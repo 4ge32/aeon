@@ -328,6 +328,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	struct inode *root_i;
 	struct inode_map *inode_map;
 	unsigned long blocksize;
+	unsigned long virt_off;
 	int ret = -EINVAL;
 	int i;
 
@@ -351,19 +352,26 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);
 	sbi->mode = (0777);	/* it will be changed */
+	sbi->max_inodes_in_page = 32;
 	sbi->inode_maps = kcalloc(sbi->cpus, sizeof(struct inode_map), GFP_KERNEL);
 	if(!sbi->inode_maps) {
 		ret = -ENOMEM;
 		goto out0;
 	}
+
+	virt_off = sbi->initsize / sbi->cpus;
+
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
+		if (i == 0)
+			sbi->inode_maps[i].virt_addr = sbi->virt_addr + AEON_DEF_BLOCK_SIZE_4K;
+		else
+			sbi->inode_maps[i].virt_addr = sbi->virt_addr + virt_off * i;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
 	}
 	aeon_dbg("The number of cpus - %d\n", sbi->cpus);
 	aeon_dbg("block device - %s\n", sb->s_bdev->bd_disk->disk_name);
-
 
 	mutex_init(&sbi->s_lock);
 

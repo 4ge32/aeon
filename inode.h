@@ -1,5 +1,5 @@
-#ifndef __AEON_INODE_H_
-#define __AEON_INODE_H_
+#ifndef __AEON_INODE_H
+#define __AEON_INODE_H
 
 #include "aeon.h"
 

@@ -30,6 +30,7 @@ struct inode_map {
 	struct rb_root	inode_inuse_tree;
 	unsigned long	num_range_node_inode;
 	struct aeon_range_node *first_inode_range;
+	void *virt_addr;
 	int allocated;
 	int freed;
 };
@@ -94,7 +95,7 @@ struct aeon_sb_info {
 	unsigned long per_list_blocks;
 	//struct free_list shared_free_list;
 
-	//struct aeon_inode *pidir;
+	int max_inodes_in_page;
 };
 
 struct aeon_range_node {

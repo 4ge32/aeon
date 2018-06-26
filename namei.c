@@ -17,29 +17,23 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	u64 ino;
 	int err = PTR_ERR(inode);
 
-	aeon_dbg("%s: START\n", __func__);
 	pidir = aeon_get_inode(sb, dir);
-	aeon_dbg("%s: START\n", __func__);
 	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
 
-	aeon_dbg("%s: START\n", __func__);
 	err = aeon_add_dentry(dentry, ino, 0);
 	if (err)
 		goto out;
 
-	aeon_dbg("%s: START\n", __func__);
 	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode, 0, 0, &dentry->d_name);
 	if (IS_ERR(inode))
 		goto out;
 
 	d_instantiate(dentry, inode);
-	//unlock_new_inode(inode);
 
 	aeon_dbg("%s: 0x%llx", __func__, pi_addr);
 
-	aeon_dbg("%s: FINISH\n", __func__);
 	return 0;
 out:
 	aeon_err(sb, "%s return %d\n", __func__, err);
