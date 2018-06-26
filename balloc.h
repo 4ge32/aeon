@@ -62,5 +62,9 @@ int aeon_insert_range_node(struct rb_root *, struct aeon_range_node *, enum node
 void aeon_delete_free_lists(struct super_block *sb);
 int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node);
+int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+			 const char *name, int namelen, struct aeon_dentry *direntry);
+int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+			 const char *name, int namelen);
 
 #endif

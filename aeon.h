@@ -139,4 +139,8 @@ static inline unsigned long BKDRHash(const char *str, int length)
 
 /* operations */
 extern const struct inode_operations aeon_dir_inode_operations;
+extern const struct inode_operations aeon_dir_inode_operations;
+extern const struct file_operations aeon_dax_file_operations;
+extern const struct iomap_ops aeon_iomap_ops;
+extern const struct file_operations aeon_dir_operations;
 #endif

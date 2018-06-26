@@ -66,7 +66,6 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	//inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 	inode->i_size = size;
 
-	//pi = (struct aeon_inode *)aeon_get_block(sb, pi_addr);
 	aeon_dbg("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
 
 	/* chosen inode is in ino */
@@ -75,12 +74,12 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	switch (type) {
 	case TYPE_CREATE:
 		//inode->i_op = &aeon_file_inode_operations;
-		//inode->i_fop = &aeon_dax_file_operations;
+		inode->i_fop = &aeon_dax_file_operations;
 		//inode->i_mapping->a_ops = &aeon_aops_dax;
 		break;
 	case TYPE_MKDIR:
 		inode->i_op = &aeon_dir_inode_operations;
-		//inode->i_fop = &aeon_dir_operations;
+		inode->i_fop = &aeon_dir_operations;
 		//inode->i_mapping->a_ops = &aeon_aops_dax;
 		set_nlink(inode, 2);
 		break;
@@ -324,7 +323,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 		break;
 	case S_IFDIR:
 		inode->i_op = &aeon_dir_inode_operations;
-		//inode->i_fop = &aeon_dir_operations;
+		inode->i_fop = &aeon_dir_operations;
 		break;
 	//case S_IFLNK:
 	//	inode->i_op = &aeon_symlink_inode_operations;

@@ -6,6 +6,54 @@
 #include "balloc.h"
 
 
+int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+			 const char *name, int namelen, struct aeon_dentry *direntry)
+{
+	struct aeon_range_node *node = NULL;
+	unsigned long hash;
+	int ret;
+
+	hash = BKDRHash(name, namelen);
+
+	node = aeon_alloc_dir_node(sb);
+	if (!node)
+		return -ENOMEM;
+
+	node->hash = hash;
+	node->direntry = direntry;
+	ret = aeon_insert_range_node(&sih->rb_tree, node, NODE_DIR);
+	if (ret) {
+		aeon_free_dir_node(node);
+		aeon_dbg("%s ERROR %d: %s\n", __func__, ret, name);
+	}
+
+	return ret;
+}
+
+int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+			 const char *name, int namelen)
+{
+	struct aeon_dentry *entry;
+	struct aeon_range_node *ret_node = NULL;
+	unsigned long hash;
+	int found = 0;
+
+	hash = BKDRHash(name, namelen);
+	found = aeon_find_range_node(&sih->rb_tree, hash, NODE_DIR, &ret_node);
+
+	if (found == 0) {
+		aeon_dbg("%s target not found: %s, length %d, "
+				"hash %lu\n", __func__, name, namelen, hash);
+		return -EINVAL;
+	}
+
+	entry = ret_node->direntry;
+	rb_erase(&ret_node->node, &sih->rb_tree);
+	aeon_free_dir_node(ret_node);
+
+	return 0;
+}
+
 static inline int aeon_rbtree_compare_rangenode(struct aeon_range_node *curr, unsigned long key, enum node_type type)
 {
 	if (type == NODE_DIR) {
