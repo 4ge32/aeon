@@ -66,5 +66,6 @@ int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *
 			 const char *name, int namelen, struct aeon_dentry *direntry);
 int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen);
-
+int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
+	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
 #endif

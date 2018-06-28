@@ -3,11 +3,6 @@
 
 #include "aeon.h"
 
-static inline struct aeon_sb_info *AEON_SB(struct super_block *sb)
-{
-	return sb->s_fs_info;
-}
-
 /*
  * Get the persistent memory's address
  */
@@ -43,7 +38,9 @@ static inline int aeon_get_reference(struct super_block *sb, u64 block,
 
 struct aeon_range_node *aeon_alloc_inode_node(struct super_block *);
 void aeon_free_inode_node(struct aeon_range_node *node);
-void aeon_free_dir_node(struct aeon_range_node *node);
 struct aeon_range_node *aeon_alloc_dir_node(struct super_block *sb);
+void aeon_free_dir_node(struct aeon_range_node *node);
+struct aeon_range_node *aeon_alloc_block_node(struct super_block *sb);
+void aeon_free_block_node(struct aeon_range_node *node);
 
 #endif

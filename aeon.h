@@ -137,6 +137,28 @@ static inline unsigned long BKDRHash(const char *str, int length)
 	return hash;
 }
 
+static inline unsigned long
+aeon_get_numblocks(unsigned short btype)
+{
+	unsigned long num_blocks;
+
+	num_blocks = 1;
+
+	return num_blocks;
+}
+
+static inline struct aeon_sb_info *AEON_SB(struct super_block *sb)
+{
+	return sb->s_fs_info;
+}
+
+static inline int aeon_get_cpuid(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return smp_processor_id() % sbi->cpus;
+}
+
 /* operations */
 extern const struct inode_operations aeon_dir_inode_operations;
 extern const struct inode_operations aeon_dir_inode_operations;

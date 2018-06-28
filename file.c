@@ -71,18 +71,6 @@ const struct file_operations aeon_dax_file_operations = {
 	.write_iter = aeon_file_write_iter,
 };
 
-/*
- * return > 0, # of blocks mapped or allocated.
- * return = 0, if plain lookup failed.
- * return < 0, error case.
- */
-static int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
-	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create)
-{
-	*bno = 5;
-	return 1;
-}
-
 static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 		            unsigned flags, struct iomap *iomap)
 {
@@ -95,8 +83,6 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	u32 bno = 0;
 	int ret;
 
-	aeon_dbg("%s: START\n", __func__);
-
 	ret = aeon_dax_get_blocks(inode, first_block, max_blocks, &bno, &new,
 			          &boundary, flags & IOMAP_WRITE);
 
@@ -105,8 +91,8 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 
 	iomap->flags = 0;
 	iomap->bdev = inode->i_sb->s_bdev;
-	iomap->dax_dev = sbi->s_dax_dev;
 	iomap->offset = (u64)first_block << blkbits;
+	iomap->dax_dev = sbi->s_dax_dev;
 
 	if (ret == 0) {
 		iomap->type = IOMAP_HOLE;

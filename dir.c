@@ -98,9 +98,6 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		aeon_dbg("%s: first else statement\n", __func__);
 	}
 
-	aeon_dbg("%s: ino - %lu\n", __func__, inode->i_ino);
-	aeon_dbg("%s: ino - %lu\n", __func__, sih->ino);
-
 	while (temp) {
 		aeon_dbg("%s: NOW\n", __func__);
 		curr = container_of(temp, struct aeon_range_node, node);

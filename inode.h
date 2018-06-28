@@ -81,7 +81,7 @@ static inline struct aeon_inode *aeon_get_inode(struct super_block *sb, struct i
 	void *addr;
 	int rc;
 
-	addr = aeon_get_block(sb, sih->pi_addr);
+	addr = (void *)sih->pi_addr;
 	rc = memcpy_mcsafe(&fake_pi, addr, sizeof(struct aeon_inode));
 	if (rc) {
 		aeon_err(sb, "%s: ERROR\n", __func__);

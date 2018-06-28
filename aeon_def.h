@@ -18,7 +18,7 @@
  * The first block contains super blocks;
  * The second block contains reserved inodes.
  */
-#define	RESERVED_BLOCKS	2
+#define	RESERVED_BLOCKS	1
 
 /*
  * Mount flags
@@ -26,6 +26,10 @@
 #define AEON_MOUNT_PROTECT      0x000001    /* wprotect CR0.WP */
 #define AEON_MOUNT_DAX          0x000008    /* Direct Access */
 #define AEON_MOUNT_FORMAT       0x000200    /* was FS formatted on mount? */
+
+
+/* AEON supported data blocks */
+#define AEON_BLOCK_TYPE_4K     0
 
 /*
  * Structure of an inode in AEON.
@@ -54,14 +58,14 @@ struct aeon_inode {
 	__le32	i_create_time;	 /* Create time */
 	__le64	aeon_ino;	 /* aeon inode number */
 
-	__le64	pad1;
-	__le64	pad2;
+	__le64	pgoff;
+	__le64  num_pages;
 
 	/* last 40 bytes */
-	__le64	pad3;
+	__le64	block;
 	__le64  next_phys_addr;  /* inode page phys_addr */
 
-	__le64	create_epoch_id; /* Transaction ID when create */
+	__le64	f_size;		 /* Transaction ID when create */
 	__le64	delete_epoch_id; /* Transaction ID when deleted */
 
 	struct {

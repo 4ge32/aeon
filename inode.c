@@ -96,6 +96,8 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	pi = (struct aeon_inode *)pi_addr;
 	pi->i_mode = inode->i_mode;
 	pi->aeon_ino = inode->i_ino;
+	pi->num_pages = 0;
+	pi->block = 0;
 
 	si = AEON_I(inode);
 	sih = &si->header;
