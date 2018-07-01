@@ -2,7 +2,7 @@
 
 FS="aeon"
 DEV=/dev/pmem0
-MOUNT_POINT=mnt
+MOUNT_POINT=/mnt
 
 run () {
   sudo insmod $FS.ko

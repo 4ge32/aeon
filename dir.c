@@ -16,6 +16,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 	struct aeon_dentry *direntry;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
+	u64 pi_addr = 0;
 	int err;
 
 	aeon_dbg("%s: dir %lu new inode %llu\n",
@@ -27,7 +28,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 
 	pidir = aeon_get_inode(sb, dir);
 
-	direntry = (struct aeon_dentry *)aeon_get_block(sb, 4096*3);
+	direntry = (struct aeon_dentry *)aeon_get_dentry_block(sb, &pi_addr, ANY_CPU);
 	strncpy(direntry->name, name, namelen);
 	direntry->name_len = namelen;
 	direntry->ino = ino;
@@ -109,7 +110,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		if (ino == 0)
 			continue;
 
-		ret = aeon_get_inode_address(sb, ino, &pi_addr);
+		ret = aeon_get_inode_address(sih, ino, &pi_addr);
 
 		if (ret) {
 			aeon_dbg("%s: get child inode %lu address failed %d\n",
@@ -120,7 +121,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 
 		child_pi = aeon_get_block(sb, pi_addr);
 		aeon_dbg("ctx: ino %llu, name %s, name_len %u\n", (u64)ino, entry->name, entry->name_len);
-		if (!dir_emit(ctx, entry->name, entry->name_len, ino, 00755)) {
+		if (!dir_emit(ctx, entry->name, entry->name_len, ino, 0755)) {
 			aeon_dbg("Here: pos %llu\n", ctx->pos);
 			return 0;
 		}

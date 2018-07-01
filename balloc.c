@@ -179,7 +179,10 @@ void aeon_init_blockmap(struct super_block *sb)
 		free_list->num_free_blocks = free_list->block_end - free_list->block_start + 1;
 
 		blknode = aeon_alloc_block_node(sb);
-		blknode->range_low = free_list->block_start;
+		if (i == 0)
+			blknode->range_low = free_list->block_start + 1;
+		else
+			blknode->range_low = free_list->block_start;
 		blknode->range_high = free_list->block_end;
 		ret = aeon_insert_blocktree(tree, blknode);
 		if (ret) {
@@ -323,6 +326,8 @@ next:
 		return -ENOSPC;
 	}
 
+	aeon_dbg("%s: %lu : %lu\n", __func__, curr->range_low, curr->range_high);
+
 	return num_blocks;
 
 }
@@ -427,6 +432,19 @@ static int aeon_new_data_blocks(struct super_block *sb,
 	return allocated;
 }
 
+// Allocate inode blocks.  The offset for the allocated block comes back in
+// blocknr.  Return the number of blocks allocated.
+static int _aeon_new_inode_blocks(struct super_block *sb, unsigned long *blocknr, unsigned int num, int cpu)
+{
+	int allocated;
+
+	aeon_dbg("%s\n", __func__);
+
+	allocated = aeon_new_blocks(sb, blocknr, num, 0, cpu);
+
+	return allocated;
+}
+
 static int aeon_find_data_blocks(struct aeon_inode *pi, unsigned long *bno, int *num_blocks)
 {
 	if (pi->num_pages == 0)
@@ -461,6 +479,15 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	found = aeon_find_data_blocks(pi, &blocknr, &num_blocks);
 	if (found) {
 		*bno = blocknr;
+		if (iblock == 0) {
+			aeon_dbg("%s: retunr num_blocks\n", __func__);
+			return num_blocks;
+		}
+	}
+
+	if (create == 0) {
+		/* return page offset */
+		aeon_dbg("%s: create == 0\n", __func__);
 		return num_blocks;
 	}
 
@@ -472,8 +499,39 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	*bno = blocknr;
 
 	aeon_dbg("%s: HEY\n", __func__);
-	pi->num_pages += num_blocks;
+	pi->num_pages = num_blocks;
 	pi->block = blocknr;
 
 	return allocated;
+}
+
+int aeon_get_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	int num_blocks = 1;
+
+	allocated = _aeon_new_inode_blocks(sb, &blocknr, num_blocks, cpuid);
+
+	sbi->inode_maps[cpuid].virt_addr = (void *)(blocknr * AEON_DEF_BLOCK_SIZE_4K + (u64)sbi->virt_addr
+		+ (sbi->initsize / sbi->cpus) * cpuid);
+
+	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+
+	return allocated;
+}
+
+u64 aeon_get_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+
+	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
+	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
+
+	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+
+	return *pi_addr;
 }

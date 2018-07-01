@@ -16,6 +16,7 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	aeon_dbg("%s: START1\n", __func__);
 	aeon_dbg("%s: to->i_count - %lu\n", __func__, to->count);
+	aeon_dbg("%s: i_count - %lu kiocb->ki_pos - %llu\n", __func__, to->count, iocb->ki_pos);
 
 	if(!iov_iter_count(to))
 		return 0;
@@ -39,7 +40,8 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	aeon_dbg("%s: START\n", __func__);
 
-	aeon_dbg("%s: to->i_count - %lu", __func__, from->count);
+	aeon_dbg("%s: i_count - %lu iov_iter - %lu\n", __func__, from->count, from->iov_offset);
+	aeon_dbg("%s: i_count - %lu kiocb->ki_pos - %llu\n", __func__, from->count, iocb->ki_pos);
 
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);

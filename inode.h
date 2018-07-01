@@ -52,7 +52,7 @@ static inline u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 inode
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
-	return aeon_get_addr_off(sbi) + AEON_DEF_BLOCK_SIZE_4K
+	return aeon_get_addr_off(sbi) + AEON_SB_SIZE
 		+ (inode_number % 32 - 1) * AEON_INODE_SIZE;
 }
 
@@ -118,7 +118,8 @@ int aeon_init_inode_inuse_list(struct super_block *);
 int aeon_init_inode_table(struct super_block *);
 struct inode *aeon_iget(struct super_block *, unsigned long);
 u64 aeon_new_aeon_inode(struct super_block *, u64 *);
-int aeon_get_inode_address(struct super_block *, u64 ino, u64 *pi_addr);
+int aeon_get_rinode_address(struct super_block *, u64 ino, u64 *pi_addr);
+int aeon_get_inode_address(struct aeon_inode_info_header *, u64 ino, u64 *pi_addr);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr);

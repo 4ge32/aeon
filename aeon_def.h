@@ -65,7 +65,7 @@ struct aeon_inode {
 	__le64	block;
 	__le64  next_phys_addr;  /* inode page phys_addr */
 
-	__le64	f_size;		 /* Transaction ID when create */
+	__le64	f_size;
 	__le64	delete_epoch_id; /* Transaction ID when deleted */
 
 	struct {

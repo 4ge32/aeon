@@ -354,6 +354,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	if (ret)
 		goto out0;
 
+
 	sbi->uid  = current_fsuid();
 	sbi->gid  = current_fsgid();
 	sbi->cpus = num_online_cpus();
@@ -373,12 +374,14 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		if (i == 0)
-			sbi->inode_maps[i].virt_addr = sbi->virt_addr + AEON_DEF_BLOCK_SIZE_4K;
-		else
-			sbi->inode_maps[i].virt_addr = sbi->virt_addr + virt_off * i;
+		aeon_dbg("%s: =======HEEEE=======\n", __func__);
+
+		//aeon_get_inode_block(sb, sbi->inode_maps[i].virt_addr);
+		sbi->inode_maps[i].virt_addr = sbi->virt_addr;
+
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
+		inode_map->allocated = 0;
 	}
 	aeon_dbg("The number of cpus - %d\n", sbi->cpus);
 	aeon_dbg("block device - %s\n", sb->s_bdev->bd_disk->disk_name);
@@ -399,7 +402,11 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	root_pi = aeon_init(sb, sbi->initsize);
 	if (sbi->aeon_sb->s_magic != AEON_MAGIC)
 		goto out2;
-	else
+
+	aeon_dbg("%s: 1=======HEEEE=======\n", __func__);
+	for (i = 0; i < sbi->cpus; i++)
+		aeon_get_inode_block(sb, sbi->inode_maps[i].virt_addr, i);
+	aeon_dbg("%s: 2=======HEEEE=======\n", __func__);
 
 	blocksize = le32_to_cpu(sbi->aeon_sb->s_blocksize);
 	aeon_set_blocksize(sb, blocksize);
