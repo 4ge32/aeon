@@ -2,10 +2,7 @@
 #include <linux/pagemap.h>
 
 #include "aeon.h"
-#include "super.h"
-#include "inode.h"
-#include "balloc.h"
-#include "dir.h"
+
 
 static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			bool excl)

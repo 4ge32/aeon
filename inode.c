@@ -1,9 +1,7 @@
 #include <linux/fs.h>
 
 #include "aeon.h"
-#include "super.h"
-#include "inode.h"
-#include "balloc.h"
+
 
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 	struct aeon_inode *pi, struct inode *inode, const char *name,

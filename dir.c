@@ -1,9 +1,6 @@
 #include <linux/fs.h>
 
 #include "aeon.h"
-#include "super.h"
-#include "inode.h"
-#include "balloc.h"
 
 
 int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)

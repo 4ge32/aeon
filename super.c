@@ -8,10 +8,7 @@
 #include <linux/backing-dev-defs.h>
 #include <linux/parser.h>
 
-#include "super.h"
-#include "inode.h"
-#include "balloc.h"
-#include "mprotect.h"
+#include "aeon.h"
 
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
