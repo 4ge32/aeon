@@ -37,7 +37,7 @@ out:
 	return err;
 }
 
-struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsigned int flag)
+static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsigned int flag)
 {
 	struct inode *inode = NULL;
 	ino_t ino;

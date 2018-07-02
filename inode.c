@@ -3,25 +3,70 @@
 #include "aeon.h"
 
 
-struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
-	struct aeon_inode *pi, struct inode *inode, const char *name,
-	unsigned long name_len)
+static inline int aeon_insert_inodetree(struct aeon_sb_info *sbi, struct aeon_range_node *new_node, int cpu)
 {
-	struct aeon_inode_info *si = AEON_I(inode);
-	struct aeon_inode_info_header *sih = &si->header;
-	struct aeon_dentry *direntry = NULL;
-	struct aeon_range_node *ret_node = NULL;
-	unsigned long hash;
-	int found = 0;
+	struct rb_root *tree;
+	int ret;
 
-	hash = BKDRHash(name, name_len);
+	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
+	ret = aeon_insert_range_node(tree, new_node, NODE_INODE);
+	if (ret)
+		aeon_dbg("ERROR: %s failed %d\n", __func__, ret);
 
-	found = aeon_find_range_node(&sih->rb_tree, hash,
-				NODE_DIR, &ret_node);
-	if (found == 1 && hash == ret_node->hash)
-		direntry = ret_node->direntry;
+	return ret;
+}
 
-	return direntry;
+static inline int aeon_search_inodetree(struct aeon_sb_info *sbi, unsigned long ino, struct aeon_range_node **ret_node)
+{
+	struct rb_root *tree;
+	unsigned long internal_ino;
+	int cpu;
+
+	cpu = ino % sbi->cpus;
+	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
+	internal_ino = ino / sbi->cpus;
+
+	return aeon_find_range_node(tree, internal_ino, NODE_INODE, ret_node);
+}
+
+int aeon_init_inode_inuse_list(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_range_node *range_node;
+	struct inode_map *inode_map;
+	unsigned long range_high;
+	int i;
+	int ret;
+
+	aeon_dbg("%s: START\n", __func__);
+	sbi->s_inodes_used_count = AEON_INODE_START;
+
+	range_high = AEON_INODE_START / sbi->cpus;
+	if (AEON_INODE_START % sbi->cpus)
+		range_high++;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_map = &sbi->inode_maps[i];
+		aeon_dbg("%s: alloc_inode_node\n", __func__);
+		range_node = aeon_alloc_inode_node(sb);
+		if (range_node == NULL)
+			return -ENOMEM;
+
+		range_node->range_low = 0;
+		range_node->range_high = range_high;
+		aeon_dbg("%s: insert_inodetree\n", __func__);
+		ret = aeon_insert_inodetree(sbi, range_node, i);
+		if (ret) {
+			aeon_err(sb, "%s failed\n", __func__);
+			aeon_free_inode_node(range_node);
+			return ret;
+		}
+		inode_map->num_range_node_inode = 1;
+		inode_map->first_inode_range = range_node;
+	}
+
+	aeon_dbg("%s: FINISH\n", __func__);
+	return 0;
 }
 
 ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry)
@@ -35,6 +80,12 @@ ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry)
 		return 0;
 
 	return direntry->ino;
+}
+
+int aeon_get_inode_address(struct aeon_inode_info_header *sih, u64 ino, u64 *pi_addr)
+{
+	*pi_addr = sih->pi_addr;
+	return 0;
 }
 
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
@@ -86,11 +137,6 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 		break;
 	}
 
-	//err = aeon_get_inode_address(sb, ino, &pi_addr);
-	//if (err) {
-	//	aeon_err(sb, "%s: get inode address failed\n", __func__);
-	//	goto out;
-	//}
 	pi = (struct aeon_inode *)pi_addr;
 	pi->i_mode = inode->i_mode;
 	pi->aeon_ino = inode->i_ino;
@@ -166,7 +212,7 @@ static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 
 
 	if (sbi->inode_maps[cpuid].allocated % 32 == 0) {
 		aeon_dbg("%s: inside if\n", __func__);
-		ret = aeon_get_inode_block(sb, pi_addr, cpuid);
+		ret = aeon_get_new_inode_block(sb, pi_addr, cpuid);
 	} else
 		*pi_addr = (u64)sbi->inode_maps[cpuid].virt_addr;
 
@@ -219,88 +265,7 @@ u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 	return ino;
 }
 
-inline int aeon_insert_inodetree(struct aeon_sb_info *sbi, struct aeon_range_node *new_node, int cpu)
-{
-	struct rb_root *tree;
-	int ret;
-
-	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
-	ret = aeon_insert_range_node(tree, new_node, NODE_INODE);
-	if (ret)
-		aeon_dbg("ERROR: %s failed %d\n", __func__, ret);
-
-	return ret;
-}
-
-inline int aeon_search_inodetree(struct aeon_sb_info *sbi, unsigned long ino, struct aeon_range_node **ret_node)
-{
-	struct rb_root *tree;
-	unsigned long internal_ino;
-	int cpu;
-
-	cpu = ino % sbi->cpus;
-	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
-	internal_ino = ino / sbi->cpus;
-
-	return aeon_find_range_node(tree, internal_ino, NODE_INODE, ret_node);
-}
-
-int aeon_init_inode_inuse_list(struct super_block *sb)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_range_node *range_node;
-	struct inode_map *inode_map;
-	unsigned long range_high;
-	int i;
-	int ret;
-
-	aeon_dbg("%s: START\n", __func__);
-	sbi->s_inodes_used_count = AEON_INODE_START;
-
-	range_high = AEON_INODE_START / sbi->cpus;
-	if (AEON_INODE_START % sbi->cpus)
-		range_high++;
-
-	for (i = 0; i < sbi->cpus; i++) {
-		inode_map = &sbi->inode_maps[i];
-		aeon_dbg("%s: alloc_inode_node\n", __func__);
-		range_node = aeon_alloc_inode_node(sb);
-		if (range_node == NULL)
-			return -ENOMEM;
-
-		range_node->range_low = 0;
-		range_node->range_high = range_high;
-		aeon_dbg("%s: insert_inodetree\n", __func__);
-		ret = aeon_insert_inodetree(sbi, range_node, i);
-		if (ret) {
-			aeon_err(sb, "%s failed\n", __func__);
-			aeon_free_inode_node(range_node);
-			return ret;
-		}
-		inode_map->num_range_node_inode = 1;
-		inode_map->first_inode_range = range_node;
-	}
-
-	aeon_dbg("%s: FINISH\n", __func__);
-	return 0;
-}
-
-int aeon_get_inode_address(struct aeon_inode_info_header *sih, u64 ino, u64 *pi_addr)
-{
-	*pi_addr = sih->pi_addr;
-	return 0;
-}
-
-int aeon_get_rinode_address(struct super_block *sb, u64 ino, u64 *pi_addr)
-{
-	*pi_addr = aeon_get_reserved_inode_addr(sb, ino);
-
-	aeon_dbg("%s: pi_addr %llx\n", __func__, *pi_addr);
-
-	return 0;
-}
-
-int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si,
+static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si,
 		       u64 ino, u64 pi_addr, int rebuild_dir)
 {
 	struct aeon_inode_info_header *sih  = &si->header;
@@ -347,7 +312,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
 		//inode->i_op = &aeon_file_inode_operations;
-		//inode->i_fop = &aeon_dax_file_operations;
+		inode->i_fop = &aeon_dax_file_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &aeon_dir_inode_operations;
@@ -394,11 +359,8 @@ struct inode *aeon_iget(struct super_block *sb, unsigned long ino)
 
 	si = AEON_I(inode);
 
-	err = aeon_get_rinode_address(sb, ino, &pi_addr);
-	if (err) {
-		aeon_err(sb, "%s: get inode address failed %d\n", __func__, err);
-		goto fail;
-	}
+	pi_addr = aeon_get_reserved_inode_addr(sb, ino);
+
 	aeon_dbg("%s: nvmm 0x%llx\n", __func__, pi_addr);
 
 	if (pi_addr == 0) {
@@ -415,7 +377,7 @@ struct inode *aeon_iget(struct super_block *sb, unsigned long ino)
 
 	err = aeon_read_inode(sb, inode, pi_addr);
 	if (unlikely(err)) {
-		aeon_dbg("%s: failed to read inode %lu\n", __func__, ino);
+		aeon_err(sb, "%s: failed to read inode %lu\n", __func__, ino);
 		goto fail;
 	}
 

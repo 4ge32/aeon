@@ -447,33 +447,31 @@ struct aeon_range_node *aeon_alloc_block_node(struct super_block *sb);
 void aeon_free_block_node(struct aeon_range_node *node);
 
 /* balloc.h */
-int aeon_alloc_block_free_lists(struct super_block *);
-void aeon_init_blockmap(struct super_block *);
-int aeon_insert_range_node(struct rb_root *, struct aeon_range_node *, enum node_type);
+int aeon_alloc_block_free_lists(struct super_block *sb);
 void aeon_delete_free_lists(struct super_block *sb);
+void aeon_init_blockmap(struct super_block *sb);
+int aeon_insert_range_node(struct rb_root *tree, struct aeon_range_node *new_node, enum node_type);
 int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node);
-int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
-			 const char *name, int namelen, struct aeon_dentry *direntry);
-int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
-			 const char *name, int namelen);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
-int aeon_get_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid);
-u64 aeon_get_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid);
+int aeon_get_new_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid);
+u64 aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *);
-int aeon_init_inode_table(struct super_block *);
-struct inode *aeon_iget(struct super_block *, unsigned long);
-u64 aeon_new_aeon_inode(struct super_block *, u64 *);
-int aeon_get_rinode_address(struct super_block *, u64 ino, u64 *pi_addr);
 int aeon_get_inode_address(struct aeon_inode_info_header *, u64 ino, u64 *pi_addr);
+ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
 	size_t size, dev_t rdev, const struct qstr *qstr);
-ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry);
+u64 aeon_new_aeon_inode(struct super_block *, u64 *);
+struct inode *aeon_iget(struct super_block *, unsigned long);
 
 /* dir.c */
 int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link);
+int aeon_remove_dentry(struct dentry *dentry, int dec_link, struct aeon_inode *update);
+struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
+	struct aeon_inode *pi, struct inode *inode, const char *name,
+	unsigned long name_len);
 #endif

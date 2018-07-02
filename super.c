@@ -32,13 +32,13 @@ static void aeon_i_callback(struct rcu_head *head)
 	struct inode *inode = container_of(head, struct inode, i_rcu);
 	struct aeon_inode_info *si = AEON_I(inode);
 
-	aeon_dbg("%s: ino %lu\n", __func__, inode->i_ino);
+	aeon_info("%s: ino %lu\n", __func__, inode->i_ino);
 	kmem_cache_free(aeon_inode_cachep, si);
 }
 
 static void aeon_destroy_inode(struct inode *inode)
 {
-	aeon_dbg("%s: %lu\n", __func__, inode->i_ino);
+	aeon_info("%s: %lu\n", __func__, inode->i_ino);
 	call_rcu(&inode->i_rcu, aeon_i_callback);
 }
 
@@ -87,12 +87,12 @@ static void aeon_free_range_node(struct aeon_range_node *node)
 	kmem_cache_free(aeon_range_node_cachep, node);
 }
 
-void aeon_free_dir_node(struct aeon_range_node *node)
+void aeon_free_inode_node(struct aeon_range_node *node)
 {
 	aeon_free_range_node(node);
 }
 
-void aeon_free_inode_node(struct aeon_range_node *node)
+void aeon_free_dir_node(struct aeon_range_node *node)
 {
 	aeon_free_range_node(node);
 }
@@ -124,49 +124,6 @@ struct aeon_range_node *aeon_alloc_dir_node(struct super_block *sb)
 struct aeon_range_node *aeon_alloc_block_node(struct super_block *sb)
 {
 	return aeon_alloc_range_node(sb);
-}
-
-static void init_once(void *foo)
-{
-	struct aeon_inode_info *vi = foo;
-	inode_init_once(&vi->vfs_inode);
-}
-
-static int __init init_inodecache(void)
-{
-	aeon_inode_cachep = kmem_cache_create("aeon_inode_cache",
-					       sizeof(struct aeon_inode_info),
-					       0, (SLAB_RECLAIM_ACCOUNT |
-						   SLAB_MEM_SPREAD), init_once);
-	if (aeon_inode_cachep == NULL)
-		return -ENOMEM;
-	return 0;
-}
-
-static void destroy_inodecache(void)
-{
-	/*
-	 * Make sure all delayed rcu free inodes are flushed before
-	 * we destroy cache.
-	 */
-	rcu_barrier();
-	kmem_cache_destroy(aeon_inode_cachep);
-}
-
-static int __init init_rangenode_cache(void)
-{
-	aeon_range_node_cachep = kmem_cache_create("aeon_range_node_cache",
-					sizeof(struct aeon_range_node),
-					0, (SLAB_RECLAIM_ACCOUNT |
-					SLAB_MEM_SPREAD), NULL);
-	if (aeon_range_node_cachep == NULL)
-		return -ENOMEM;
-	return 0;
-}
-
-static void destroy_rangenode_cache(void)
-{
-	kmem_cache_destroy(aeon_range_node_cachep);
 }
 
 static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
@@ -310,6 +267,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *root_i = NULL;
+	int i;
 
 	sbi->aeon_sb = aeon_get_super(sb);
 	root_i = aeon_get_inode_by_ino(sb, AEON_ROOT_INO);
@@ -325,6 +283,9 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 		return NULL;
 	}
 
+	for (i = 0; i < sbi->cpus; i++)
+		aeon_get_new_inode_block(sb, sbi->inode_maps[i].virt_addr, i);
+
 	return root_i;
 }
 
@@ -335,11 +296,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	struct inode *root_i;
 	struct inode_map *inode_map;
 	unsigned long blocksize;
-	unsigned long virt_off;
 	int ret = -EINVAL;
 	int i;
 
-	aeon_dbg("%s:START\n", __func__);
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
@@ -350,7 +309,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	ret = aeon_get_nvmm_info(sb, sbi);
 	if (ret)
 		goto out0;
-
 
 	sbi->uid  = current_fsuid();
 	sbi->gid  = current_fsgid();
@@ -367,21 +325,13 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		goto out0;
 	}
 
-	virt_off = sbi->initsize / sbi->cpus;
-
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		aeon_dbg("%s: =======HEEEE=======\n", __func__);
-
-		//aeon_get_inode_block(sb, sbi->inode_maps[i].virt_addr);
-		sbi->inode_maps[i].virt_addr = sbi->virt_addr;
-
+		sbi->inode_maps[i].virt_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
 		inode_map->allocated = 0;
 	}
-	aeon_dbg("The number of cpus - %d\n", sbi->cpus);
-	aeon_dbg("block device - %s\n", sb->s_bdev->bd_disk->disk_name);
 
 	mutex_init(&sbi->s_lock);
 
@@ -400,18 +350,12 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	if (sbi->aeon_sb->s_magic != AEON_MAGIC)
 		goto out2;
 
-	aeon_dbg("%s: 1=======HEEEE=======\n", __func__);
-	for (i = 0; i < sbi->cpus; i++)
-		aeon_get_inode_block(sb, sbi->inode_maps[i].virt_addr, i);
-	aeon_dbg("%s: 2=======HEEEE=======\n", __func__);
-
-	blocksize = le32_to_cpu(sbi->aeon_sb->s_blocksize);
-	aeon_set_blocksize(sb, blocksize);
-
 	aeon_root_check(sb, root_pi);
 
 	sb->s_magic = le32_to_cpu(sbi->aeon_sb->s_magic);
 	sb->s_op = &aeon_sops;
+	blocksize = le32_to_cpu(sbi->aeon_sb->s_blocksize);
+	aeon_set_blocksize(sb, blocksize);
 
 	root_i = aeon_iget(sb, AEON_ROOT_INO);
 	if (IS_ERR(root_i)) {
@@ -430,15 +374,16 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("%s:FINISH\n", __func__);
 
 	return 0;
+
 out2:
 	aeon_delete_free_lists(sb);
 out1:
-	aeon_dbg("%s: free inode_maps\n", __func__);
+	aeon_err(sb, "%s: free inode_maps\n", __func__);
 	kfree(sbi->inode_maps);
 out0:
 	kfree(sbi);
 
-	aeon_dbg("%s failed: return %d\n", __func__, ret);
+	aeon_err(sb, "%s failed: return %d\n", __func__, ret);
 	return ret;
 }
 
@@ -454,6 +399,49 @@ static struct file_system_type aeon_fs_type = {
 	.mount		= aeon_mount,
 	.kill_sb	= kill_block_super,
 };
+
+static void init_once(void *foo)
+{
+	struct aeon_inode_info *vi = foo;
+	inode_init_once(&vi->vfs_inode);
+}
+
+static int __init init_inodecache(void)
+{
+	aeon_inode_cachep = kmem_cache_create("aeon_inode_cache",
+					       sizeof(struct aeon_inode_info),
+					       0, (SLAB_RECLAIM_ACCOUNT |
+						   SLAB_MEM_SPREAD), init_once);
+	if (aeon_inode_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+static void destroy_inodecache(void)
+{
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before
+	 * we destroy cache.
+	 */
+	rcu_barrier();
+	kmem_cache_destroy(aeon_inode_cachep);
+}
+
+static int __init init_rangenode_cache(void)
+{
+	aeon_range_node_cachep = kmem_cache_create("aeon_range_node_cache",
+					sizeof(struct aeon_range_node),
+					0, (SLAB_RECLAIM_ACCOUNT |
+					SLAB_MEM_SPREAD), NULL);
+	if (aeon_range_node_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+static void destroy_rangenode_cache(void)
+{
+	kmem_cache_destroy(aeon_range_node_cachep);
+}
 
 static int __init init_aeon_fs(void)
 {

@@ -3,6 +3,54 @@
 #include "aeon.h"
 
 
+static int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+			 const char *name, int namelen, struct aeon_dentry *direntry)
+{
+	struct aeon_range_node *node = NULL;
+	unsigned long hash;
+	int ret;
+
+	hash = BKDRHash(name, namelen);
+
+	node = aeon_alloc_dir_node(sb);
+	if (!node)
+		return -ENOMEM;
+
+	node->hash = hash;
+	node->direntry = direntry;
+	ret = aeon_insert_range_node(&sih->rb_tree, node, NODE_DIR);
+	if (ret) {
+		aeon_free_dir_node(node);
+		aeon_dbg("%s ERROR %d: %s\n", __func__, ret, name);
+	}
+
+	return ret;
+}
+
+static int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+			 const char *name, int namelen)
+{
+	struct aeon_dentry *entry;
+	struct aeon_range_node *ret_node = NULL;
+	unsigned long hash;
+	int found = 0;
+
+	hash = BKDRHash(name, namelen);
+	found = aeon_find_range_node(&sih->rb_tree, hash, NODE_DIR, &ret_node);
+
+	if (found == 0) {
+		aeon_dbg("%s target not found: %s, length %d, "
+				"hash %lu\n", __func__, name, namelen, hash);
+		return -EINVAL;
+	}
+
+	entry = ret_node->direntry;
+	rb_erase(&ret_node->node, &sih->rb_tree);
+	aeon_free_dir_node(ret_node);
+
+	return 0;
+}
+
 int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
@@ -25,7 +73,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 
 	pidir = aeon_get_inode(sb, dir);
 
-	direntry = (struct aeon_dentry *)aeon_get_dentry_block(sb, &pi_addr, ANY_CPU);
+	direntry = (struct aeon_dentry *)aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
 	strncpy(direntry->name, name, namelen);
 	direntry->name_len = namelen;
 	direntry->ino = ino;
@@ -63,6 +111,27 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link, struct aeon_inode *u
 	return 0;
 out:
 	return ret;
+}
+
+struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
+	struct aeon_inode *pi, struct inode *inode, const char *name,
+	unsigned long name_len)
+{
+	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_dentry *direntry = NULL;
+	struct aeon_range_node *ret_node = NULL;
+	unsigned long hash;
+	int found = 0;
+
+	hash = BKDRHash(name, name_len);
+
+	found = aeon_find_range_node(&sih->rb_tree, hash,
+				NODE_DIR, &ret_node);
+	if (found == 1 && hash == ret_node->hash)
+		direntry = ret_node->direntry;
+
+	return direntry;
 }
 
 static int aeon_readdir(struct file *file, struct dir_context *ctx)
