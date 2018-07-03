@@ -62,6 +62,7 @@ static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsi
 static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
+	struct super_block *sb = inode->i_sb;
 	struct aeon_inode *pidir;
 	struct aeon_inode update_dir;
 	int ret = -ENOMEM;
@@ -79,12 +80,80 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 
 	return 0;
 out:
-	aeon_err(sb, "%s return %d\n". __func__, ret);
+	aeon_err(sb, "%s return %d\n", __func__, ret);
 	return ret;
+}
+
+static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
+{
+	struct inode *inode = NULL;
+	struct super_block *sb = dir->i_sb;
+	u64 ino;
+	u64 pi_addr = 0;
+	int err = -EMLINK;
+
+
+	ino = aeon_new_aeon_inode(sb, &pi_addr);
+	if (ino == 0)
+		goto out;
+
+	err = aeon_add_dentry(dentry, ino, 0);
+
+	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino,
+				   S_IFDIR | mode, sb->s_blocksize,
+				   0, &dentry->d_name);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto out;
+	}
+
+	d_instantiate(dentry, inode);
+
+	return 0;
+out:
+	aeon_err(sb, "%s return %d\n", __func__, err);
+	return err;
+}
+
+static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
+{
+	struct inode *inode = dentry->d_inode;
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode *pidir;
+	struct aeon_inode update_dir;
+	int err = ENOTEMPTY;
+
+	if (!inode)
+		return -ENOENT;
+
+	pidir = aeon_get_inode(sb, dir);
+
+	if (aeon_inode_by_name(dir, &dentry->d_name) == 0)
+		return -ENOENT;
+
+	aeon_dbg("%s: inode %lu, dir %lu, link %d\n", __func__,
+					inode->i_ino, dir->i_ino, dir->i_nlink);
+
+	err = aeon_remove_dentry(dentry, -1, &update_dir);
+	if (err)
+		goto end_rmdir;
+
+	clear_nlink(inode);
+	inode->i_ctime = dir->i_ctime;
+
+	if (dir->i_nlink)
+		drop_nlink(dir);
+
+	return 0;
+end_rmdir:
+	aeon_err(sb, "%s return %d\n", __func__, err);
+	return err;
 }
 
 const struct inode_operations aeon_dir_inode_operations = {
 	.create = aeon_create,
 	.lookup = aeon_lookup,
 	.unlink = aeon_unlink,
+	.mkdir  = aeon_mkdir,
+	.rmdir  = aeon_rmdir,
 };
