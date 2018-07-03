@@ -52,10 +52,10 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		goto out_unlock;
 
 	ret = dax_iomap_rw(iocb, from, &aeon_iomap_ops);
-	if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
-		i_size_write(inode, iocb->ki_pos);
-		mark_inode_dirty(inode);
-	}
+	//if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
+	//	i_size_write(inode, iocb->ki_pos);
+	//	mark_inode_dirty(inode);
+	//}
 
 out_unlock:
 	inode_unlock(inode);

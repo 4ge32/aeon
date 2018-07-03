@@ -7,6 +7,7 @@
 #include <linux/dcache.h>
 #include <linux/backing-dev-defs.h>
 #include <linux/parser.h>
+#include <linux/cred.h>
 
 #include "aeon.h"
 
@@ -22,7 +23,7 @@ static struct inode *aeon_alloc_inode(struct super_block *sb)
 	if (!si)
 		return NULL;
 
-	si->vfs_inode.i_version = 1;
+	atomic64_set(&si->vfs_inode.i_version, 1);
 
 	return &si->vfs_inode;
 }
@@ -331,6 +332,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
 		inode_map->allocated = 0;
+		inode_map->freed = 0;
 	}
 
 	mutex_init(&sbi->s_lock);

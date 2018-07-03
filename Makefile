@@ -11,4 +11,3 @@ all:
 
 clean:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd` clean
-	rm -v *.o.ur-safe
