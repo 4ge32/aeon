@@ -6,6 +6,11 @@
 #include "aeon.h"
 
 
+static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
+{
+	return generic_file_llseek(file, offset, origin);
+}
+
 static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
 	struct inode *inode = iocb->ki_filp->f_mapping->host;
@@ -13,7 +18,7 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	aeon_dbg("%s: START1\n", __func__);
 	aeon_dbg("%s: to->i_count - %lu\n", __func__, to->count);
-	aeon_dbg("%s: i_count - %lu kiocb->ki_pos - %llu\n", __func__, to->count, iocb->ki_pos);
+	aeon_dbg("%s: inode ino %lu i_count - %lu kiocb->ki_pos - %llu\n", __func__, inode->i_ino, to->count, iocb->ki_pos);
 
 	if(!iov_iter_count(to))
 		return 0;
@@ -38,7 +43,7 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	aeon_dbg("%s: START\n", __func__);
 
 	aeon_dbg("%s: i_count - %lu iov_iter - %lu\n", __func__, from->count, from->iov_offset);
-	aeon_dbg("%s: i_count - %lu kiocb->ki_pos - %llu\n", __func__, from->count, iocb->ki_pos);
+	aeon_dbg("%s: inode ino %lu i_count - %lu kiocb->ki_pos - %llu\n", __func__, inode->i_ino, from->count, iocb->ki_pos);
 
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
@@ -52,10 +57,9 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		goto out_unlock;
 
 	ret = dax_iomap_rw(iocb, from, &aeon_iomap_ops);
-	//if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
-	//	i_size_write(inode, iocb->ki_pos);
-	//	mark_inode_dirty(inode);
-	//}
+	if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {
+		i_size_write(inode, iocb->ki_pos);
+	}
 
 out_unlock:
 	inode_unlock(inode);
@@ -65,9 +69,19 @@ out_unlock:
 	return ret;
 }
 
+/*
+ * Not need fsync. At least in the future.
+ */
+static int aeon_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+{
+	return 0;
+}
+
 const struct file_operations aeon_dax_file_operations = {
+	.llseek     = aeon_llseek,
 	.read_iter  = aeon_file_read_iter,
 	.write_iter = aeon_file_write_iter,
+	.fsync      = aeon_fsync,
 };
 
 static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
