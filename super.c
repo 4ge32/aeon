@@ -301,6 +301,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	int i;
 
 
+	BUILD_BUG_ON(sizeof(struct aeon_super_block) > AEON_SB_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_SB_SIZE);
+
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;

@@ -10,7 +10,7 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 	struct free_list *free_list;
 	int i;
 
-	sbi->free_lists = kcalloc(sbi->cpus, sizeof(free_list), GFP_KERNEL);
+	sbi->free_lists = kcalloc(sbi->cpus, sizeof(struct free_list), GFP_KERNEL);
 
 	if(!sbi->free_lists)
 		return -ENOMEM;
@@ -31,7 +31,6 @@ void aeon_delete_free_lists(struct super_block *sb)
 
 	/* Each tree is freed in save_blocknode_mappings */
 	kfree(sbi->free_lists);
-	sbi->free_lists = NULL;
 }
 
 static int aeon_insert_blocktree(struct rb_root *tree, struct aeon_range_node *new_node)
@@ -460,17 +459,16 @@ int aeon_get_new_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid)
 
 // Allocate dentry block.  The offset for the allocated block comes back in
 // blocknr.  Return the number of blocks allocated (should be 1).
-u64 aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid)
+u64 aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, unsigned long *blocknr, int cpuid)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
-	unsigned long blocknr = 0;
 
-	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
+	allocated = aeon_new_blocks(sb, blocknr, 1, 0, ANY_CPU);
 
-	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
+	*pi_addr = (u64)sbi->virt_addr + *blocknr * AEON_DEF_BLOCK_SIZE_4K;
 
-	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, *blocknr, *pi_addr);
 
 	return *pi_addr;
 }
