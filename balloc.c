@@ -449,8 +449,7 @@ int aeon_get_new_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid)
 
 	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 
-	sbi->inode_maps[cpuid].virt_addr = (void *)(blocknr * AEON_DEF_BLOCK_SIZE_4K + (u64)sbi->virt_addr
-		+ (sbi->initsize / sbi->cpus) * cpuid);
+	sbi->inode_maps[cpuid].virt_addr = (void *)(blocknr * AEON_DEF_BLOCK_SIZE_4K + (u64)sbi->virt_addr);
 
 	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, (u64)sbi->inode_maps[cpuid].virt_addr);
 
