@@ -34,38 +34,43 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_range_node *range_node;
 	struct inode_map *inode_map;
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	unsigned long range_high;
+	unsigned long long used_inodes = le64_to_cpu(aeon_sb->s_num_inodes);
+	int inode_start = used_inodes;
 	int i;
 	int ret;
 
 	aeon_dbg("%s: START\n", __func__);
-	sbi->s_inodes_used_count = AEON_INODE_START;
+	sbi->s_inodes_used_count = inode_start;
 
-	range_high = AEON_INODE_START / sbi->cpus;
-	if (AEON_INODE_START % sbi->cpus)
+	range_high = (inode_start) / sbi->cpus;
+	if (inode_start % sbi->cpus)
 		range_high++;
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		aeon_dbg("%s: alloc_inode_node\n", __func__);
+		mutex_lock(&inode_map->inode_table_mutex);
 		range_node = aeon_alloc_inode_node(sb);
-		if (range_node == NULL)
+		if (range_node == NULL) {
+			mutex_unlock(&inode_map->inode_table_mutex);
 			return -ENOMEM;
-
+		}
 		range_node->range_low = 0;
 		range_node->range_high = range_high;
-		aeon_dbg("%s: insert_inodetree\n", __func__);
+		aeon_dbg("%s: range_hig %lu insert_inodetree\n", __func__, range_high);
 		ret = aeon_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			aeon_err(sb, "%s failed\n", __func__);
 			aeon_free_inode_node(range_node);
+			mutex_unlock(&inode_map->inode_table_mutex);
 			return ret;
 		}
 		inode_map->num_range_node_inode = 1;
 		inode_map->first_inode_range = range_node;
+		mutex_unlock(&inode_map->inode_table_mutex);
 	}
 
-	aeon_dbg("%s: FINISH\n", __func__);
 	return 0;
 }
 
@@ -114,6 +119,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	//inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 	inode->i_size = size;
+	inode->i_mode = mode;
 
 	aeon_dbg("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
 
@@ -142,6 +148,9 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	pi->aeon_ino = inode->i_ino;
 	pi->num_pages = 0;
 	pi->block = 0;
+	pi->i_size = cpu_to_le64(inode->i_size);
+	pi->num_dentry = 0;
+	pi->i_new = 1;
 
 	si = AEON_I(inode);
 	sih = &si->header;
@@ -219,7 +228,6 @@ static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 
 	*pi_addr += ((free_ino / sbi->cpus) - 2) * AEON_INODE_SIZE;
 	aeon_dbg("%s: %llx\n", __func__, *pi_addr);
 
-
 	/*
 	 * Handle the situation that the number of inode increase
 	 * over thirty-two in the future.
@@ -265,12 +273,49 @@ u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 	return ino;
 }
 
+static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u64 ino)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int num_cpu = sbi->cpus;
+	int cpu_id = (ino - AEON_INODE_START) % num_cpu;
+	struct inode_map inode_map = sbi->inode_maps[cpu_id];
+	u64 pi_addr = (u64)inode_map.virt_addr;
+
+	pi_addr += ((ino / sbi->cpus) - 2) * AEON_INODE_SIZE;
+
+	return pi_addr;
+}
+
+static inline u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 ino)
+{
+	u64 addr = 0;
+
+	if (ino == AEON_ROOT_INO)
+		addr =  _aeon_get_reserved_inode_addr(sb, ino);
+	else
+		addr = aeon_get_created_inode_addr(sb, ino);
+
+	return addr;
+}
+
 static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si,
 		       u64 ino, u64 pi_addr, int rebuild_dir)
 {
 	struct aeon_inode_info_header *sih  = &si->header;
+	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
 	aeon_init_header(sb, sih, 0755);
+
 	sih->pi = (struct aeon_inode *)pi_addr;
+	sih->pi_addr = pi_addr;
+	sih->ino = ino;
+
+	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFDIR:
+		aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
+		break;
+	default:
+		break;
+	}
 
 	return 0;
 }
@@ -294,7 +339,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	pi = sih->pi;
 	aeon_dbg("%s: %p\n", __func__, pi);
 
-	inode->i_mode = pi->i_mode;
+	inode->i_mode = le16_to_cpu(pi->i_mode);
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 	aeon_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
@@ -303,6 +348,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 
 	if (inode->i_mode == 0 || pi->deleted == 1) {
 		ret = -ESTALE;
+		aeon_err(sb, "inode->i_mode %lu - delet %ld\n", inode->i_mode, pi->deleted);
 		goto bad_inode;
 	}
 
@@ -328,13 +374,14 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 		break;
 	}
 
-	inode->i_size = le64_to_cpu(sih->i_size);
+	inode->i_size = le64_to_cpu(pi->i_size);
 	inode->i_atime.tv_sec = (__s32)le32_to_cpu(pi->i_atime);
 	inode->i_ctime.tv_sec = (__s32)le32_to_cpu(pi->i_ctime);
 	inode->i_mtime.tv_sec = (__s32)le32_to_cpu(pi->i_mtime);
 	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
 					 inode->i_ctime.tv_nsec = 0;
 	set_nlink(inode, le16_to_cpu(pi->i_links_count));
+	aeon_dbg("%s %lld", __func__, inode->i_size);
 	aeon_dbg("%s: LAST\n", __func__);
 
 	return 0;
@@ -344,6 +391,9 @@ bad_inode:
 	return ret;
 }
 
+/*
+ * Pass ino that was created
+ */
 struct inode *aeon_iget(struct super_block *sb, unsigned long ino)
 {
 	struct inode *inode;

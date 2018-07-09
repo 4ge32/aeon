@@ -184,7 +184,6 @@ static int not_enough_blocks(struct free_list *free_list, unsigned long num_bloc
 	struct aeon_range_node *first = free_list->first_node;
 	struct aeon_range_node *last = free_list->last_node;
 
-	aeon_dbg("%s\n", __func__);
 	if (free_list->num_free_blocks < num_blocks || !first || !last) {
 		aeon_dbg("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
 			 __func__, free_list->num_free_blocks, num_blocks,
@@ -311,7 +310,6 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	long ret_blocks = 0;
 	int retried = 0;
 
-	aeon_dbg("%s\n", __func__);
 	num_blocks = num * aeon_get_numblocks(btype);
 
 	if (cpuid == ANY_CPU)
@@ -363,8 +361,6 @@ static int aeon_new_data_blocks(struct super_block *sb,
 	unsigned long start_blk, unsigned int num, int cpu)
 {
 	int allocated;
-
-	aeon_dbg("%s\n", __func__);
 
 	allocated = aeon_new_blocks(sb, blocknr, num,
 			    sih->i_blk_type, cpu);

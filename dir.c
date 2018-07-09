@@ -3,24 +3,18 @@
 #include "aeon.h"
 
 
-static int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
+#define IF2DT(sif) (((sif) & S_IFMT) >> 12)
+
+int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen, struct aeon_dentry *direntry)
 {
-	struct aeon_range_node *node = NULL;
 	unsigned long hash;
 	int ret;
 
 	hash = BKDRHash(name, namelen);
 
-	node = aeon_alloc_dir_node(sb);
-	if (!node)
-		return -ENOMEM;
-
-	node->hash = hash;
-	node->direntry = direntry;
-	ret = aeon_insert_range_node(&sih->rb_tree, node, NODE_DIR);
+	ret = radix_tree_insert(&sih->tree, hash, direntry);
 	if (ret) {
-		aeon_free_dir_node(node);
 		aeon_dbg("%s ERROR %d: %s\n", __func__, ret, name);
 	}
 
@@ -31,27 +25,21 @@ static int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_h
 			 const char *name, int namelen)
 {
 	struct aeon_dentry *entry;
-	struct aeon_range_node *ret_node = NULL;
 	unsigned long hash;
-	int found = 0;
 
 	hash = BKDRHash(name, namelen);
-	found = aeon_find_range_node(&sih->rb_tree, hash, NODE_DIR, &ret_node);
-
-	if (found == 0) {
-		aeon_dbg("%s target not found: %s, length %d, "
-				"hash %lu\n", __func__, name, namelen, hash);
-		return -EINVAL;
-	}
-
-	entry = ret_node->direntry;
-	rb_erase(&ret_node->node, &sih->rb_tree);
-	aeon_free_dir_node(ret_node);
+	entry = radix_tree_delete(&sih->tree, hash);
 
 	return 0;
 }
 
-int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
+static struct aeon_dentry_map *aeon_get_dentry_map(struct aeon_sb_info *sbi, struct aeon_inode *pi)
+{
+	unsigned long blocknr = le64_to_cpu(pi->i_dentry);
+	return (struct aeon_dentry_map *)(sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K);
+}
+
+int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link, unsigned long *blocknr)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -59,8 +47,11 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
 	struct aeon_dentry *direntry;
+	struct aeon_dentry_map *de_map;
 	const char *name = dentry->d_name.name;
+	unsigned long num_de;
 	int namelen = dentry->d_name.len;
+	unsigned long d_blocknr = 0;
 	u64 pi_addr = 0;
 	int err;
 
@@ -73,10 +64,23 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 
 	pidir = aeon_get_inode(sb, dir);
 
-	direntry = (struct aeon_dentry *)aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
+	if (pidir->i_new) {
+		de_map = (struct aeon_dentry_map *)aeon_get_new_dentry_block(sb, &pi_addr, blocknr, ANY_CPU);
+		de_map->num_dentries = 0;
+		pidir->i_new = 0;
+	} else {
+		de_map = aeon_get_dentry_map(AEON_SB(sb), pidir);
+		*blocknr = le64_to_cpu(pidir->i_dentry);
+	}
+	num_de = le64_to_cpu(de_map->num_dentries);
+
+	direntry = (struct aeon_dentry *)aeon_get_new_dentry_block(sb, &pi_addr, &d_blocknr, ANY_CPU);
 	strncpy(direntry->name, name, namelen);
 	direntry->name_len = namelen;
 	direntry->ino = ino;
+
+	de_map->block_dentry[num_de++] = d_blocknr;
+	de_map->num_dentries = cpu_to_le64(num_de);
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, direntry);
 	if (err)
@@ -120,83 +124,84 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_dentry *direntry = NULL;
-	struct aeon_range_node *ret_node = NULL;
 	unsigned long hash;
-	int found = 0;
 
 	hash = BKDRHash(name, name_len);
-
-	found = aeon_find_range_node(&sih->rb_tree, hash,
-				NODE_DIR, &ret_node);
-	if (found == 1 && hash == ret_node->hash)
-		direntry = ret_node->direntry;
+	direntry = radix_tree_lookup(&sih->tree, hash);
 
 	return direntry;
 }
 
+#define FREE_BATCH 16
 static int aeon_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode *pidir;
+	struct aeon_inode *child_pi;
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
-	struct super_block *sb = inode->i_sb;
-	struct aeon_range_node *curr = NULL;
-	struct rb_node *temp = NULL;
-	struct aeon_inode *child_pi;
+	struct aeon_dentry *entries[FREE_BATCH];
 	struct aeon_dentry *entry;
-	unsigned long pos = ctx->pos;
-	ino_t ino;
-	u64 pi_addr = 0;
+	unsigned long pos = 0;
+	int nr_entries;
 	int ret;
-	int found = 0;
+	int i;
+	u64 pi_addr;
+	ino_t ino;
 
+	pidir = aeon_get_inode(sb, inode);
+	aeon_dbg("%s: ino %llu, size %llu, pos %llu\n",
+			__func__, (u64)inode->i_ino,
+			pidir->i_size, ctx->pos);
 
-	if (pos == 0) {
-		temp = rb_first(&sih->rb_tree);
-	}
-	else if (pos == READDIR_END) {
+	if (!sih) {
+		aeon_dbg("%s: inode %lu sih does not exist!\n",
+				__func__, inode->i_ino);
+		ctx->pos = READDIR_END;
 		return 0;
-	} else {
-		found = aeon_find_range_node(&sih->rb_tree, pos, NODE_DIR, &curr);
-		if (found == 1 && pos == curr->hash) {
-			aeon_dbg("%s: REACH HERE?\n", __func__);
-			temp = &curr->node;
-		}
-		aeon_dbg("%s: first else statement\n", __func__);
 	}
 
-	while (temp) {
-		aeon_dbg("%s: NOW\n", __func__);
-		curr = container_of(temp, struct aeon_range_node, node);
-		entry = curr->direntry;
+	pos = ctx->pos;
+	if (pos == READDIR_END)
+		return 0;
 
-		pos = BKDRHash(entry->name, entry->name_len);
-		ctx->pos = pos;
-		ino = __le64_to_cpu(entry->ino);
-		if (ino == 0)
-			continue;
+	do {
+		nr_entries = radix_tree_gang_lookup(&sih->tree, (void *)entries, pos, FREE_BATCH);
+		for (i = 0; i < nr_entries; i++) {
+			entry = entries[i];
 
-		ret = aeon_get_inode_address(sih, ino, &pi_addr);
+			pos = BKDRHash(entry->name, entry->name_len);
+			ino = __le64_to_cpu(entry->ino);
+			if (ino == 0)
+				continue;
 
-		if (ret) {
-			aeon_dbg("%s: get child inode %lu address failed %d\n",
-					__func__, ino, ret);
-			ctx->pos = READDIR_END;
-			return ret;
+			ret = aeon_get_inode_address(sih, ino, &pi_addr);
+			if (ret) {
+				aeon_dbg("%s: get child inode %lu address failed %d\n",
+						__func__, ino, ret);
+				ctx->pos = READDIR_END;
+				return ret;
+			}
+
+			aeon_dbg("ctx: ino %llu, name %s, name_len %u, de_len %u\n",
+					(u64)ino, entry->name, entry->name_len,
+					entry->de_len);
+			child_pi = (struct aeon_inode *)pi_addr;
+			if (!dir_emit(ctx, entry->name, entry->name_len,
+						ino, IF2DT(child_pi->i_mode))) {
+				aeon_dbg("Here: pos %llu\n", ctx->pos);
+				return 0;
+			}
+			ctx->pos = pos + 1;
 		}
+		pos++;
+	} while (nr_entries == FREE_BATCH);
 
-		child_pi = aeon_get_block(sb, pi_addr);
-		aeon_dbg("ctx: ino %llu, name %s, name_len %u\n", (u64)ino, entry->name, entry->name_len);
-		if (!dir_emit(ctx, entry->name, entry->name_len, ino, 0755)) {
-			aeon_dbg("Here: pos %llu\n", ctx->pos);
-			return 0;
-		}
-		temp = rb_next(temp);
-	}
-
-	ctx->pos = READDIR_END;
+	pos = READDIR_END;
 
 	return 0;
+
 }
 
 const struct file_operations aeon_dir_operations = {

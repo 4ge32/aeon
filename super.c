@@ -66,10 +66,16 @@ static void aeon_put_super(struct super_block *sb)
 	kfree(sbi);
 }
 
+static int aeon_write_inode(struct inode *inode, struct writeback_control *wbc)
+{
+	return 0;
+}
+
 static struct super_operations aeon_sops = {
 	.alloc_inode   = aeon_alloc_inode,
 	.destroy_inode = aeon_destroy_inode,
 	.put_super     = aeon_put_super,
+	.write_inode   = aeon_write_inode,
 };
 
 void aeon_err_msg(struct super_block *sb, const char *fmt, ...)
@@ -240,6 +246,7 @@ static void aeon_init_super_block(struct super_block *sb, unsigned long size)
 	aeon_sb->s_magic = cpu_to_le32(AEON_MAGIC);
 	aeon_sb->s_size = cpu_to_le64(size);
 	aeon_sb->s_blocksize = AEON_DEF_BLOCK_SIZE_4K;
+	aeon_sb->s_num_inodes = 1;
 
 	aeon_memlock_super(sb);
 }
@@ -260,6 +267,7 @@ static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root
 		cpu_to_le32(get_seconds());
 	root_i->aeon_ino = cpu_to_le64(AEON_ROOT_INO);
 	root_i->valid = 1;
+	root_i->i_new = 1;
 
 	aeon_memlock_inode(sb, root_i);
 }
@@ -273,6 +281,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	sbi->aeon_sb = aeon_get_super(sb);
 	root_i = aeon_get_inode_by_ino(sb, AEON_ROOT_INO);
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
+		aeon_info("AEON INIT\n");
 		aeon_init_super_block(sb, size);
 		aeon_init_root_inode(sb, root_i);
 	}
@@ -331,7 +340,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		sbi->inode_maps[i].virt_addr = 0;
+		inode_map->virt_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
 		inode_map->allocated = 0;
@@ -352,7 +361,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	root_pi = aeon_init(sb, sbi->initsize);
-	if (sbi->aeon_sb->s_magic != AEON_MAGIC)
+	if (le32_to_cpu(sbi->aeon_sb->s_magic) != AEON_MAGIC)
 		goto out2;
 
 	aeon_root_check(sb, root_pi);

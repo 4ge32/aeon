@@ -9,10 +9,10 @@
 #define AEON_INODE_SIZE         128
 #define AEON_SB_SIZE            512
 #define AEON_DEF_BLOCK_SIZE_4K  4096
-#define AEON_NAME_LEN 		512
+#define AEON_NAME_LEN 		128
 
 #define AEON_ROOT_INO		(1)
-#define AEON_INODE_START        (2)
+#define AEON_INODE_START        (4)
 
 /*
  * The first block contains super blocks;
@@ -39,7 +39,7 @@ struct aeon_inode {
 	u8	i_rsvd;		 /* reserved. used to be checksum */
 	u8	valid;		 /* Is this inode valid? */
 	u8	deleted;	 /* Is this inode deleted? */
-	u8	pad0;
+	u8	i_new;           /* Is this inode new? */
 	/* 4  */
 	__le32	i_flags;	 /* Inode flags */
 	__le64	i_size;		 /* Size of data in bytes */
@@ -58,15 +58,15 @@ struct aeon_inode {
 	__le32	i_create_time;	 /* Create time */
 	__le64	aeon_ino;	 /* aeon inode number */
 
-	__le64	pgoff;
+	__le64	num_dentry;
 	__le64  num_pages;
 
 	/* last 40 bytes */
-	__le64	block;
-	__le64  next_phys_addr;  /* inode page phys_addr */
+	__le64	i_dentry;
+	__le64  parent_inode;
 
 	__le64	f_size;
-	__le64	delete_epoch_id; /* Transaction ID when deleted */
+	__le64	block; /* Transaction ID when deleted */
 
 	struct {
 		__le32 rdev;	 /* major/minor # */
@@ -87,6 +87,7 @@ struct aeon_super_block {
 	__le64		s_size;             /* total size of fs in bytes */
 
 	__le64		s_start_dynamic;
+	__le64          s_num_inodes;
 
 	/* all the dynamic fields should go here */
 	/* s_mtime and s_wtime should be together and their order should not be
@@ -97,20 +98,30 @@ struct aeon_super_block {
 	__le64		s_num_free_blocks;
 } __attribute((__packed__));
 
+struct aeon_dentry_map {
+	__le64  block_dentry[511];
+	__le64  num_dentries;
+};
+
 struct aeon_dentry {
+	/* 8 bytes */
 	u8	entry_type;
 	u8	name_len;		/* length of the dentry name */
-	u8	reassigned;		/* Currently deleted */
 	u8	invalid;		/* Invalid now? */
+	u8      pad0;
+	/* 8 bytes */
 	__le16	de_len;			/* length of this dentry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */
+	/* 8 bytes */
 	__le32	csum;			/* entry checksum */
+	__le32  pad1;
+	/*  8 bytes */
 	__le64	ino;			/* inode no pointed to by this entry */
-	__le64	padding;
-	__le64	epoch_id;
-	__le64	trans_id;
-	char	name[AEON_NAME_LEN + 1];	/* File name */
+	/* 128 bytes */
+	char	name[AEON_NAME_LEN];	/* File name */
+	/* 96 bytes */
+	char    pad2[96];
 } __attribute((__packed__));
 
 #endif

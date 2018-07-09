@@ -7,13 +7,11 @@ MOUNT_POINT=/mnt
 run () {
   sudo insmod $FS.ko
   sudo mount -t $FS -o init $DEV $MOUNT_POINT
-  dmesg > err.log
 }
 
 rrun() {
   sudo umount $MOUNT_POINT
   sudo mount -t $FS $DEV $MOUNT_POINT
-  dmesg > err.log
 }
 
 clean () {
@@ -22,18 +20,18 @@ clean () {
   make clean
 }
 
-fs_test() {
-	echo $FS
+nvdimm_set () {
+   sudo ndctl create-namespace -e "namespace0.0" -m memory -f
 }
 
 case "$1" in
   clean)
     clean
     ;;
-  test)
-    fs_test
+  set)
+    nvdimm_set
     ;;
-  rt)
+  rm)
     rrun
     ;;
   *)

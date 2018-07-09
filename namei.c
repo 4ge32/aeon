@@ -8,8 +8,11 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			bool excl)
 {
 	struct aeon_inode *pidir;
+	struct aeon_inode *pi;
 	struct super_block *sb = dir->i_sb;
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode *inode = NULL;
+	unsigned long blocknr = 0;
 	u64 pi_addr = 0;
 	u64 ino;
 	int err = PTR_ERR(inode);
@@ -19,7 +22,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, 0);
+	err = aeon_add_dentry(dentry, ino, 0, &blocknr);
 	if (err)
 		goto out;
 
@@ -29,7 +32,13 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	d_instantiate(dentry, inode);
 
-	aeon_dbg("%s: 0x%llx", __func__, pi_addr);
+	pi = aeon_get_inode(sb, inode);
+	pidir->i_dentry = cpu_to_le64(blocknr);
+	pi->parent_inode = pidir->aeon_ino;
+	aeon_sb->s_num_inodes++;
+	pidir->num_dentry++;
+
+	aeon_dbg("%s %lld\n", __func__, inode->i_size);
 
 	return 0;
 out:
@@ -40,10 +49,13 @@ out:
 static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsigned int flag)
 {
 	struct inode *inode = NULL;
-	ino_t ino;
+	ino_t ino = 0;
+
+
+	aeon_dbg("%s %s %lu\n", __func__, dentry->d_name.name, ino);
 
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
-
+	aeon_dbg("%s %s %lu\n", __func__, dentry->d_name.name, ino);
 	if (ino) {
 		inode = aeon_iget(dir->i_sb, ino);
 		aeon_dbg("%s: %lu\n", __func__, ino);
@@ -91,13 +103,14 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	u64 ino;
 	u64 pi_addr = 0;
 	int err = -EMLINK;
+	unsigned long blocknr = 0;
 
 
 	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, 0);
+	err = aeon_add_dentry(dentry, ino, 0, &blocknr);
 
 	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino,
 				   S_IFDIR | mode, sb->s_blocksize,
