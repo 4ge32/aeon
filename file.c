@@ -77,11 +77,17 @@ static int aeon_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	return 0;
 }
 
+static int aeon_open(struct inode *inode, struct file *file)
+{
+	return generic_file_open(inode, file);
+}
+
 const struct file_operations aeon_dax_file_operations = {
 	.llseek     = aeon_llseek,
 	.read_iter  = aeon_file_read_iter,
 	.write_iter = aeon_file_write_iter,
 	.fsync      = aeon_fsync,
+	.open       = aeon_open,
 };
 
 static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
