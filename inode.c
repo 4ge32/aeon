@@ -87,10 +87,26 @@ ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry)
 	return direntry->ino;
 }
 
-int aeon_get_inode_address(struct aeon_inode_info_header *sih, u64 ino, u64 *pi_addr)
+static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 {
-	*pi_addr = sih->pi_addr;
-	return 0;
+	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
+
+	pi->valid = 0;
+
+	pi->deleted = 0;
+	pi->i_new = 1;
+	pi->i_links_count = cpu_to_le16(inode->i_nlink);
+	pi->i_mtime = pi->i_atime = pi->i_ctime =
+		pi->i_create_time = cpu_to_le32(current_time(inode).tv_sec);
+
+	pi->aeon_ino = inode->i_ino;
+	pi->num_pages = 0;
+	pi->block = 0;
+	pi->i_size = cpu_to_le64(inode->i_size);
+	pi->i_mode = inode->i_mode;
+	pi->num_dentry = 0;
+
+	pi->valid = 1;
 }
 
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
@@ -100,7 +116,6 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	struct super_block *sb;
 	struct aeon_sb_info *sbi;
 	struct inode *inode;
-	struct aeon_inode *pi;
 	struct aeon_inode_info *si;
 	struct aeon_inode_info_header *sih = NULL;
 	int err;
@@ -113,11 +128,9 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 		goto out;
 	}
 
-	aeon_dbg("%s: new inode\n", __func__);
 	inode_init_owner(inode, dir, mode);
 	inode->i_blocks = inode->i_size = 0;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-	//inode->i_generation = atomic_add_return(1, &sbi->next_generation);
 	inode->i_size = size;
 	inode->i_mode = mode;
 
@@ -143,14 +156,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 		break;
 	}
 
-	pi = (struct aeon_inode *)pi_addr;
-	pi->i_mode = inode->i_mode;
-	pi->aeon_ino = inode->i_ino;
-	pi->num_pages = 0;
-	pi->block = 0;
-	pi->i_size = cpu_to_le64(inode->i_size);
-	pi->num_dentry = 0;
-	pi->i_new = 1;
+	fill_new_aeon_inode(pi_addr, inode);
 
 	si = AEON_I(inode);
 	sih = &si->header;
@@ -305,9 +311,11 @@ static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si
 	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
 	aeon_init_header(sb, sih, 0755);
 
-	sih->pi = (struct aeon_inode *)pi_addr;
 	sih->pi_addr = pi_addr;
 	sih->ino = ino;
+
+	if (pi->i_new == 1)
+		goto end;
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFDIR:
@@ -317,6 +325,7 @@ static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si
 		break;
 	}
 
+end:
 	return 0;
 }
 
@@ -328,15 +337,15 @@ static void aeon_set_inode_flags(struct inode *inode, struct aeon_inode *pi, uns
 /* copy persistent state to struct inode */
 static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_addr)
 {
-	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode *pi;
+	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	int ret = -EIO;
 	unsigned long ino;
 
 	aeon_dbg("%s: pi_addr 0x%llx\n", __func__, pi_addr);
 
-	pi = sih->pi;
+	pi = aeon_get_inode(sb, sih);
 	aeon_dbg("%s: %p\n", __func__, pi);
 
 	inode->i_mode = le16_to_cpu(pi->i_mode);
@@ -352,7 +361,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 		goto bad_inode;
 	}
 
-	inode->i_blocks = sih->i_blocks;
+	inode->i_blocks = le64_to_cpu(pi->i_blocks);
 	//inode->i_mapping->a_ops = &aeon_aops_dax;
 
 	switch (inode->i_mode & S_IFMT) {

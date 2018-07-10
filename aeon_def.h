@@ -62,11 +62,11 @@ struct aeon_inode {
 	__le64  num_pages;
 
 	/* last 40 bytes */
-	__le64	i_dentry;
-	__le64  parent_inode;
+	__le64	dentry_map;
+	__le64  i_blocks;
 
 	__le64	f_size;
-	__le64	block; /* Transaction ID when deleted */
+	__le64	block;
 
 	struct {
 		__le32 rdev;	 /* major/minor # */

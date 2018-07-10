@@ -175,20 +175,11 @@ struct aeon_inode_info_header {
 	struct rb_root vma_tree;	/* Write vmas */
 	struct list_head list;		/* SB list of mmap sih */
 	int num_vmas;
-	unsigned short i_mode;		/* Dir or file? */
-	unsigned int i_flags;
-	unsigned long i_size;
-	unsigned long i_blocks;
 	unsigned long ino;
 	unsigned long pi_addr;
 	unsigned long alter_pi_addr;
-	unsigned long valid_entries;	/* For thorough GC */
-	unsigned long num_entries;	/* For thorough GC */
 	u64 last_setattr;		/* Last setattr entry */
-	u64 last_link_change;		/* Last link change entry */
-	u64 last_dentry;		/* Last updated dentry */
 	u8  i_blk_type;
-	struct aeon_inode *pi;
 };
 
 struct aeon_inode_info {
@@ -314,10 +305,8 @@ static inline struct aeon_inode *aeon_get_inode_by_ino(struct super_block *sb, u
 	return aeon_get_reserved_inode(sb, ino);
 }
 
-static inline struct aeon_inode *aeon_get_inode(struct super_block *sb, struct inode *inode)
+static inline struct aeon_inode *aeon_get_inode(struct super_block *sb, struct aeon_inode_info_header *sih)
 {
-	struct aeon_inode_info *si = AEON_I(inode);
-	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode fake_pi;
 	void *addr;
 	int rc;
@@ -329,16 +318,14 @@ static inline struct aeon_inode *aeon_get_inode(struct super_block *sb, struct i
 		return NULL;
 	}
 
-	aeon_dbg("%s: addr - %lu\n", __func__, sih->pi_addr);
+	aeon_dbg("%s: addr - 0x%lx\n", __func__, sih->pi_addr);
 
 	return (struct aeon_inode *)addr;
 }
 
 static inline void aeon_init_header(struct super_block *sb, struct aeon_inode_info_header *sih, u16 i_mode)
 {
-	sih->i_size = 0;
 	sih->ino = 0;
-	sih->i_blocks = 0;
 	sih->pi_addr = 0;
 	sih->alter_pi_addr = 0;
 	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
@@ -346,13 +333,7 @@ static inline void aeon_init_header(struct super_block *sb, struct aeon_inode_in
 	sih->vma_tree = RB_ROOT;
 	sih->num_vmas = 0;
 	INIT_LIST_HEAD(&sih->list);
-	sih->i_mode = i_mode;
-	sih->i_flags = 0;
-	sih->valid_entries = 0;
-	sih->num_entries = 0;
 	sih->last_setattr = 0;
-	sih->last_link_change = 0;
-	sih->last_dentry = 0;
 }
 
 /* mprotect.c */

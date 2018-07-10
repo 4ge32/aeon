@@ -35,7 +35,7 @@ static int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_h
 
 static struct aeon_dentry_map *aeon_get_dentry_map(struct aeon_sb_info *sbi, struct aeon_inode *pi)
 {
-	unsigned long blocknr = le64_to_cpu(pi->i_dentry);
+	unsigned long blocknr = le64_to_cpu(pi->dentry_map);
 	return (struct aeon_dentry_map *)(sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K);
 }
 
@@ -62,7 +62,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link, unsigned long 
 	if (namelen == 0)
 		return -EINVAL;
 
-	pidir = aeon_get_inode(sb, dir);
+	pidir = aeon_get_inode(sb, sih);
 
 	if (pidir->i_new) {
 		de_map = (struct aeon_dentry_map *)aeon_get_new_dentry_block(sb, &pi_addr, blocknr, ANY_CPU);
@@ -70,7 +70,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link, unsigned long 
 		pidir->i_new = 0;
 	} else {
 		de_map = aeon_get_dentry_map(AEON_SB(sb), pidir);
-		*blocknr = le64_to_cpu(pidir->i_dentry);
+		*blocknr = le64_to_cpu(pidir->dentry_map);
 	}
 	num_de = le64_to_cpu(de_map->num_dentries);
 
@@ -108,7 +108,7 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link, struct aeon_inode *u
 	if (ret)
 		goto out;
 
-	pidir = aeon_get_inode(sb, dir);
+	pidir = aeon_get_inode(sb, sih);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
@@ -145,12 +145,10 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 	struct aeon_dentry *entry;
 	unsigned long pos = 0;
 	int nr_entries;
-	int ret;
 	int i;
-	u64 pi_addr;
 	ino_t ino;
 
-	pidir = aeon_get_inode(sb, inode);
+	pidir = aeon_get_inode(sb, sih);
 	aeon_dbg("%s: ino %llu, size %llu, pos %llu\n",
 			__func__, (u64)inode->i_ino,
 			pidir->i_size, ctx->pos);
@@ -176,18 +174,11 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 			if (ino == 0)
 				continue;
 
-			ret = aeon_get_inode_address(sih, ino, &pi_addr);
-			if (ret) {
-				aeon_dbg("%s: get child inode %lu address failed %d\n",
-						__func__, ino, ret);
-				ctx->pos = READDIR_END;
-				return ret;
-			}
 
+			child_pi = aeon_get_inode(sb, sih);
 			aeon_dbg("ctx: ino %llu, name %s, name_len %u, de_len %u\n",
 					(u64)ino, entry->name, entry->name_len,
 					entry->de_len);
-			child_pi = (struct aeon_inode *)pi_addr;
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 						ino, IF2DT(child_pi->i_mode))) {
 				aeon_dbg("Here: pos %llu\n", ctx->pos);

@@ -405,7 +405,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	int allocated;
 	int found;
 
-	pi = aeon_get_inode(sb, inode);
+	pi = aeon_get_inode(sb, sih);
 	inode->i_ctime = inode->i_mtime = current_time(inode);
 
 	found = aeon_find_data_blocks(pi, &blocknr, &num_blocks);

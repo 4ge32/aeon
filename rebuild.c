@@ -7,7 +7,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 			       u64 pi_addr, struct aeon_inode_info_header *sih)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long blocknr = le64_to_cpu(pi->i_dentry);
+	unsigned long blocknr = le64_to_cpu(pi->dentry_map);
 	struct aeon_dentry_map *de;
 	struct aeon_dentry *d;
 	int num_entry;
@@ -18,6 +18,8 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 
 	num_entry = le64_to_cpu(de->num_dentries);
+	if (num_entry == 1)
+		return 0;
 	for (i = 0; i < num_entry; i++) {
 		d = (struct aeon_dentry *)(sbi->virt_addr + de->block_dentry[i] * AEON_DEF_BLOCK_SIZE_4K);
 		aeon_dbg("%s: %s\n", __func__, d->name);

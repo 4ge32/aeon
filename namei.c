@@ -8,16 +8,18 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			bool excl)
 {
 	struct aeon_inode *pidir;
-	struct aeon_inode *pi;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+	struct aeon_inode_info *si = AEON_I(dir);
+	struct aeon_inode_info_header *sih = &si->header;
 	struct inode *inode = NULL;
 	unsigned long blocknr = 0;
 	u64 pi_addr = 0;
 	u64 ino;
 	int err = PTR_ERR(inode);
 
-	pidir = aeon_get_inode(sb, dir);
+	pidir = aeon_get_inode(sb, sih);
+
 	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
@@ -32,13 +34,11 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	d_instantiate(dentry, inode);
 
-	pi = aeon_get_inode(sb, inode);
-	pidir->i_dentry = cpu_to_le64(blocknr);
-	pi->parent_inode = pidir->aeon_ino;
-	aeon_sb->s_num_inodes++;
+	pidir->dentry_map = cpu_to_le64(blocknr);
 	pidir->num_dentry++;
 
-	aeon_dbg("%s %lld\n", __func__, inode->i_size);
+	aeon_sb->s_num_inodes++;
+
 
 	return 0;
 out:
@@ -75,11 +75,13 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(dir);
+	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
 	struct aeon_inode update_dir;
 	int ret = -ENOMEM;
 
-	pidir = aeon_get_inode(sb, dir);
+	pidir = aeon_get_inode(sb, sih);
 
 	ret = aeon_remove_dentry(dentry, 0, &update_dir);
 	if (ret)
@@ -132,6 +134,8 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(dir);
+	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
 	struct aeon_inode update_dir;
 	int err = ENOTEMPTY;
@@ -139,7 +143,7 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!inode)
 		return -ENOENT;
 
-	pidir = aeon_get_inode(sb, dir);
+	pidir = aeon_get_inode(sb, sih);
 
 	if (aeon_inode_by_name(dir, &dentry->d_name) == 0)
 		return -ENOENT;
