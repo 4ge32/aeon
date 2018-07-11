@@ -104,7 +104,6 @@ static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 	pi->block = 0;
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = inode->i_mode;
-	pi->num_dentry = 0;
 
 	pi->valid = 1;
 }
@@ -223,16 +222,23 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 *pi_addr, int cpuid)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	int ret = 0;
+	struct aeon_inode *pi;
+	u64 prev_addr;
+	int ret = 1;
+	int order = (sbi->inode_maps[cpuid].allocated - 1) % 32;
 
 	if (sbi->inode_maps[cpuid].allocated % 32 == 0) {
-		aeon_dbg("%s: inside if\n", __func__);
-		ret = aeon_get_new_inode_block(sb, pi_addr, cpuid);
+		prev_addr = (u64)sbi->inode_maps[cpuid].virt_addr;
+		pi = (struct aeon_inode *)prev_addr;
+		/* update addr */
+		ret = aeon_get_new_inode_block(sb, cpuid);
+		pi->next_inode_block = ret;
+		*pi_addr = prev_addr;
 	} else
 		*pi_addr = (u64)sbi->inode_maps[cpuid].virt_addr;
 
-	*pi_addr += ((free_ino / sbi->cpus) - 2) * AEON_INODE_SIZE;
-	aeon_dbg("%s: %llx\n", __func__, *pi_addr);
+	*pi_addr += order * AEON_INODE_SIZE;
+	aeon_dbg("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
 
 	/*
 	 * Handle the situation that the number of inode increase
@@ -265,7 +271,7 @@ u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 	}
 
 	ret = aeon_get_new_inode_address(sb, free_ino, pi_addr, map_id);
-	if (ret) {
+	if (!ret) {
 		aeon_dbg("%s: get inode address failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);
 		return 0;

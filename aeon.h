@@ -438,7 +438,7 @@ int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
-int aeon_get_new_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid);
+unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid);
 u64 aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, unsigned long *blocknr, int cpuid);
 
 /* inode.c */

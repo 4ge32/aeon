@@ -436,7 +436,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 
 // Allocate inode block.  The offset for the allocated block comes back in
 // blocknr.  Return the number of blocks allocated (should be 1).
-int aeon_get_new_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid)
+unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
@@ -449,7 +449,7 @@ int aeon_get_new_inode_block(struct super_block *sb, u64 *pi_addr, int cpuid)
 
 	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, (u64)sbi->inode_maps[cpuid].virt_addr);
 
-	return allocated;
+	return blocknr;
 }
 
 // Allocate dentry block.  The offset for the allocated block comes back in

@@ -34,8 +34,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	d_instantiate(dentry, inode);
 
-	pidir->dentry_map = cpu_to_le64(blocknr);
-	pidir->num_dentry++;
+	pidir->dentry_map_block = cpu_to_le64(blocknr);
 
 	aeon_sb->s_num_inodes++;
 

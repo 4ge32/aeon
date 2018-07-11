@@ -58,11 +58,11 @@ struct aeon_inode {
 	__le32	i_create_time;	 /* Create time */
 	__le64	aeon_ino;	 /* aeon inode number */
 
-	__le64	num_dentry;
+	__le64	next_inode_block;
 	__le64  num_pages;
 
 	/* last 40 bytes */
-	__le64	dentry_map;
+	__le64	dentry_map_block;
 	__le64  i_blocks;
 
 	__le64	f_size;
@@ -98,8 +98,9 @@ struct aeon_super_block {
 	__le64		s_num_free_blocks;
 } __attribute((__packed__));
 
+#define MAX_ENTRY 510
 struct aeon_dentry_map {
-	__le64  block_dentry[511];
+	__le64  block_dentry[MAX_ENTRY + 1];
 	__le64  num_dentries;
 };
 

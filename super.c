@@ -294,7 +294,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	}
 
 	for (i = 0; i < sbi->cpus; i++)
-		aeon_get_new_inode_block(sb, sbi->inode_maps[i].virt_addr, i);
+		aeon_get_new_inode_block(sb, i);
 
 	return root_i;
 }
