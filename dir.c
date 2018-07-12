@@ -40,28 +40,31 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 	struct aeon_dentry_map *de_map = (struct aeon_dentry_map *)(sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K);
 	struct aeon_dentry_map *new_de_map;
 	unsigned long num_entries = le64_to_cpu(de_map->num_dentries);
-	unsigned long *new_de_map_blocknr = 0;
+	unsigned long new_de_map_blocknr = 0;
 	u64 pi_addr = 0;
 
 	if (num_entries == MAX_ENTRY) {
 		/* create new map */
-		new_de_map = (struct aeon_dentry_map *)aeon_get_new_dentry_block(sb, &pi_addr, new_de_map_blocknr, ANY_CPU);
+		new_de_map_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
+		new_de_map = (struct aeon_dentry_map *)pi_addr;
 		new_de_map->num_dentries = 0;
-		de_map->block_dentry[num_entries] = *new_de_map_blocknr;
+		de_map->next_map = new_de_map_blocknr;
 		de_map->num_dentries++;
 
 		de_map = new_de_map;
 	} else if (num_entries == MAX_ENTRY + 1) {
 		/* return next map */
-		blocknr = de_map->block_dentry[MAX_ENTRY];
+		blocknr = de_map->next_map;
 		de_map = (struct aeon_dentry_map *)(sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K);
+		if (de_map->num_dentries == MAX_ENTRY)
+			return ERR_PTR(-ENOSPC);
 	}
 
 	return de_map;
 
 }
 
-int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link, unsigned long *blocknr)
+int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -87,23 +90,27 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link, unsigned long 
 	pidir = aeon_get_inode(sb, sih);
 
 	if (pidir->i_new) {
-		de_map = (struct aeon_dentry_map *)aeon_get_new_dentry_block(sb, &pi_addr, blocknr, ANY_CPU);
+		d_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
+		de_map = (struct aeon_dentry_map *)pi_addr;
 		de_map->num_dentries = 0;
 		pidir->i_new = 0;
+		pidir->dentry_map_block = cpu_to_le64(d_blocknr);
 	} else {
 		de_map = aeon_get_dentry_map(sb, pidir);
-		*blocknr = le64_to_cpu(pidir->dentry_map_block);
+		if (IS_ERR(de_map))
+			return -ENOSPC;
 	}
 
 	num_de = le64_to_cpu(de_map->num_dentries);
 
-	direntry = (struct aeon_dentry *)aeon_get_new_dentry_block(sb, &pi_addr, &d_blocknr, ANY_CPU);
+	d_blocknr = aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
+	direntry = (struct aeon_dentry *)pi_addr;
 	strncpy(direntry->name, name, namelen);
 	direntry->name_len = namelen;
 	direntry->ino = ino;
 
-	de_map->block_dentry[num_de++] = d_blocknr;
-	de_map->num_dentries = cpu_to_le64(num_de);
+	de_map->block_dentry[num_de] = d_blocknr;
+	de_map->num_dentries = cpu_to_le64(++num_de);
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, direntry);
 	if (err)

@@ -99,8 +99,12 @@ struct aeon_super_block {
 } __attribute((__packed__));
 
 #define MAX_ENTRY 510
+/* TODO
+ * scale a number of dentries in the future
+ */
 struct aeon_dentry_map {
-	__le64  block_dentry[MAX_ENTRY + 1];
+	__le64  block_dentry[MAX_ENTRY];
+	__le64  next_map;
 	__le64  num_dentries;
 };
 

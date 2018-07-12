@@ -349,8 +349,12 @@ alloc:
 		return -ENOSPC;
 	}
 
+	aeon_dbg("6 HERE? ret_block %ld\n", ret_blocks);
+	aeon_dbg("%p\n", blocknr);
+	aeon_dbg("%p\n", &new_blocknr);
 	*blocknr = new_blocknr;
 
+	aeon_dbg("7 HERE? ret_block %ld\n", ret_blocks);
 	return ret_blocks / aeon_get_numblocks(btype);
 }
 
@@ -454,16 +458,34 @@ unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid)
 
 // Allocate dentry block.  The offset for the allocated block comes back in
 // blocknr.  Return the number of blocks allocated (should be 1).
-u64 aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, unsigned long *blocknr, int cpuid)
+unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
+	unsigned long blocknr = 0;
 
-	allocated = aeon_new_blocks(sb, blocknr, 1, 0, ANY_CPU);
+	aeon_dbg("%s:\n", __func__);
+	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 
-	*pi_addr = (u64)sbi->virt_addr + *blocknr * AEON_DEF_BLOCK_SIZE_4K;
+	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
 
-	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, *blocknr, *pi_addr);
+	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
-	return *pi_addr;
+	return blocknr;
+}
+
+unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+
+	aeon_dbg("%s:\n", __func__);
+	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
+
+	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
+
+	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+
+	return blocknr;
 }

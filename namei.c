@@ -13,7 +13,6 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct inode *inode = NULL;
-	unsigned long blocknr = 0;
 	u64 pi_addr = 0;
 	u64 ino;
 	int err = PTR_ERR(inode);
@@ -24,7 +23,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, 0, &blocknr);
+	err = aeon_add_dentry(dentry, ino, 0);
 	if (err)
 		goto out;
 
@@ -34,10 +33,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	d_instantiate(dentry, inode);
 
-	pidir->dentry_map_block = cpu_to_le64(blocknr);
-
 	aeon_sb->s_num_inodes++;
-
 
 	return 0;
 out:
@@ -104,14 +100,13 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	u64 ino;
 	u64 pi_addr = 0;
 	int err = -EMLINK;
-	unsigned long blocknr = 0;
 
 
 	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, 0, &blocknr);
+	err = aeon_add_dentry(dentry, ino, 0);
 
 	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino,
 				   S_IFDIR | mode, sb->s_blocksize,

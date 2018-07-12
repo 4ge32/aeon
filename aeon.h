@@ -439,7 +439,8 @@ int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
 unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid);
-u64 aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, unsigned long *blocknr, int cpuid);
+unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid);
+unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *);
@@ -454,7 +455,7 @@ struct inode *aeon_iget(struct super_block *, unsigned long);
 /* dir.c */
 int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen, struct aeon_dentry *direntry);
-int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link, unsigned long *blocknr);
+int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link, struct aeon_inode *update);
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 	struct aeon_inode *pi, struct inode *inode, const char *name,
