@@ -432,6 +432,7 @@ void aeon_free_block_node(struct aeon_range_node *node);
 /* balloc.h */
 int aeon_alloc_block_free_lists(struct super_block *sb);
 void aeon_delete_free_lists(struct super_block *sb);
+unsigned long aeon_count_free_blocks(struct super_block *sb);
 void aeon_init_blockmap(struct super_block *sb);
 int aeon_insert_range_node(struct rb_root *tree, struct aeon_range_node *new_node, enum node_type);
 int aeon_find_range_node(struct rb_root *tree, unsigned long key,
@@ -451,6 +452,10 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	size_t size, dev_t rdev, const struct qstr *qstr);
 u64 aeon_new_aeon_inode(struct super_block *, u64 *);
 struct inode *aeon_iget(struct super_block *, unsigned long);
+int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
+			     struct aeon_inode_info_header *sih);
+int aeon_free_dram_resource(struct super_block *sb,
+	struct aeon_inode_info_header *sih);
 
 /* dir.c */
 int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
@@ -460,6 +465,7 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link, struct aeon_inode *u
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 	struct aeon_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
+void aeon_delete_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih);
 
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,

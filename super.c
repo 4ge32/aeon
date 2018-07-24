@@ -8,6 +8,7 @@
 #include <linux/backing-dev-defs.h>
 #include <linux/parser.h>
 #include <linux/cred.h>
+#include <linux/statfs.h>
 
 #include "aeon.h"
 
@@ -71,11 +72,79 @@ static int aeon_write_inode(struct inode *inode, struct writeback_control *wbc)
 	return 0;
 }
 
+static void aeon_evict_inode(struct inode *inode)
+{
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	int destroy = 0;
+	int ret;
+
+	aeon_dbg("%s: START\n", __func__);
+
+	if (!sih) {
+		aeon_err(sb, "%s: ino %lu sih is NULL!\n",
+				__func__, inode->i_ino);
+		goto out;
+	}
+
+	aeon_dbg("%s: %lu\n", __func__, inode->i_ino);
+	if (!inode->i_nlink && !is_bad_inode(inode)) {
+		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+			goto out;
+
+		if (pi) {
+			ret = aeon_free_inode_resource(sb, pi, sih);
+			if (ret)
+				goto out;
+		}
+
+		destroy = 1;
+		pi = NULL;
+
+		inode->i_mtime = inode->i_ctime = current_time(inode);
+		inode->i_size = 0;
+	}
+out:
+	if (destroy == 0) {
+		aeon_dbg("%s: destroying %lu\n", __func__, inode->i_ino);
+		aeon_free_dram_resource(sb, sih);
+	}
+
+	truncate_inode_pages(&inode->i_data, 0);
+
+	clear_inode(inode);
+
+	aeon_dbg("%s: FINISH\n", __func__);
+}
+
+static int aeon_statfs(struct dentry *d, struct kstatfs *buf)
+{
+	struct super_block *sb = d->d_sb;
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	buf->f_type = AEON_MAGIC;
+	buf->f_bsize = sb->s_blocksize;
+
+	buf->f_blocks = sbi->num_blocks;
+	buf->f_bfree = buf->f_bavail = aeon_count_free_blocks(sb);
+	buf->f_files = aeon_sb->s_num_inodes;
+	buf->f_namelen = AEON_NAME_LEN;
+
+	aeon_dbg("__func__, %llu -- %llu\n", buf->f_blocks, buf->f_bfree);
+
+	return 0;
+}
+
 static struct super_operations aeon_sops = {
 	.alloc_inode   = aeon_alloc_inode,
 	.destroy_inode = aeon_destroy_inode,
 	.put_super     = aeon_put_super,
 	.write_inode   = aeon_write_inode,
+	.evict_inode   = aeon_evict_inode,
+	.statfs        = aeon_statfs,
 };
 
 void aeon_err_msg(struct super_block *sb, const char *fmt, ...)

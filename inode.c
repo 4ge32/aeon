@@ -2,6 +2,10 @@
 
 #include "aeon.h"
 
+#define AEON_BLOCK_TYPE_MAX 1
+unsigned int blk_type_to_shift[AEON_BLOCK_TYPE_MAX] = {12};
+uint32_t blk_type_to_size[AEON_BLOCK_TYPE_MAX] = {0x1000};
+
 
 static inline int aeon_insert_inodetree(struct aeon_sb_info *sbi, struct aeon_range_node *new_node, int cpu)
 {
@@ -453,4 +457,179 @@ struct inode *aeon_iget(struct super_block *sb, unsigned long ino)
 fail:
 	iget_failed(inode);
 	return ERR_PTR(err);
+}
+
+static unsigned long aeon_get_last_blocknr(struct super_block *sb, struct aeon_inode_info_header *sih)
+{
+	unsigned long last_blocknr;
+	unsigned int btype;
+	unsigned int data_bits;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	int ret;
+	return 0;
+
+	if (ret) {
+		aeon_dbg("%s: read pi @ 0x%lx failed\n",
+				__func__, sih->pi_addr);
+		btype = 0;
+	} else {
+		btype = sih->i_blk_type;
+	}
+
+	data_bits = blk_type_to_shift[btype];
+
+	if (pi->i_size == 0)
+		last_blocknr = 0;
+	else
+		last_blocknr = (pi->i_size - 1) >> data_bits;
+
+	return last_blocknr;
+}
+
+int aeon_free_dram_resource(struct super_block *sb,
+	struct aeon_inode_info_header *sih)
+{
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	int freed = 0;
+
+	if (pi->aeon_ino == 0)
+		return 0;
+
+	if (!(S_ISREG(le16_to_cpu(pi->i_mode))) &&
+			!(S_ISDIR(le16_to_cpu(pi->i_mode))))
+		return 0;
+
+	if (S_ISREG(pi->i_mode)) {
+		//last_blocknr = nova_get_last_blocknr(sb, sih);
+		//freed = nova_delete_file_tree(sb, sih, 0,
+		//			last_blocknr, false, false, 0);
+	} else {
+		aeon_delete_dir_tree(sb, sih);
+		freed = 1;
+	}
+
+	return freed;
+}
+
+static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map;
+	struct aeon_range_node *i = NULL;
+	struct aeon_range_node *curr_node;
+	int cpuid = ino % sbi->cpus;
+	unsigned long internal_ino = ino / sbi->cpus;
+	int found;
+	int ret;
+
+	aeon_dbg("Free inuse ino: %lu\n", ino);
+	inode_map = &sbi->inode_maps[cpuid];
+
+	mutex_lock(&inode_map->inode_table_mutex);
+	found = aeon_search_inodetree(sbi, ino, &i);
+	if (!found) {
+		aeon_dbg("%s ERROR: ino %lu not found \n", __func__, ino);
+		mutex_unlock(&inode_map->inode_table_mutex);
+		return -EINVAL;
+	}
+
+	if ((internal_ino == i->range_low) && (internal_ino == i->range_high)) {
+		rb_erase(&i->node, &inode_map->inode_inuse_tree);
+		aeon_free_inode_node(i);
+		inode_map->num_range_node_inode--;
+		goto block_found;
+	}
+	if ((internal_ino == i->range_low) && (internal_ino < i->range_high)) {
+		i->range_low = internal_ino + 1;
+		goto block_found;
+	}
+	if ((internal_ino > i->range_low) && (internal_ino == i->range_high)) {
+		i->range_high = internal_ino - 1;
+		goto block_found;
+	}
+	if ((internal_ino > i->range_low) && (internal_ino < i->range_high)) {
+		curr_node = aeon_alloc_inode_node(sb);
+		if (curr_node == NULL)
+			goto block_found;
+		curr_node->range_low = internal_ino + 1;
+		curr_node->range_high = i->range_high;
+
+		i->range_high = internal_ino - 1;
+
+		ret = aeon_insert_inodetree(sbi, curr_node, cpuid);
+		if (ret) {
+			aeon_free_inode_node(curr_node);
+			goto err;
+		}
+		inode_map->num_range_node_inode++;
+		goto block_found;
+	}
+err:
+	aeon_err(sb, "Unable to free inode %lu\n", ino);
+	mutex_unlock(&inode_map->inode_table_mutex);
+	return ret;
+block_found:
+	sbi->s_inodes_used_count--;
+	inode_map->freed++;
+	mutex_unlock(&inode_map->inode_table_mutex);
+	return ret;
+}
+
+static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
+			   struct aeon_inode_info_header *sih)
+{
+	int err = 0;
+
+	sih->pi_addr = 0;
+
+	err = aeon_free_inuse_inode(sb, pi->aeon_ino);
+
+	return err;
+}
+
+int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
+			     struct aeon_inode_info_header *sih)
+{
+	unsigned long last_blocknr;
+	int ret = 0;
+
+	aeon_memunlock_inode(sb, pi);
+	pi->deleted = 1;
+
+	if (pi->valid) {
+		aeon_dbg("%s: inode %lu still valid\n",
+				__func__, sih->ino);
+		pi->valid = 0;
+	}
+	aeon_memunlock_inode(sb, pi);
+
+	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFREG:
+		last_blocknr = aeon_get_last_blocknr(sb, sih);
+		aeon_dbg("%s: file ino %lu\n", __func__, sih->ino);
+		//freed = aeon_delete_file_tree(sb, sih, 0,
+		//			last_blocknr, true, true);
+		break;
+	case S_IFDIR:
+		aeon_dbg("%s: dir ino %lu\n", __func__, sih->ino);
+		aeon_delete_dir_tree(sb, sih);
+		break;
+	case S_IFLNK:
+		/* Log will be freed later */
+		aeon_dbg("%s: symlink ino %lu\n",
+				__func__, sih->ino);
+		//freed = aeon_delete_file_tree(sb, sih, 0, 0,
+		//				true, true);
+		break;
+	default:
+		aeon_dbg("%s: special ino %lu\n",
+				__func__, sih->ino);
+		break;
+	}
+
+	ret = aeon_free_inode(sb, pi, sih);
+	if (ret)
+		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
+
+	return ret;
 }

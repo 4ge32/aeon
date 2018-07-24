@@ -4,6 +4,7 @@
 
 
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
+#define FREE_BATCH 16
 
 int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen, struct aeon_dentry *direntry)
@@ -31,6 +32,36 @@ static int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_h
 	entry = radix_tree_delete(&sih->tree, hash);
 
 	return 0;
+}
+
+void aeon_delete_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih)
+{
+	struct aeon_dentry *direntry;
+	unsigned long pos = 0;
+	struct aeon_dentry *entries[FREE_BATCH];
+	int nr_entries;
+	int i;
+	void *ret;
+
+	do {
+		nr_entries = radix_tree_gang_lookup(&sih->tree, (void **)entries, pos, FREE_BATCH);
+		for (i = 0; i < nr_entries; i++) {
+			direntry = entries[i];
+
+			pos = BKDRHash(direntry->name, direntry->name_len);
+			ret = radix_tree_delete(&sih->tree, pos);
+			if (!ret || ret != direntry) {
+				aeon_err(sb, "dentry: type %d, inode %llu, name %s, namelen %u, rec len %u\n",
+						direntry->entry_type,
+						le64_to_cpu(direntry->ino),
+						direntry->name, direntry->name_len,
+						le16_to_cpu(direntry->de_len));
+				if (!ret)
+					aeon_dbg("ret is NULL\n");
+			}
+		}
+		pos ++;
+	} while (nr_entries == FREE_BATCH);
 }
 
 static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struct aeon_inode *pi)
@@ -162,7 +193,6 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 	return direntry;
 }
 
-#define FREE_BATCH 16
 static int aeon_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);

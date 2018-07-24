@@ -33,6 +33,21 @@ void aeon_delete_free_lists(struct super_block *sb)
 	kfree(sbi->free_lists);
 }
 
+unsigned long aeon_count_free_blocks(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	unsigned long num_free_blocks = 0;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = aeon_get_free_list(sb, i);
+		num_free_blocks += free_list->num_free_blocks;
+	}
+
+	return num_free_blocks;
+}
+
 static int aeon_insert_blocktree(struct rb_root *tree, struct aeon_range_node *new_node)
 {
 	int ret;
@@ -349,12 +364,8 @@ alloc:
 		return -ENOSPC;
 	}
 
-	aeon_dbg("6 HERE? ret_block %ld\n", ret_blocks);
-	aeon_dbg("%p\n", blocknr);
-	aeon_dbg("%p\n", &new_blocknr);
 	*blocknr = new_blocknr;
 
-	aeon_dbg("7 HERE? ret_block %ld\n", ret_blocks);
 	return ret_blocks / aeon_get_numblocks(btype);
 }
 
@@ -449,6 +460,10 @@ unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid)
 
 	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 
+	/*
+	 * TODO:
+	 * Change multiple form to bit manipulation form.
+	 */
 	sbi->inode_maps[cpuid].virt_addr = (void *)(blocknr * AEON_DEF_BLOCK_SIZE_4K + (u64)sbi->virt_addr);
 
 	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, (u64)sbi->inode_maps[cpuid].virt_addr);
@@ -480,7 +495,6 @@ unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 
-	aeon_dbg("%s:\n", __func__);
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 
 	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
