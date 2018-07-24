@@ -17,7 +17,7 @@ rrun() {
 clean () {
   sudo umount $MOUNT_POINT
   sudo rmmod $FS
-  make clean
+  #make clean
 }
 
 nvdimm_set () {
