@@ -105,7 +105,8 @@ static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 
 	pi->aeon_ino = inode->i_ino;
 	pi->num_pages = 0;
-	pi->block = 0;
+	pi->i_block = 0;
+	pi->i_blocks = 0;
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = inode->i_mode;
 

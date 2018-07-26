@@ -413,6 +413,24 @@ static inline void aeon_memunlock_super(struct super_block *sb)
 		__aeon_memunlock_range(ps, AEON_SB_SIZE);
 }
 
+static inline struct aeon_extent_header *AEON_EXTENT_HEADER(struct super_block *sb, struct aeon_inode *pi)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long addr;
+
+	addr = (u64)sbi->virt_addr + (pi->i_block << 12);
+	return (struct aeon_extent_header *)addr;
+}
+
+static inline struct aeon_extent *AEON_EXTENT(struct super_block *sb, struct aeon_inode *pi)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long addr;
+
+	addr = (u64)sbi->virt_addr + (pi->i_blocks << 12);
+	return (struct aeon_extent *)addr;
+}
+
 /* operations */
 extern const struct inode_operations aeon_dir_inode_operations;
 extern const struct inode_operations aeon_dir_inode_operations;

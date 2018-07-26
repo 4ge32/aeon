@@ -63,9 +63,9 @@ struct aeon_inode {
 
 	/* last 40 bytes */
 	__le64	dentry_map_block;
-	__le64  i_blocks;
+	__le64  i_block;        /* point extent_header */
 
-	__le64	f_size;
+	__le64	i_blocks;       /* point extent log */
 	__le64	block;
 
 	struct {
@@ -106,7 +106,7 @@ struct aeon_dentry_map {
 	__le64  block_dentry[MAX_ENTRY];
 	__le64  next_map;
 	__le64  num_dentries;
-};
+}__attribute((__packed__));
 
 struct aeon_dentry {
 	/* 8 bytes */
@@ -127,6 +127,22 @@ struct aeon_dentry {
 	char	name[AEON_NAME_LEN];	/* File name */
 	/* 96 bytes */
 	char    pad2[96];
+} __attribute((__packed__));
+
+/*
+ * extent tree's header referred from inode
+ */
+struct aeon_extent_header {
+	__le16  eh_entries;
+	__le16  eh_max;
+	__le16  eh_depth;
+	__le64  eh_curr_block;
+} __attribute((__packed__));
+
+struct aeon_extent {
+	__le64  ex_block;
+	__le16  ex_length;
+	__le64  next_block;
 } __attribute((__packed__));
 
 #endif

@@ -141,6 +141,8 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 static int aeon_iomap_end(struct inode *inode, loff_t offset, loff_t length,
 			  ssize_t written, unsigned flags, struct iomap *iomap)
 {
+	if (iomap->type == IOMAP_MAPPED && written < length && (flags & IOMAP_WRITE))
+		truncate_pagecache(inode, inode->i_size);
 	return 0;
 }
 
