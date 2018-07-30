@@ -214,7 +214,8 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 	ino_t ino;
 
 
-	dir_emit_dots(file, ctx);
+	if (!dir_emit_dots(file, ctx))
+		return 0;
 
 	pidir = aeon_get_inode(sb, sih);
 	aeon_dbg("%s: ino %llu, size %llu, pos %llu\n",
