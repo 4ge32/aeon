@@ -75,7 +75,7 @@ struct aeon_inode {
 	__le32	csum;            /* CRC32 checksum */
 
 	/* last 8 bytes */
-	__le64  used;            /* used inodes in block */
+	__le64  parent_ino;            /* used inodes in block */
 } __attribute((__packed__));
 
 struct aeon_super_block {

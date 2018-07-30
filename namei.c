@@ -4,8 +4,8 @@
 #include "aeon.h"
 
 
-static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
-			bool excl)
+static int aeon_create(struct inode *dir, struct dentry *dentry,
+			umode_t mode, bool excl)
 {
 	struct aeon_inode *pidir;
 	struct super_block *sb = dir->i_sb;
@@ -36,6 +36,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	aeon_sb->s_num_inodes++;
 
 	return 0;
+
 out:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;
@@ -66,6 +67,12 @@ static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsi
 	return d_splice_alias(inode, dentry);
 }
 
+static int aeon_link(struct dentry *dest_dentry, struct inode *dir, struct dentry *dentry)
+{
+	aeon_dbg("%s\n", __func__);
+	return 0;
+}
+
 static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
@@ -91,6 +98,12 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 out:
 	aeon_err(sb, "%s return %d\n", __func__, ret);
 	return ret;
+}
+
+static int aeon_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
+{
+	aeon_dbg("%s\n", __func__);
+	return 0;
 }
 
 static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
@@ -156,15 +169,65 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 		drop_nlink(dir);
 
 	return 0;
+
 end_rmdir:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }
 
+static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
+		       struct inode *new_dir, struct dentry *new_dentry,
+		       unsigned int flags)
+{
+	struct inode *old_inode = d_inode(old_dentry);
+	struct inode *new_inode = d_inode(new_dentry);
+	struct super_block *sb = old_dir->i_sb;
+	struct aeon_inode_info *o_si = AEON_I(old_dir);
+	struct aeon_inode_info_header *o_sih = &o_si->header;
+	struct aeon_dentry *old_de;
+	struct aeon_dentry *dir_de = NULL;
+	struct aeon_inode *pi = aeon_get_inode(sb, o_sih);
+	struct qstr *old_entry = &old_dentry->d_name;
+	struct qstr *new_entry = &new_dentry->d_name;
+	int err;
+
+	old_de = aeon_find_dentry(sb, pi, old_dir, old_entry->name, old_entry->len);
+	if (old_de == NULL) {
+		err = -ENOENT;
+		goto out;
+	}
+
+	if (S_ISDIR(old_inode->i_mode)) {
+		err = -EIO;
+	        //dir_de = aeon_dotdot(old_inode);
+		if (!dir_de)
+			goto out;
+	}
+
+	//strncpy(direntry->name, new_entry->name, new_entry->len);
+	//direntry->name_len = new_entry->len;
+
+	return 0;
+
+out:
+	aeon_err(sb, "%s return %d\n", __func__, err);
+	return err;
+}
+
+static int aeon_mknod (struct inode * dir, struct dentry *dentry, umode_t mode, dev_t rdev)
+{
+	aeon_dbg("%s\n", __func__);
+	return 0;
+}
+
 const struct inode_operations aeon_dir_inode_operations = {
-	.create = aeon_create,
-	.lookup = aeon_lookup,
-	.unlink = aeon_unlink,
-	.mkdir  = aeon_mkdir,
-	.rmdir  = aeon_rmdir,
+	.create  = aeon_create,
+	.lookup  = aeon_lookup,
+	.link    = aeon_link,
+	.unlink  = aeon_unlink,
+	.symlink = aeon_symlink,
+	.mkdir   = aeon_mkdir,
+	.rmdir   = aeon_rmdir,
+	.rename  = aeon_rename,
+	.mknod   = aeon_mknod,
 };
