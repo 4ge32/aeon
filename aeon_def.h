@@ -137,6 +137,7 @@ struct aeon_extent_header {
 	__le16  eh_max;
 	__le16  eh_depth;
 	__le64  eh_curr_block;
+	__le32  eh_iblock;
 } __attribute((__packed__));
 
 struct aeon_extent {

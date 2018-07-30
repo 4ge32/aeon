@@ -420,6 +420,10 @@ static u32 seach_extent(struct super_block *sb, struct aeon_inode *pi, unsigned 
 	aeh = AEON_EXTENT_HEADER(sb, pi);
 	ae = AEON_EXTENT(sb, pi);
 
+	aeon_dbg("%s: %d\n", __func__, le16_to_cpu(aeh->eh_entries));
+	if (le16_to_cpu(aeh->eh_entries) <= iblock)
+		return 0;
+
 	aeon_dbg("%s: %lu\n", __func__, iblock);
 	for (i = 0; i < iblock; i++) {
 		block = le64_to_cpu(ae->next_block);
@@ -457,15 +461,20 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	 */
 
 	pi = aeon_get_inode(sb, sih);
-	inode->i_ctime = inode->i_mtime = current_time(inode);
+	//inode->i_ctime = inode->i_mtime = current_time(inode);
 
 	found = aeon_find_data_blocks(sb, pi, &blocknr, &num_blocks);
 	if (found) {
-		*bno = blocknr;
-		if (iblock == 0) {
-			aeon_dbg("%s: retunr num_blocks\n", __func__);
+		//*bno = blocknr;
+		//if (iblock == 0) {
+		//	aeon_dbg("%s: retunr num_blocks\n", __func__);
+		//	return num_blocks;
+		//}
+		*bno = seach_extent(sb, pi, iblock);
+		if (*bno == 0)
+			goto create;
+		else
 			return num_blocks;
-		}
 	}
 
 	if (create == 0) {
@@ -475,6 +484,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 		return num_blocks;
 	}
 
+create:
 	/* Return initialized blocks to the user */
 	if (pi->i_block == 0) {
 		/* TODO:
@@ -485,15 +495,18 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 		aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 		pi->i_block = blocknr;
 		aeh = AEON_EXTENT_HEADER(sb, pi);
-		aeh->eh_entries = 1;
+		aeh->eh_entries = 0;
 		aeh->eh_max = 4;
 		aeh->eh_depth = 0;
 		aeh->eh_curr_block = 0;
+		aeh->eh_iblock = 0;
 
 		blocknr = 0;
 	} else
 		aeh = AEON_EXTENT_HEADER(sb, pi);
 
+	if (le32_to_cpu(aeh->eh_iblock) == iblock && iblock != 0)
+		return num_blocks;
 
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 	aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
@@ -508,6 +521,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 		ae->ex_block = blocknr;
 
 		aeh->eh_curr_block = blocknr;
+		aeh->eh_iblock = cpu_to_le32(iblock);
 	} else {
 		new_ae = (struct aeon_extent *)((blocknr << 12) + sbi->virt_addr);
 		ae = AEON_EXTENT(sb, pi);
@@ -524,6 +538,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 		new_ae->next_block = 0;
 
 		aeh->eh_curr_block = blocknr;
+		aeh->eh_iblock = cpu_to_le32(iblock);
 	}
 
 	*bno = blocknr;

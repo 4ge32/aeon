@@ -8,6 +8,7 @@
 
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 {
+	aeon_dbg("%s\n", __func__);
 	return generic_file_llseek(file, offset, origin);
 }
 

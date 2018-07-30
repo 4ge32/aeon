@@ -34,6 +34,11 @@ static int aeon_remove_dir_tree(struct super_block *sb, struct aeon_inode_info_h
 	return 0;
 }
 
+struct aeon_dentry *aeon_dotdot(struct inode *dir)
+{
+	return NULL;
+}
+
 void aeon_delete_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih)
 {
 	struct aeon_dentry *direntry;
@@ -208,6 +213,9 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 	int i;
 	ino_t ino;
 
+
+	dir_emit_dots(file, ctx);
+
 	pidir = aeon_get_inode(sb, sih);
 	aeon_dbg("%s: ino %llu, size %llu, pos %llu\n",
 			__func__, (u64)inode->i_ino,
@@ -236,9 +244,8 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 
 
 			child_pi = aeon_get_inode(sb, sih);
-			aeon_dbg("ctx: ino %llu, name %s, name_len %u, de_len %u\n",
-					(u64)ino, entry->name, entry->name_len,
-					entry->de_len);
+			aeon_dbg("ctx: ino %llu, name %s, name_len %u\n",
+					(u64)ino, entry->name, entry->name_len);
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 						ino, IF2DT(child_pi->i_mode))) {
 				aeon_dbg("Here: pos %llu\n", ctx->pos);
