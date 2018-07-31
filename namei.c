@@ -180,7 +180,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		       unsigned int flags)
 {
 	struct inode *old_inode = d_inode(old_dentry);
-	struct inode *new_inode = d_inode(new_dentry);
+	//struct inode *new_inode = d_inode(new_dentry);
 	struct super_block *sb = old_dir->i_sb;
 	struct aeon_inode_info *o_si = AEON_I(old_dir);
 	struct aeon_inode_info_header *o_sih = &o_si->header;
@@ -188,7 +188,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct aeon_dentry *dir_de = NULL;
 	struct aeon_inode *pi = aeon_get_inode(sb, o_sih);
 	struct qstr *old_entry = &old_dentry->d_name;
-	struct qstr *new_entry = &new_dentry->d_name;
+	//struct qstr *new_entry = &new_dentry->d_name;
 	int err;
 
 	old_de = aeon_find_dentry(sb, pi, old_dir, old_entry->name, old_entry->len);

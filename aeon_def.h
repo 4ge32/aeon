@@ -8,7 +8,8 @@
 
 #define AEON_INODE_SIZE         128
 #define AEON_SB_SIZE            512
-#define AEON_DEF_BLOCK_SIZE_4K  4096
+#define AEON_SHIFT              12
+#define AEON_DEF_BLOCK_SIZE_4K  (1 << AEON_SHIFT)
 #define AEON_NAME_LEN 		128
 
 #define AEON_ROOT_INO		(1)
@@ -96,10 +97,11 @@ struct aeon_super_block {
 	__le64		s_num_free_blocks;
 } __attribute((__packed__));
 
-#define AEON_DENTRY_SIZE 256
-#define AEON_D_SHIFT     8
-#define MAX_ENTRY 508
-#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + ((MAX_ENTRY - 1 )<< AEON_D_SHIFT))
+#define AEON_DENTRY_SIZE        256
+#define AEON_D_SHIFT            8
+#define AEON_INTERNAL_ENTRY     AEON_D_SHIFT
+#define MAX_ENTRY               508
+#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
 /* TODO
  * scale a number of dentries in the future
  */

@@ -73,47 +73,100 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
-	struct aeon_dentry_map *de_map = (struct aeon_dentry_map *)(sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K);
+	struct aeon_dentry_map *de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
 	struct aeon_dentry_map *new_de_map;
-	unsigned long num_entries = le64_to_cpu(de_map->num_dentries);
+	unsigned long num_entries = le64_to_cpu(de_map->num_latest_dentry);
+	unsigned long num_internal = le64_to_cpu(de_map->num_internal_dentries);
 	unsigned long new_de_map_blocknr = 0;
 	u64 pi_addr = 0;
 
-	if (num_entries == MAX_ENTRY) {
+	aeon_dbg("%s: latest %lu\n", __func__, num_entries);
+
+	if (num_entries == MAX_ENTRY - 1 && num_internal == AEON_INTERNAL_ENTRY) {
 		/* create new map */
+		aeon_dbg("Hello\n");
 		new_de_map_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
 		new_de_map = (struct aeon_dentry_map *)pi_addr;
 		new_de_map->num_dentries = 0;
+		new_de_map->num_latest_dentry = 0;
+		new_de_map->num_internal_dentries = cpu_to_le64(AEON_INTERNAL_ENTRY);
+
 		de_map->next_map = new_de_map_blocknr;
+		de_map->num_latest_dentry++;
 		de_map->num_dentries++;
 
 		de_map = new_de_map;
-	} else if (num_entries == MAX_ENTRY + 1) {
+	} else if (num_entries == MAX_ENTRY) {
 		/* return next map */
+		aeon_dbg("World\n");
 		blocknr = de_map->next_map;
-		de_map = (struct aeon_dentry_map *)(sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K);
+		de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
+		/* dead code so far */
 		if (de_map->num_dentries == MAX_DENTRY)
-			return ERR_PTR(-ENOSPC);
+			return ERR_PTR(-EMLINK);
 	}
 
 	return de_map;
 
 }
 
+static struct aeon_dentry *aeon_allocate_new_dentry_block(struct super_block *sb, u64 ino,
+				          		  const char *name, int namelen,
+				          		  unsigned long *d_blocknr)
+{
+	struct aeon_dentry *direntry;
+	u64 pi_addr = 0;
+
+	*d_blocknr = aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
+	if (*d_blocknr == 0)
+		return ERR_PTR(-ENOSPC);
+
+	direntry = (struct aeon_dentry *)pi_addr;
+	strncpy(direntry->name, name, namelen);
+	direntry->name_len = namelen;
+	direntry->ino = ino;
+
+	return direntry;
+}
+
+static void aeon_register_dentry_to_map(struct aeon_dentry_map *de_map,
+					unsigned long d_blocknr, int new)
+{
+	if (new)
+		de_map->num_latest_dentry = 0;
+	else
+		de_map->num_latest_dentry++;
+
+	de_map->block_dentry[le64_to_cpu(de_map->num_latest_dentry)] = d_blocknr;
+	de_map->num_internal_dentries = 1;
+}
+
+static struct aeon_dentry *aeon_get_internal_dentry(struct super_block *sb,
+						    struct aeon_dentry_map *de_map)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned int latest_entry = le64_to_cpu(de_map->num_latest_dentry);
+	unsigned int internal_entry = le64_to_cpu(de_map->num_internal_dentries);
+	unsigned long head_addr = le64_to_cpu(de_map->block_dentry[latest_entry]) << AEON_SHIFT;
+	unsigned int internal_offset = internal_entry << AEON_D_SHIFT;
+
+	return (struct aeon_dentry *)((u64)sbi->virt_addr + head_addr + internal_offset);
+}
+
 int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
-	struct aeon_dentry *direntry;
+	struct aeon_dentry *direntry = NULL;
 	struct aeon_dentry_map *de_map;
 	const char *name = dentry->d_name.name;
-	unsigned long num_de;
 	int namelen = dentry->d_name.len;
 	unsigned long d_blocknr = 0;
+	unsigned long internal_de;
+	unsigned long latest_entry;
 	u64 pi_addr = 0;
 	int err;
 
@@ -121,94 +174,71 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 				__func__, dir->i_ino, ino);
 	aeon_dbg("%s: %s %d\n", __func__, name, namelen);
 
+	/* TODO:
+	 * Refine entire code that includes helper funtions.
+	 */
+
 	if (namelen == 0)
 		return -EINVAL;
 
 	pidir = aeon_get_inode(sb, sih);
 
+	/*
+	 * Whether parent directory is new or not.
+	 */
 	if (pidir->i_new) {
+		// launch new dentry map
 		d_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
 		de_map = (struct aeon_dentry_map *)pi_addr;
 		de_map->num_dentries = 0;
+		de_map->num_latest_dentry = 0;
+		de_map->num_internal_dentries = cpu_to_le64(AEON_INTERNAL_ENTRY);
 		pidir->i_new = 0;
 		pidir->dentry_map_block = cpu_to_le64(d_blocknr);
-
-		num_de = le64_to_cpu(de_map->num_dentries);
-		d_blocknr = aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
-		direntry = (struct aeon_dentry *)pi_addr;
-		strncpy(direntry->name, name, namelen);
-		direntry->name_len = namelen;
-		direntry->ino = ino;
-
-		de_map->block_dentry[num_de] = d_blocknr;
-		de_map->num_dentries = cpu_to_le64(++num_de);
-		de_map->num_latest_dentry = 0;
-		de_map->num_internal_dentries = 1;
-
-		aeon_dbg("%s: pidir->inew\n", __func__);
-
-		unsigned long latest_entry = le64_to_cpu(de_map->num_latest_dentry);
-		aeon_dbg("%s: %llu\n", __func__, (le64_to_cpu(de_map->block_dentry[latest_entry])));
-		err = aeon_insert_dir_tree(sb, sih, name, namelen, direntry);
-		if (err)
-			return -ENOMEM;
-		dir->i_mtime = dir->i_ctime = current_time(dir);
-		return 0;
 	} else {
 		de_map = aeon_get_dentry_map(sb, pidir);
 		if (IS_ERR(de_map))
+			return -EMLINK;
+	}
+
+	internal_de = le64_to_cpu(de_map->num_internal_dentries);
+	/*
+	 * When running out of allocated page that is for dentry.
+	 */
+	if (internal_de == AEON_INTERNAL_ENTRY) {
+		// allocate new dentry page
+		direntry = aeon_allocate_new_dentry_block(sb, ino, name, namelen, &d_blocknr);
+		if (IS_ERR(direntry))
 			return -ENOSPC;
+
+		// register new dentry page to map
+		aeon_register_dentry_to_map(de_map, d_blocknr, 0);
+
+		goto end;
 	}
 
-	aeon_dbg("%s: middle\n", __func__);
-	num_de = le64_to_cpu(de_map->num_dentries);
-	unsigned long internal_de = le64_to_cpu(de_map->num_internal_dentries);
-	unsigned long latest_de = le64_to_cpu(de_map->num_latest_dentry);
-	if (internal_de == 8) {
-		aeon_dbg("%s: num_de 1\n", __func__);
-		d_blocknr = aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
-		direntry = (struct aeon_dentry *)pi_addr;
-		strncpy(direntry->name, name, namelen);
-		direntry->name_len = namelen;
-		direntry->ino = ino;
-
-		de_map->block_dentry[++latest_de] = d_blocknr;
-		de_map->num_dentries = cpu_to_le64(++num_de);
-		de_map->num_latest_dentry = cpu_to_le64(latest_de);
-		de_map->num_internal_dentries = 1;
-
-		unsigned long latest_entry = le64_to_cpu(de_map->num_latest_dentry);
-		aeon_dbg("%s: %llu\n", __func__, (le64_to_cpu(de_map->block_dentry[latest_entry])));
-
-		err = aeon_insert_dir_tree(sb, sih, name, namelen, direntry);
-		if (err)
-			return -ENOMEM;
-
-		dir->i_mtime = dir->i_ctime = current_time(dir);
-
-		aeon_dbg("%s: num_de 2\n", __func__);
-		return 0;
-	}
-	aeon_dbg("%s: last\n", __func__);
-	unsigned long latest_entry = le64_to_cpu(de_map->num_latest_dentry);
-	aeon_dbg("%s: %llu\n", __func__, (le64_to_cpu(de_map->block_dentry[latest_entry])));
-	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_map->num_internal_dentries));
-	direntry = (struct aeon_dentry *)((u64)sbi->virt_addr +
-			(le64_to_cpu(de_map->block_dentry[latest_entry]) << 12) +
-			(le64_to_cpu(de_map->num_internal_dentries) << AEON_D_SHIFT));
+	// use remained page for allocating dentry.
+	direntry = aeon_get_internal_dentry(sb, de_map);
 	strncpy(direntry->name, name, namelen);
 	direntry->name_len = namelen;
 	direntry->ino = ino;
 
-	//de_map->block_dentry[num_de] = d_blocknr;
-	de_map->num_dentries = cpu_to_le64(++num_de);
 	de_map->num_internal_dentries++;
+
+end:
+	de_map->num_dentries++;
+
+	latest_entry = le64_to_cpu(de_map->num_latest_dentry);
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, direntry);
 	if (err)
 		return -ENOMEM;
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
+
+	aeon_dbg("%s: %llu\n", __func__, (le64_to_cpu(de_map->block_dentry[latest_entry])));
+	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_map->num_internal_dentries));
+	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_map->num_dentries));
 
 	return 0;
 }
