@@ -74,8 +74,6 @@ struct aeon_inode {
 
 	__le32	csum;            /* CRC32 checksum */
 
-	/* last 8 bytes */
-	__le64  parent_ino;            /* used inodes in block */
 } __attribute((__packed__));
 
 struct aeon_super_block {
@@ -98,7 +96,10 @@ struct aeon_super_block {
 	__le64		s_num_free_blocks;
 } __attribute((__packed__));
 
-#define MAX_ENTRY 510
+#define AEON_DENTRY_SIZE 256
+#define AEON_D_SHIFT     8
+#define MAX_ENTRY 508
+#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + ((MAX_ENTRY - 1 )<< AEON_D_SHIFT))
 /* TODO
  * scale a number of dentries in the future
  */
@@ -106,6 +107,8 @@ struct aeon_dentry_map {
 	__le64  block_dentry[MAX_ENTRY];
 	__le64  next_map;
 	__le64  num_dentries;
+	__le64  num_latest_dentry;
+	__le64  num_internal_dentries;
 }__attribute((__packed__));
 
 struct aeon_dentry {
