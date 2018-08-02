@@ -85,7 +85,10 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 
 	pidir = aeon_get_inode(sb, sih);
 
-	ret = aeon_remove_dentry(dentry, 0, &update_dir);
+	/* TODO:
+	 * replace NULL to struct aeon_dentry *
+	 */
+	ret = aeon_remove_dentry(dentry, 0, &update_dir, NULL);
 	if (ret)
 		goto out;
 
@@ -158,7 +161,7 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	aeon_dbg("%s: inode %lu, dir %lu, link %d\n", __func__,
 					inode->i_ino, dir->i_ino, dir->i_nlink);
 
-	err = aeon_remove_dentry(dentry, -1, &update_dir);
+	err = aeon_remove_dentry(dentry, -1, &update_dir, NULL);
 	if (err)
 		goto end_rmdir;
 
@@ -180,36 +183,72 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		       unsigned int flags)
 {
 	struct inode *old_inode = d_inode(old_dentry);
-	//struct inode *new_inode = d_inode(new_dentry);
+	struct inode *new_inode = d_inode(new_dentry);
 	struct super_block *sb = old_dir->i_sb;
-	struct aeon_inode_info *o_si = AEON_I(old_dir);
+	struct aeon_inode_info *o_si = AEON_I(old_inode);
 	struct aeon_inode_info_header *o_sih = &o_si->header;
 	struct aeon_dentry *old_de;
 	struct aeon_dentry *dir_de = NULL;
+	struct aeon_dentry *new_de;
 	struct aeon_inode *pi = aeon_get_inode(sb, o_sih);
-	struct qstr *old_entry = &old_dentry->d_name;
-	//struct qstr *new_entry = &new_dentry->d_name;
+	struct qstr *old_name = &old_dentry->d_name;
+	struct qstr *new_name = &new_dentry->d_name;
 	int err;
 
-	old_de = aeon_find_dentry(sb, pi, old_dir, old_entry->name, old_entry->len);
+	aeon_dbg("SEE IT !!! - %s\n", old_name->name);
+
+	old_de = aeon_find_dentry(sb, pi, old_dir, old_name->name, old_name->len);
 	if (old_de == NULL) {
 		err = -ENOENT;
-		goto out;
+		goto out_dir;
 	}
 
 	if (S_ISDIR(old_inode->i_mode)) {
 		err = -EIO;
-	        //dir_de = aeon_dotdot(old_inode);
+	        dir_de = aeon_dotdot(sb, o_sih);
 		if (!dir_de)
-			goto out;
+			goto out_dir;
 	}
 
-	//strncpy(direntry->name, new_entry->name, new_entry->len);
-	//direntry->name_len = new_entry->len;
+	if (new_inode) {
+		aeon_dbg("1: HELLO\n");
+		err = -ENOTEMPTY;
+		if (dir_de && !aeon_empty_dir(new_inode))
+			goto out_dir;
+
+		err = -ENOENT;
+		new_de = aeon_find_dentry(sb, NULL, new_dir, new_name->name, new_name->len);
+		if (!new_de)
+			goto out_dir;
+		aeon_set_link(new_dir, new_de, old_inode, 1);
+		new_inode->i_ctime = current_time(new_inode);
+		if (dir_de)
+			drop_nlink(new_inode);
+		inode_dec_link_count(new_inode);
+	} else {
+		err = aeon_add_dentry(new_dentry, old_inode->i_ino, 0);
+		if (err)
+			goto out_dir;
+		if (dir_de)
+			inode_inc_link_count(new_dir);
+	}
+
+	old_inode->i_ctime = current_time(old_inode);
+	mark_inode_dirty(old_inode);
+
+	aeon_remove_dentry(old_dentry, 0, pi, old_de);
+	old_de->invalid = 0;
+
+	if (dir_de) {
+		aeon_dbg("2: HELLO\n");
+		if (old_dir != new_dir)
+			aeon_set_link(old_inode, dir_de, new_dir, 0);
+		inode_dec_link_count(old_dir);
+	}
 
 	return 0;
 
-out:
+out_dir:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }

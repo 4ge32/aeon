@@ -1,5 +1,5 @@
 #
-# Makefile for the linux NOVA filesystem routines.
+# Makefile for the linux filesystem.
 #
 
 obj-m += aeon.o

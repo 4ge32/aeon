@@ -480,11 +480,15 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr);
 int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen, struct aeon_dentry *direntry);
 int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link);
-int aeon_remove_dentry(struct dentry *dentry, int dec_link, struct aeon_inode *update);
+int aeon_remove_dentry(struct dentry *dentry, int dec_link,
+		       struct aeon_inode *update, struct aeon_dentry *de);
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 	struct aeon_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len);
 void aeon_delete_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih);
+struct aeon_dentry *aeon_dotdot(struct super_block *sb, struct aeon_inode_info_header *sih);
+int aeon_empty_dir(struct inode *inode);
+void aeon_set_link(struct inode *dir, struct aeon_dentry *de, struct inode *inode, int update_times);
 
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
