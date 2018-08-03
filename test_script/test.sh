@@ -64,6 +64,24 @@ create ()
   done
 }
 
+hard_and_sym_link ()
+{
+  N=1
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-link-$num"
+    test-link-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
+
 source ./list_test.sh
 echo "===== TEST START ====="
 
@@ -77,7 +95,11 @@ case "$1" in
   create)
     create
     ;;
+  link)
+    hard_and_sym_link
+    ;;
   all)
+    hard_and_sym_link
     remove
     rename
     create

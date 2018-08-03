@@ -69,8 +69,22 @@ static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsi
 
 static int aeon_link(struct dentry *dest_dentry, struct inode *dir, struct dentry *dentry)
 {
-	aeon_dbg("%s\n", __func__);
-	return 0;
+	struct inode *inode = d_inode(dest_dentry);
+	int err;
+
+	inode->i_ctime = current_time(inode);
+	inode_inc_link_count(inode);
+	ihold(inode);
+
+	err = aeon_add_dentry(dentry, inode->i_ino, 0);
+	if (!err) {
+		d_instantiate(dentry, inode);
+		return 0;
+	}
+	inode_dec_link_count(inode);
+	iput(inode);
+
+	return err;
 }
 
 static int aeon_unlink(struct inode *dir, struct dentry *dentry)

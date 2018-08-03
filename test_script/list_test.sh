@@ -156,3 +156,19 @@ test-remove-2 ()
 
   clean
 }
+
+test-link-1 ()
+{
+  init
+
+  echo "hello" > $DIR/file1.txt
+  echo "hello" > $TMP/file1.txt
+  echo "world" > $DIR/file2.txt
+  echo "world" > $TMP/file2.txt
+  ln $DIR/file1.txt $DIR/file3.txt
+  ln $TMP/file1.txt $TMP/file3.txt
+  diff <(ls -l $DIR) <(ls -l $TMP)
+  res=$?
+
+  clean
+}
