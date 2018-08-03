@@ -5,4 +5,5 @@
 !Makefile
 !.gitignore
 !run.sh
-!test
+!test_script
+!*.sh

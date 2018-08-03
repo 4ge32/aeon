@@ -125,7 +125,7 @@ struct aeon_dentry {
 	__le32	mtime;			/* For both mtime and ctime */
 	/* 8 bytes */
 	__le32	csum;			/* entry checksum */
-	__le32  pad1;
+	__le32  parent_map_block;
 	/*  8 bytes */
 	__le64	ino;			/* inode no pointed to by this entry */
 	/* 128 bytes */

@@ -55,27 +55,6 @@ struct aeon_dentry *aeon_dotdot(struct super_block *sb, struct aeon_inode_info_h
 	return de;
 }
 
-int aeon_empty_dir(struct inode *inode)
-{
-	struct aeon_inode_info *si = AEON_I(inode);
-	struct aeon_inode_info_header *sih = &si->header;
-	struct aeon_inode *pi;
-	struct super_block *sb = inode->i_sb;
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_dentry_map *de_map;
-	unsigned long de_map_block;
-
-	pi = aeon_get_inode(sb, sih);
-
-	de_map_block = le64_to_cpu(pi->dentry_map_block);
-	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr + (de_map_block << AEON_SHIFT));
-
-	if (le64_to_cpu(de_map->num_dentries) == 2)
-		return 1;
-	else
-		return 0;
-}
-
 void aeon_delete_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih)
 {
 	struct aeon_dentry *direntry;
@@ -112,13 +91,13 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
 	struct aeon_dentry_map *de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
 	struct aeon_dentry_map *new_de_map;
-	unsigned long num_entries = le64_to_cpu(de_map->num_latest_dentry);
+	unsigned long la_num_entries = le64_to_cpu(de_map->num_latest_dentry);
 	unsigned long num_internal = le64_to_cpu(de_map->num_internal_dentries);
 	unsigned long new_de_map_blocknr = 0;
 	u64 pi_addr = 0;
 
 
-	if (num_entries == MAX_ENTRY - 1 && num_internal == AEON_INTERNAL_ENTRY) {
+	if (la_num_entries == MAX_ENTRY - 1 && num_internal == AEON_INTERNAL_ENTRY) {
 		/* create new map */
 		aeon_dbg("Hello\n");
 		new_de_map_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
@@ -131,13 +110,14 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 		de_map->num_latest_dentry++;
 		de_map->num_dentries++;
 
+		new_de_map->num_dentries = (--de_map->num_dentries);
 		de_map = new_de_map;
-	} else if (num_entries == MAX_ENTRY) {
+	} else if (la_num_entries == MAX_ENTRY) {
 		/* return next map */
 		aeon_dbg("World\n");
 		blocknr = de_map->next_map;
 		de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
-		/* dead code so far */
+		/* dead code so far ? */
 		if (de_map->num_dentries == MAX_DENTRY)
 			return ERR_PTR(-EMLINK);
 	}
@@ -355,6 +335,43 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 		   struct inode *inode, int update_times)
 {
 	de->ino = cpu_to_le32(inode->i_ino);
+}
+
+
+/*
+ * TODO:
+ * want to integrate funtion of except first
+ */
+static struct aeon_dentry_map *aeon_get_first_dentry_map(struct super_block *sb, struct aeon_inode *pi, bool first)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
+	struct aeon_dentry_map *de_map;
+
+	if (blocknr == 0)
+		return NULL;
+
+	de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
+	if (le64_to_cpu(de_map->num_dentries) == 2)
+		return NULL;
+
+	return de_map;
+
+}
+
+int aeon_empty_dir(struct inode *inode)
+{
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_dentry_map *de_map;
+
+	de_map = aeon_get_first_dentry_map(sb, pi, 0);
+	if (de_map)
+		return 0;
+
+	return 1;
 }
 
 static int aeon_readdir(struct file *file, struct dir_context *ctx)

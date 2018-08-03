@@ -75,20 +75,31 @@ static int aeon_link(struct dentry *dest_dentry, struct inode *dir, struct dentr
 
 static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = d_inode(dentry);
 	struct super_block *sb = inode->i_sb;
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
 	struct aeon_inode update_dir;
+	struct aeon_dentry *remove_entry;
 	int ret = -ENOMEM;
+
 
 	pidir = aeon_get_inode(sb, sih);
 
 	/* TODO:
-	 * replace NULL to struct aeon_dentry *
+	 * store pointer of dentry structure on pmem in d_fsdata for
+	 * extracting data fastly. Following if statement assume the
+	 * situation. Maybe it can be implemented in lookup method?
 	 */
-	ret = aeon_remove_dentry(dentry, 0, &update_dir, NULL);
+	if (dentry->d_fsdata)
+		remove_entry = (struct aeon_dentry *)(dentry->d_fsdata);
+	else {
+		struct qstr *name = &dentry->d_name;
+		remove_entry = aeon_find_dentry(sb, NULL, dir, name->name, name->len);
+	}
+
+	ret = aeon_remove_dentry(dentry, 0, &update_dir, remove_entry);
 	if (ret)
 		goto out;
 
@@ -96,6 +107,8 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 
 	if (inode->i_nlink)
 		drop_nlink(inode);
+
+	pidir->i_links_count--;
 
 	return 0;
 out:
@@ -147,21 +160,28 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
+	struct aeon_inode_info *csi = AEON_I(inode);
+	struct aeon_inode_info_header *csih = &csi->header;
+	struct aeon_inode *pi;
 	struct aeon_inode update_dir;
+	struct aeon_dentry *remove_entry;
 	int err = ENOTEMPTY;
 
-	if (!inode)
-		return -ENOENT;
 
 	pidir = aeon_get_inode(sb, sih);
+	pi = aeon_get_inode(sb, csih);
 
-	if (aeon_inode_by_name(dir, &dentry->d_name) == 0)
-		return -ENOENT;
+	if (dentry->d_fsdata)
+		remove_entry = (struct aeon_dentry *)(dentry->d_fsdata);
+	else {
+		struct qstr *name = &dentry->d_name;
 
-	aeon_dbg("%s: inode %lu, dir %lu, link %d\n", __func__,
-					inode->i_ino, dir->i_ino, dir->i_nlink);
+		if (!aeon_empty_dir(inode))
+			return -ENOTEMPTY;
+		remove_entry = aeon_find_dentry(sb, NULL, dir, name->name, name->len);
+	}
 
-	err = aeon_remove_dentry(dentry, -1, &update_dir, NULL);
+	err = aeon_remove_dentry(dentry, -1, &update_dir, remove_entry);
 	if (err)
 		goto end_rmdir;
 
