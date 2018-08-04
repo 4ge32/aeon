@@ -18,9 +18,9 @@ test-rename-1 ()
 
   for i in $DIR $TMP
   do
-    touch $i/good >/dev/null
-    mkdir $i/dir >/dev/null
-    mv $i/good $i/dir/ >/dev/null
+    touch $i/good
+    mkdir $i/dir
+    mv $i/good $i/dir/
   done
   diff -r $TMP $DIR
   res=$?
@@ -169,6 +169,13 @@ test-link-1 ()
   ln $TMP/file1.txt $TMP/file3.txt
   diff <(ls -l $DIR) <(ls -l $TMP)
   res=$?
+
+  clean
+}
+
+test-link-2 ()
+{
+  init
 
   clean
 }

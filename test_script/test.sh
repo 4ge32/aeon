@@ -48,7 +48,7 @@ remove ()
 
 create ()
 {
-  N=2
+  N=1
   for num in `seq 1 $N`
   do
     res=1
@@ -66,7 +66,7 @@ create ()
 
 hard_and_sym_link ()
 {
-  N=1
+  N=2
   for num in `seq 1 $N`
   do
     res=1
