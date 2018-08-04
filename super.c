@@ -336,6 +336,7 @@ static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root
 		cpu_to_le32(get_seconds());
 	root_i->aeon_ino = cpu_to_le64(AEON_ROOT_INO);
 	root_i->valid = 1;
+	root_i->deleted = 0;
 	root_i->i_new = 1;
 
 	aeon_memlock_inode(sb, root_i);
