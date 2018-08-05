@@ -141,11 +141,13 @@ static struct aeon_dentry *aeon_init_dentry(struct super_block *sb, struct aeon_
 	strncpy(direntry->name, ".\0", 2);
 	direntry->name_len = 2;
 	direntry->ino = ino;
+	direntry->invalid = 0;
 
 	direntry = (struct aeon_dentry *)(pi_addr + (1 << AEON_D_SHIFT));
 	strncpy(direntry->name, "..\0", 3);
 	direntry->name_len = 3;
 	direntry->ino = pidir->aeon_ino;
+	direntry->invalid = 0;
 
 	de_map->num_internal_dentries = cpu_to_le64(2);
 	de_map->num_dentries = cpu_to_le64(2);
@@ -415,7 +417,6 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 			entry = entries[i];
 			if (entry->invalid == 1) {
 				goto next;
-				i--;
 			}
 
 			pos = BKDRHash(entry->name, entry->name_len);
