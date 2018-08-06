@@ -189,6 +189,9 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	pi = aeon_get_inode(sb, csih);
 
 	if (dentry->d_fsdata) {
+		/* TODO:
+		 * This block has meaning?
+		 */
 		struct aeon_dentry_info *di;
 
 		di = (struct aeon_dentry_info *)(dentry->d_fsdata);
