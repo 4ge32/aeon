@@ -106,9 +106,12 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	 * extracting data fastly. Following if statement assume the
 	 * situation. Maybe it can be implemented in lookup method?
 	 */
-	if (dentry->d_fsdata)
-		remove_entry = (struct aeon_dentry *)(dentry->d_fsdata);
-	else {
+	if (dentry->d_fsdata) {
+		struct aeon_dentry_info *di;
+
+		di = (struct aeon_dentry_info *)(dentry->d_fsdata);
+		remove_entry = di->de;
+	} else {
 		struct qstr *name = &dentry->d_name;
 		remove_entry = aeon_find_dentry(sb, NULL, dir, name->name, name->len);
 	}
@@ -185,9 +188,12 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	pidir = aeon_get_inode(sb, sih);
 	pi = aeon_get_inode(sb, csih);
 
-	if (dentry->d_fsdata)
-		remove_entry = (struct aeon_dentry *)(dentry->d_fsdata);
-	else {
+	if (dentry->d_fsdata) {
+		struct aeon_dentry_info *di;
+
+		di = (struct aeon_dentry_info *)(dentry->d_fsdata);
+		remove_entry = di->de;
+	} else {
 		struct qstr *name = &dentry->d_name;
 
 		if (!aeon_empty_dir(inode))

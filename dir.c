@@ -1,10 +1,12 @@
 #include <linux/fs.h>
+#include <linux/slab.h>
 
 #include "aeon.h"
 
 
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 #define FREE_BATCH 16
+
 
 int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen, struct aeon_dentry *direntry)
@@ -198,15 +200,55 @@ static struct aeon_dentry *aeon_get_internal_dentry(struct super_block *sb,
 	return (struct aeon_dentry *)((u64)sbi->virt_addr + head_addr + internal_offset);
 }
 
+static int isInvalidSpace(struct aeon_dentry_info *de_info)
+{
+	struct aeon_dentry_invalid *di = de_info->di;
+
+	if (list_empty(&di->invalid_list))
+		return 0;
+
+	return 1;
+}
+
+static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
+					               struct aeon_dentry_map *de_map,
+						       struct aeon_dentry_info *de_info)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_dentry_invalid *adi = list_first_entry(&de_info->di->invalid_list,
+							   struct aeon_dentry_invalid,
+							   invalid_list);
+	unsigned int latest_entry = adi->global;
+	unsigned int internal_entry = adi->internal;
+	unsigned long head_addr = le64_to_cpu(de_map->block_dentry[latest_entry]) << AEON_SHIFT;
+	unsigned int internal_offset = internal_entry << AEON_D_SHIFT;
+
+	//list_for_each_entry(adi, &de_info->di->invalid_list, invalid_list) {
+	//	aeon_dbg("!!! %lu - %u\n", adi->global, adi->internal);
+	//	latest_entry = adi->global;
+	//	internal_entry = adi->internal;
+	//	goto out;
+	//}
+
+	aeon_dbg("%s: %u - %u\n", __func__, latest_entry, internal_entry);
+
+	list_del(&adi->invalid_list);
+	kfree(adi);
+
+	return (struct aeon_dentry *)((u64)sbi->virt_addr + head_addr + internal_offset);
+}
+
 int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
+	struct dentry *parent = dentry->d_parent;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
 	struct aeon_dentry *direntry = NULL;
 	struct aeon_dentry_map *de_map;
+	struct aeon_dentry_info *de_info;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
 	unsigned long d_blocknr = 0;
@@ -218,6 +260,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 	aeon_dbg("%s: dir %lu new inode %llu\n",
 				__func__, dir->i_ino, ino);
 	aeon_dbg("%s: %s %d\n", __func__, name, namelen);
+
 
 	/* TODO:
 	 * Refine entire code that includes helper funtions.
@@ -232,6 +275,10 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 	 * Whether parent directory is new or not.
 	 */
 	if (pidir->i_new) {
+		struct aeon_dentry_invalid *adi;
+		de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
+		adi = kzalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
+		de_info->di = adi;
 		// launch new dentry map
 		d_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
 		de_map = (struct aeon_dentry_map *)pi_addr;
@@ -242,6 +289,9 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 
 		direntry = aeon_init_dentry(sb, de_map, ino, pidir);
 
+		INIT_LIST_HEAD(&de_info->di->invalid_list);
+		parent->d_fsdata = (void *)de_info;
+
 		pidir->i_new = 0;
 	} else {
 		de_map = aeon_get_dentry_map(sb, pidir);
@@ -249,30 +299,56 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 			return -EMLINK;
 	}
 
-	internal_de = le64_to_cpu(de_map->num_internal_dentries);
-	/*
-	 * When running out of allocated page that is for dentry.
-	 */
-	if (internal_de == AEON_INTERNAL_ENTRY) {
-		// allocate new dentry page
-		direntry = aeon_allocate_new_dentry_block(sb, ino, name, namelen, &d_blocknr);
-		if (IS_ERR(direntry))
-			return -ENOSPC;
+	de_info = (struct aeon_dentry_info *)parent->d_fsdata;
 
-		// register new dentry page to map
-		aeon_register_dentry_to_map(de_map, d_blocknr, 0);
+	if (!isInvalidSpace(de_info)) {
+		aeon_dbg("HERE1\n");
+		internal_de = le64_to_cpu(de_map->num_internal_dentries);
+		/*
+		 * When running out of allocated page that is for dentry.
+		 */
+		if (internal_de == AEON_INTERNAL_ENTRY) {
+			// allocate new dentry page
+			direntry = aeon_allocate_new_dentry_block(sb, ino, name, namelen, &d_blocknr);
+			if (IS_ERR(direntry))
+				return -ENOSPC;
+			// register new dentry page to map
+			aeon_register_dentry_to_map(de_map, d_blocknr, 0);
 
-		goto end;
+			direntry->internal_offset = 0;
+			direntry->global_offset = (de_map->num_latest_dentry - 1);
+			direntry->invalid = 0;
+
+			goto end;
+		}
+
+		// use remained page for allocating dentry.
+		direntry = aeon_get_internal_dentry(sb, de_map);
+		strncpy(direntry->name, name, namelen);
+		direntry->name_len = namelen;
+		direntry->ino = ino;
+		direntry->internal_offset = de_map->num_internal_dentries;
+		direntry->global_offset = de_map->num_latest_dentry;
+		direntry->invalid = 0;
+
+		aeon_dbg("%s: %lld - %u\n", __func__, le64_to_cpu(direntry->internal_offset),
+				le32_to_cpu(direntry->global_offset));
+
+		de_map->num_internal_dentries++;
+	} else {
+		aeon_dbg("HERE2\n");
+		direntry = aeon_reuse_space_for_dentry(sb, de_map, de_info);
+		strncpy(direntry->name, name, namelen);
+		direntry->name_len = namelen;
+		direntry->ino = ino;
+		direntry->internal_offset = de_map->num_internal_dentries;
+		direntry->global_offset = de_map->num_latest_dentry;
+		direntry->invalid = 0;
+
+		aeon_dbg("%s: %lld - %u\n", __func__, le64_to_cpu(direntry->internal_offset),
+				le32_to_cpu(direntry->global_offset));
+
 	}
-
-	// use remained page for allocating dentry.
-	direntry = aeon_get_internal_dentry(sb, de_map);
-	strncpy(direntry->name, name, namelen);
-	direntry->name_len = namelen;
-	direntry->ino = ino;
-	direntry->invalid = 0;
-
-	de_map->num_internal_dentries++;
 
 end:
 	de_map->num_dentries++;
@@ -296,10 +372,15 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
+	struct dentry *parent = dentry->d_parent;
+	struct aeon_dentry_info *de_info = (struct aeon_dentry_info *)parent->d_fsdata;
 	struct super_block *sb = dir->i_sb;
 	struct qstr *entry = &dentry->d_name;
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_inode *pidir = aeon_get_inode(sb, sih);
+	struct aeon_dentry_invalid *adi = kmalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
+	struct aeon_dentry_map *de_map = aeon_get_dentry_map(sb, pidir);
 	int ret;
 
 	if (!dentry->d_name.len)
@@ -309,6 +390,12 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	if (ret)
 		goto out;
 
+	adi->internal = le64_to_cpu(de->internal_offset);
+	adi->global = le32_to_cpu(de->global_offset);
+	list_add(&adi->invalid_list, &de_info->di->invalid_list);
+	aeon_dbg("%s: %lu - %u\n", __func__, adi->global, adi->internal);
+
+	de_map->num_dentries--;
 	de->invalid = 1;
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);

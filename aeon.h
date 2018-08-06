@@ -187,6 +187,19 @@ struct aeon_inode_info {
 	struct inode vfs_inode;
 };
 
+struct aeon_dentry_invalid {
+	struct list_head invalid_list;
+	unsigned int internal;
+	unsigned long global;
+};
+
+struct aeon_dentry_info {
+	unsigned int internal;
+	unsigned long global;
+	struct aeon_dentry_invalid *di;
+	struct aeon_dentry *de;
+};
+
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src, unsigned int size)
 {
 	int ret;
