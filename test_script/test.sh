@@ -30,7 +30,7 @@ rename ()
 
 remove ()
 {
-  N=2
+  N=3
   for num in `seq 1 $N`
   do
     res=1
@@ -99,7 +99,7 @@ case "$1" in
     hard_and_sym_link
     ;;
   all)
-    hard_and_sym_link
+    #hard_and_sym_link
     remove
     rename
     create
