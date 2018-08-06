@@ -125,13 +125,15 @@ struct aeon_dentry {
 	__le32	mtime;			/* For both mtime and ctime */
 	/* 8 bytes */
 	__le32	csum;			/* entry checksum */
-	__le32  parent_map_block;
+	/* TODO: size of variable */
+	__le64  internal_offset;
+	__le32  global_offset;
 	/*  8 bytes */
 	__le64	ino;			/* inode no pointed to by this entry */
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
 	/* 96 bytes */
-	char    pad2[96];
+	char    pad2[64];
 } __attribute((__packed__));
 
 /*
