@@ -215,7 +215,6 @@ static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 						       struct aeon_dentry_info *de_info)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-<<<<<<< HEAD
 	struct aeon_dentry_invalid *adi = list_first_entry(&de_info->di->invalid_list,
 							   struct aeon_dentry_invalid,
 							   invalid_list);

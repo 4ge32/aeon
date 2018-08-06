@@ -123,7 +123,7 @@ test-remove-1 ()
 {
   init
 
-  DELETE=$((RANDOM%+10))
+  DELETE=$((RANDOM%+10 + 1))
   D_FILE=""
   NUM=10
   for i in `seq 1 $NUM`
@@ -151,6 +151,36 @@ test-remove-2 ()
   mkdir $TMP/newdir
   rmdir $DIR/newdir
   rmdir $TMP/newdir
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+test-remove-3 ()
+{
+  init
+
+  DELETE=$((RANDOM%+10 + 1))
+  D_FILE=""
+  NUM=10
+  for i in `seq 1 $NUM`
+  do
+    empty_file
+    touch $DIR/$NAME
+    touch $TMP/$NAME
+    if [ $i -eq $DELETE ]; then
+      D_FILE=$NAME
+    fi
+  done
+  rm $DIR/$D_FILE
+  rm $TMP/$D_FILE
+  for i in `seq 1 2`
+  do
+    empty_file
+    touch $DIR/$NAME
+    touch $TMP/$NAME
+  done
   diff -r $TMP $DIR
   res=$?
 
