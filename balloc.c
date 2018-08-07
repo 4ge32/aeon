@@ -601,3 +601,18 @@ unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr
 
 	return blocknr;
 }
+
+unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, int cpuid)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+
+	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
+
+	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
+
+	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+
+	return blocknr;
+}

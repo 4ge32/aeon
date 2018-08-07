@@ -1,0 +1,48 @@
+#include <linux/fs.h>
+
+#include "aeon.h"
+
+int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
+		       const char *symname, int len)
+{
+	unsigned long blocknr;
+	u64 pi_addr = 0;
+	u64 block;
+	char *blockp;
+
+	blocknr = aeon_get_new_symlink_block(sb, &pi_addr, ANY_CPU);
+	if (blocknr == 0)
+		return -ENOSPC;
+
+	block = aeon_get_block_off(sb, blocknr, AEON_BLOCK_TYPE_4K);
+	blockp = (char *)aeon_get_block(sb, block);
+
+	memcpy_to_pmem_nocache(blockp, symname, len);
+	blockp[len] = '\0';
+
+	pi->sym_block = cpu_to_le64(blocknr);
+
+	return 0;
+}
+
+static const char *aeon_get_link(struct dentry *dentry, struct inode *inode,
+			         struct delayed_call *done)
+{
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	unsigned blocknr;
+	u64 block;
+	char *blockp;
+
+	blocknr = le64_to_cpu(pi->sym_block);
+	block = aeon_get_block_off(sb, blocknr, AEON_BLOCK_TYPE_4K);
+	blockp = (char *)aeon_get_block(sb, block);
+
+	return blockp;
+}
+
+const struct inode_operations aeon_symlink_inode_operations = {
+	.get_link	= aeon_get_link,
+};

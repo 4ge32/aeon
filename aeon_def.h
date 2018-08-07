@@ -67,7 +67,7 @@ struct aeon_inode {
 	__le64  i_block;        /* point extent_header */
 
 	__le64	i_blocks;       /* point extent log */
-	__le64	block;
+	__le64	sym_block;      /* for symbolic link */
 
 	struct {
 		__le32 rdev;	 /* major/minor # */
