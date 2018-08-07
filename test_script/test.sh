@@ -66,7 +66,7 @@ create ()
 
 hard_and_sym_link ()
 {
-  N=2
+  N=3
   for num in `seq 1 $N`
   do
     res=1

@@ -277,6 +277,12 @@ static inline int aeon_get_reference(struct super_block *sb, u64 block,
 	return rc;
 }
 
+static inline u64 aeon_get_block_off(struct super_block *sb, unsigned long blocknr,
+				     unsigned short btype)
+{
+	return (u64)blocknr << AEON_SHIFT;
+}
+
 static inline struct free_list *aeon_get_free_list(struct super_block *sb, int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -448,6 +454,7 @@ static inline struct aeon_extent *AEON_EXTENT(struct super_block *sb, struct aeo
 extern const struct inode_operations aeon_dir_inode_operations;
 extern const struct inode_operations aeon_dir_inode_operations;
 extern const struct file_operations aeon_dax_file_operations;
+extern const struct inode_operations aeon_symlink_inode_operations;
 extern const struct iomap_ops aeon_iomap_ops;
 extern const struct file_operations aeon_dir_operations;
 extern const struct address_space_operations aeon_aops_dax;
@@ -473,6 +480,7 @@ int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid);
+unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *);
@@ -505,6 +513,10 @@ int aeon_empty_dir(struct inode *inode);
 
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
-			       u64 pi_addr, struct aeon_inode_info_header *sih);
+		                u64 pi_addr, struct aeon_inode_info_header *sih);
+
+/* symlink.c */
+int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
+		       const char *symname, int len);
 
 #endif

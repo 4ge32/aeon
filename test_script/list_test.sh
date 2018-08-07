@@ -207,5 +207,27 @@ test-link-2 ()
 {
   init
 
+  echo "hello" >> $DIR/file1.txt
+  echo "hello" >> $TMP/file1.txt
+  ln -s $DIR/file1.txt $DIR/file2.txt
+  ln -s $TMP/file1.txt $TMP/file2.txt
+  diff $DIR/file2.txt $TMP/file2.txt
+  res=$?
+
+  clean
+}
+
+test-link-3 ()
+{
+  init
+
+  echo "hello" >> $DIR/file1.txt
+  echo "world" >> $TMP/file1.txt
+  ln -s $DIR/file1.txt $TMP/file2.txt
+  ln -s $TMP/file1.txt $DIR/file2.txt
+  diff $DIR/file2.txt $TMP/file1.txt
+  diff $DIR/file1.txt $TMP/file2.txt
+  res=$?
+
   clean
 }

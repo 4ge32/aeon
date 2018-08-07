@@ -156,6 +156,9 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 		//inode->i_mapping->a_ops = &aeon_aops_dax;
 		set_nlink(inode, 2);
 		break;
+	case TYPE_SYMLINK:
+		inode->i_op = &aeon_symlink_inode_operations;
+		break;
 	default:
 		aeon_dbg("Unknown new inode type %d\n", type);
 		break;
@@ -385,10 +388,10 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 		inode->i_op = &aeon_dir_inode_operations;
 		inode->i_fop = &aeon_dir_operations;
 		break;
-	//case S_IFLNK:
-	//	inode->i_op = &aeon_symlink_inode_operations;
-	//	break;
-	//default:
+	case S_IFLNK:
+		inode->i_op = &aeon_symlink_inode_operations;
+		break;
+	default:
 	//	inode->i_op = &aeon_special_inode_operations;
 	//	init_special_inode(inode, inode->i_mode,
 	//			   le32_to_cpu(pi->dev.rdev));

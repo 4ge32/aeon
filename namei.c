@@ -135,8 +135,46 @@ out:
 
 static int aeon_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 {
-	aeon_dbg("%s\n", __func__);
+	struct super_block *sb = dir->i_sb;
+	int err = -ENAMETOOLONG;
+	unsigned l = strlen(symname) + 1;
+	struct inode *inode;
+	struct aeon_inode_info *si;
+	struct aeon_inode_info_header *sih;
+	struct aeon_inode *pi;
+	u64 pi_addr = 0;
+	u64 ino;
+
+	if (l > sb->s_blocksize)
+		goto err;
+
+	ino = aeon_new_aeon_inode(sb, &pi_addr);
+	if (ino == 0) {
+		err = -ENOSPC;
+		goto err;
+	}
+
+	err = aeon_add_dentry(dentry, ino, 0);
+	if (err)
+		goto err;
+
+	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino,
+				   S_IFLNK|0777, l, 0, &dentry->d_name);
+
+	si = AEON_I(inode);
+	sih = &si->header;
+	pi = aeon_get_inode(sb, sih);
+	err = aeon_block_symlink(sb, pi, symname, l);
+	if (err)
+		goto err;
+
+	d_instantiate(dentry, inode);
+	unlock_new_inode(inode);
+
 	return 0;
+err:
+	aeon_err(sb, "%s return %d\n", err);
+	return err;
 }
 
 static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
