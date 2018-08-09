@@ -32,7 +32,6 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 		goto out;
 
 	d_instantiate(dentry, inode);
-	unlock_new_inode(inode);
 
 	aeon_sb->s_num_inodes++;
 
