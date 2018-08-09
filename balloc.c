@@ -289,8 +289,6 @@ next:
 		return -ENOSPC;
 	}
 
-	aeon_dbg("%s: %lu : %lu\n", __func__, curr->range_low, curr->range_high);
-
 	return num_blocks;
 
 }
@@ -420,11 +418,11 @@ static u32 seach_extent(struct super_block *sb, struct aeon_inode *pi, unsigned 
 	aeh = AEON_EXTENT_HEADER(sb, pi);
 	ae = AEON_EXTENT(sb, pi);
 
-	aeon_dbg("%s: %d\n", __func__, le16_to_cpu(aeh->eh_entries));
+	//aeon_dbg("%s: %d\n", __func__, le16_to_cpu(aeh->eh_entries));
 	if (le16_to_cpu(aeh->eh_entries) <= iblock)
 		return 0;
 
-	aeon_dbg("%s: %lu\n", __func__, iblock);
+	//aeon_dbg("%s: %lu\n", __func__, iblock);
 	for (i = 0; i < iblock; i++) {
 		block = le64_to_cpu(ae->next_block);
 		aeon_dbg("%s: 0x%lx\n", __func__, block);
@@ -577,7 +575,7 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, in
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 
-	aeon_dbg("%s:\n", __func__);
+	//aeon_dbg("%s:\n", __func__);
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 
 	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;

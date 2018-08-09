@@ -34,7 +34,6 @@ static void aeon_i_callback(struct rcu_head *head)
 	struct inode *inode = container_of(head, struct inode, i_rcu);
 	struct aeon_inode_info *si = AEON_I(inode);
 
-	aeon_info("%s: ino %lu\n", __func__, inode->i_ino);
 	kmem_cache_free(aeon_inode_cachep, si);
 }
 
@@ -88,6 +87,9 @@ static void aeon_evict_inode(struct inode *inode)
 				__func__, inode->i_ino);
 		goto out;
 	}
+
+	if (sih->de_info != NULL)
+		aeon_free_invalid_dentry_list(sb, sih);
 
 	aeon_dbg("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {

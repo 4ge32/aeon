@@ -180,6 +180,7 @@ struct aeon_inode_info_header {
 	unsigned long alter_pi_addr;
 	u64 last_setattr;		/* Last setattr entry */
 	u8  i_blk_type;
+	struct aeon_dentry_info *de_info;
 };
 
 struct aeon_inode_info {
@@ -198,6 +199,7 @@ struct aeon_dentry_info {
 	unsigned long global;
 	struct aeon_dentry_invalid *di;
 	struct aeon_dentry *de;
+	struct aeon_dentry_map *de_map;
 };
 
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src, unsigned int size)
@@ -353,6 +355,7 @@ static inline void aeon_init_header(struct super_block *sb, struct aeon_inode_in
 	sih->num_vmas = 0;
 	INIT_LIST_HEAD(&sih->list);
 	sih->last_setattr = 0;
+	sih->de_info = NULL;
 }
 
 /* mprotect.c */
@@ -510,6 +513,7 @@ void aeon_delete_dir_tree(struct super_block *sb, struct aeon_inode_info_header 
 struct aeon_dentry *aeon_dotdot(struct super_block *sb, struct aeon_inode_info_header *sih);
 void aeon_set_link(struct inode *dir, struct aeon_dentry *de, struct inode *inode, int update_times);
 int aeon_empty_dir(struct inode *inode);
+void aeon_free_invalid_dentry_list(struct super_block *sb, struct aeon_inode_info_header *sih);
 
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,

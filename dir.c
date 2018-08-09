@@ -223,14 +223,8 @@ static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 	unsigned long head_addr = le64_to_cpu(de_map->block_dentry[latest_entry]) << AEON_SHIFT;
 	unsigned int internal_offset = internal_entry << AEON_D_SHIFT;
 
-	//list_for_each_entry(adi, &de_info->di->invalid_list, invalid_list) {
-	//	aeon_dbg("!!! %lu - %u\n", adi->global, adi->internal);
-	//	latest_entry = adi->global;
-	//	internal_entry = adi->internal;
-	//	goto out;
-	//}
 
-	aeon_dbg("%s: %u - %u\n", __func__, latest_entry, internal_entry);
+	aeon_dbg("%s: %u - %u\n", __func__, internal_entry, latest_entry);
 
 	list_del(&adi->invalid_list);
 	kfree(adi);
@@ -290,7 +284,9 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 		direntry = aeon_init_dentry(sb, de_map, ino, pidir);
 
 		INIT_LIST_HEAD(&de_info->di->invalid_list);
+		de_info->de_map = de_map;
 		parent->d_fsdata = (void *)de_info;
+		sih->de_info = de_info;
 
 		pidir->i_new = 0;
 	} else {
@@ -325,6 +321,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 		// use remained page for allocating dentry.
 		direntry = aeon_get_internal_dentry(sb, de_map);
 		strncpy(direntry->name, name, namelen);
+		*(direntry->name + namelen) = '\0';
 		direntry->name_len = namelen;
 		direntry->ino = ino;
 		direntry->internal_offset = de_map->num_internal_dentries;
@@ -339,10 +336,9 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 		aeon_dbg("HERE2\n");
 		direntry = aeon_reuse_space_for_dentry(sb, de_map, de_info);
 		strncpy(direntry->name, name, namelen);
+		*(direntry->name + namelen) = '\0';
 		direntry->name_len = namelen;
 		direntry->ino = ino;
-		direntry->internal_offset = de_map->num_internal_dentries;
-		direntry->global_offset = de_map->num_latest_dentry;
 		direntry->invalid = 0;
 
 		aeon_dbg("%s: %lld - %u\n", __func__, le64_to_cpu(direntry->internal_offset),
@@ -393,10 +389,11 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	adi->internal = le64_to_cpu(de->internal_offset);
 	adi->global = le32_to_cpu(de->global_offset);
 	list_add(&adi->invalid_list, &de_info->di->invalid_list);
-	aeon_dbg("%s: %lu - %u\n", __func__, adi->global, adi->internal);
+	aeon_dbg("%s: %u - %lu\n", __func__, adi->internal, adi->global);
 
 	de_map->num_dentries--;
 	de->invalid = 1;
+	memset(de->name, '\0', de->name_len);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
@@ -463,6 +460,29 @@ int aeon_empty_dir(struct inode *inode)
 	return 1;
 }
 
+static struct aeon_dentry *aeon_pull_dentry(struct super_block *sb, struct aeon_dentry_map *de_map,
+				     unsigned int internal, unsigned long global)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long head_addr = le64_to_cpu(de_map->block_dentry[global]) << AEON_SHIFT;
+
+	return (struct aeon_dentry *)((u64)sbi->virt_addr + head_addr + (internal << AEON_D_SHIFT));
+}
+
+void aeon_free_invalid_dentry_list(struct super_block *sb, struct aeon_inode_info_header *sih)
+{
+	struct aeon_dentry_info *de_info = sih->de_info;
+	struct aeon_dentry_invalid *adi;
+	struct aeon_dentry_map *de_map = de_info->de_map;
+	struct aeon_dentry *direntry;
+
+	list_for_each_entry(adi, &de_info->di->invalid_list, invalid_list) {
+		/* TODO: Still in progress */
+		aeon_dbg("%s: Free invalid list (%u - %lu)\n", __func__, adi->internal, adi->global);
+		direntry = aeon_pull_dentry(sb, de_map, adi->internal, adi->global);
+	}
+}
+
 static int aeon_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
@@ -502,12 +522,9 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		nr_entries = radix_tree_gang_lookup(&sih->tree, (void *)entries, pos, FREE_BATCH);
 		for (i = 0; i < nr_entries; i++) {
 			entry = entries[i];
-			if (entry->invalid == 1) {
-				goto next;
-			}
 
 			pos = BKDRHash(entry->name, entry->name_len);
-			ino = __le64_to_cpu(entry->ino);
+			ino = le64_to_cpu(entry->ino);
 			if (ino == 0)
 				continue;
 
@@ -520,7 +537,6 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 				aeon_dbg("Here: pos %llu\n", ctx->pos);
 				return 0;
 			}
-next:
 			ctx->pos = pos + 1;
 		}
 		pos++;
