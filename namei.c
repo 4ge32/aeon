@@ -125,7 +125,7 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	if (inode->i_nlink)
 		drop_nlink(inode);
 
-	pidir->i_links_count--;
+	//pidir->i_links_count--;
 
 	return 0;
 out:
@@ -318,7 +318,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	mark_inode_dirty(old_inode);
 
 	aeon_remove_dentry(old_dentry, 0, pi, old_de);
-	old_de->invalid = 0;
+	old_de->valid = 0;
 
 	if (dir_de) {
 		aeon_dbg("2: HELLO\n");

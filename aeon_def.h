@@ -117,7 +117,7 @@ struct aeon_dentry {
 	/* 8 bytes */
 	u8	entry_type;
 	u8	name_len;		/* length of the dentry name */
-	u8	invalid;		/* Invalid now? */
+	u8	valid;			/* Invalid now? */
 	u8      pad0;
 	/* 8 bytes */
 	__le16	de_len;			/* length of this dentry */

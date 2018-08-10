@@ -88,8 +88,8 @@ static void aeon_evict_inode(struct inode *inode)
 		goto out;
 	}
 
-	if (sih->de_info != NULL)
-		aeon_free_invalid_dentry_list(sb, sih);
+	//if (sih->de_info != NULL)
+	//	aeon_free_invalid_dentry_list(sb, sih);
 
 	aeon_dbg("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
@@ -253,10 +253,22 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 	return 0;
 }
 
-static void aeon_root_check(struct super_block *sb, struct aeon_inode *root_pi)
+static int aeon_root_check(struct super_block *sb, struct aeon_inode *root_pi)
 {
-	if (!S_ISDIR(le16_to_cpu(root_pi->i_mode)))
+	if (!S_ISDIR(le16_to_cpu(root_pi->i_mode))) {
 		aeon_err(sb, "root is not a directory\n");
+		goto err;
+	}
+
+	if (le64_to_cpu(root_pi->aeon_ino) != AEON_ROOT_INO) {
+		aeon_err(sb, "root has invalid inode number\n");
+		goto err;
+	}
+
+	return 0;
+err:
+	aeon_dbg("%s: 0x%px", __func__, root_pi);
+	return 1;
 }
 
 enum {
@@ -356,6 +368,9 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 		aeon_info("AEON INIT\n");
 		aeon_init_super_block(sb, size);
 		aeon_init_root_inode(sb, root_i);
+	} else {
+		aeon_init_root_inode(sb, root_i);
+		root_i->i_new = 0;
 	}
 
 	aeon_init_blockmap(sb);
@@ -437,7 +452,10 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	if (le32_to_cpu(sbi->aeon_sb->s_magic) != AEON_MAGIC)
 		goto out2;
 
-	aeon_root_check(sb, root_pi);
+	if (aeon_root_check(sb, root_pi)) {
+		ret = -ENOTDIR;
+		goto out2;
+	}
 
 	sb->s_magic = le32_to_cpu(sbi->aeon_sb->s_magic);
 	sb->s_op = &aeon_sops;

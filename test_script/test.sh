@@ -67,7 +67,7 @@ create ()
 hard_and_sym_link ()
 {
   N=3
-  for num in `seq 1 $N`
+  for num in `seq 2 $N`
   do
     res=1
     ./run.sh
@@ -102,7 +102,7 @@ case "$1" in
     #hard_and_sym_link
     remove
     rename
-    create
+    #create
     ;;
   *)
     echo "remoe rename create all"

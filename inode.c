@@ -109,7 +109,7 @@ static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 	pi->i_blocks = 0;
 	pi->dentry_map_block = 0;
 	pi->i_size = cpu_to_le64(inode->i_size);
-	pi->i_mode = inode->i_mode;
+	pi->i_mode = cpu_to_le16(inode->i_mode);
 
 	pi->valid = 1;
 }
@@ -332,7 +332,7 @@ static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si
 	if (pi->i_new == 1)
 		goto end;
 
-	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFDIR:
 		aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
 		break;
@@ -372,7 +372,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 
 	if (inode->i_mode == 0 || pi->deleted == 1) {
 		ret = -ESTALE;
-		aeon_err(sb, "inode->i_mode %lu - delet %ld\n", inode->i_mode, pi->deleted);
+		aeon_err(sb, "inode->i_mode %lu - delete %ld\n", inode->i_mode, pi->deleted);
 		goto bad_inode;
 	}
 
@@ -383,13 +383,16 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	case S_IFREG:
 		//inode->i_op = &aeon_file_inode_operations;
 		inode->i_fop = &aeon_dax_file_operations;
+		aeon_dbg("%s: FILE\n", __func__);
 		break;
 	case S_IFDIR:
 		inode->i_op = &aeon_dir_inode_operations;
 		inode->i_fop = &aeon_dir_operations;
+		aeon_dbg("%s: DIR\n", __func__);
 		break;
 	case S_IFLNK:
 		inode->i_op = &aeon_symlink_inode_operations;
+		aeon_dbg("%s: LINK\n", __func__);
 		break;
 	default:
 	//	inode->i_op = &aeon_special_inode_operations;
@@ -608,7 +611,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	}
 	aeon_memunlock_inode(sb, pi);
 
-	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		last_blocknr = aeon_get_last_blocknr(sb, sih);
 		aeon_dbg("%s: file ino %lu\n", __func__, sih->ino);

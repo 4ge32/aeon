@@ -143,16 +143,17 @@ static struct aeon_dentry *aeon_init_dentry(struct super_block *sb, struct aeon_
 	strncpy(direntry->name, ".\0", 2);
 	direntry->name_len = 2;
 	direntry->ino = ino;
-	direntry->invalid = 0;
+	direntry->valid = 1;
 
 	direntry = (struct aeon_dentry *)(pi_addr + (1 << AEON_D_SHIFT));
 	strncpy(direntry->name, "..\0", 3);
 	direntry->name_len = 3;
 	direntry->ino = pidir->aeon_ino;
-	direntry->invalid = 0;
+	direntry->valid = 1;
 
 	de_map->num_internal_dentries = cpu_to_le64(2);
 	de_map->num_dentries = cpu_to_le64(2);
+	de_map->block_dentry[0] = d_blocknr;
 
 	return direntry;
 }
@@ -290,12 +291,14 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 
 		pidir->i_new = 0;
 	} else {
+		aeon_dbg("iiHERE!!!???\n");
 		de_map = aeon_get_dentry_map(sb, pidir);
 		if (IS_ERR(de_map))
 			return -EMLINK;
 	}
 
-	de_info = (struct aeon_dentry_info *)parent->d_fsdata;
+	aeon_dbg("HERE!!!???\n");
+	de_info = sih->de_info;
 
 	if (!isInvalidSpace(de_info)) {
 		aeon_dbg("HERE1\n");
@@ -313,7 +316,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 
 			direntry->internal_offset = 0;
 			direntry->global_offset = (de_map->num_latest_dentry - 1);
-			direntry->invalid = 0;
+			direntry->valid = 1;
 
 			goto end;
 		}
@@ -326,7 +329,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 		direntry->ino = ino;
 		direntry->internal_offset = de_map->num_internal_dentries;
 		direntry->global_offset = de_map->num_latest_dentry;
-		direntry->invalid = 0;
+		direntry->valid = 1;
 
 		aeon_dbg("%s: %lld - %u\n", __func__, le64_to_cpu(direntry->internal_offset),
 				le32_to_cpu(direntry->global_offset));
@@ -339,7 +342,7 @@ int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link)
 		*(direntry->name + namelen) = '\0';
 		direntry->name_len = namelen;
 		direntry->ino = ino;
-		direntry->invalid = 0;
+		direntry->valid = 1;
 
 		aeon_dbg("%s: %lld - %u\n", __func__, le64_to_cpu(direntry->internal_offset),
 				le32_to_cpu(direntry->global_offset));
@@ -392,7 +395,8 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	aeon_dbg("%s: %u - %lu\n", __func__, adi->internal, adi->global);
 
 	de_map->num_dentries--;
-	de->invalid = 1;
+	aeon_dbg("%s: num_dentries - %llu\n", __func__, le64_to_cpu(de_map->num_dentries));
+	de->valid = 0;
 	memset(de->name, '\0', de->name_len);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
