@@ -55,6 +55,7 @@ static void aeon_put_super(struct super_block *sb)
 	}
 
 	aeon_delete_free_lists(sb);
+	aeon_destroy_stats(sbi);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
@@ -411,6 +412,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	if (ret)
 		goto out0;
 
+	sbi->sb   = sb;
 	sbi->uid  = current_fsuid();
 	sbi->gid  = current_fsgid();
 	sbi->cpus = num_online_cpus();
@@ -462,11 +464,16 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	blocksize = le32_to_cpu(sbi->aeon_sb->s_blocksize);
 	aeon_set_blocksize(sb, blocksize);
 
+	ret = aeon_build_stats(sbi);
+	if (ret) {
+		goto out2;
+	}
+
 	root_i = aeon_iget(sb, AEON_ROOT_INO);
 	if (IS_ERR(root_i)) {
 		ret = -ENOMEM;
 		aeon_err(sb, "%s ERR root_i\n", __func__);
-		goto out2;
+		goto out3;
 	}
 	aeon_dbg("%s: root_i ino - %lu\n", __func__, root_i->i_ino);
 	aeon_dbg("%s: root_pi ino - %u\n", __func__, le32_to_cpu(root_pi->aeon_ino));
@@ -474,12 +481,15 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_root = d_make_root(root_i);
 	if (!sb->s_root) {
 		ret = -ENOMEM;
-		goto out2;
+		goto out3;
 	}
+
 	aeon_dbg("%s:FINISH\n", __func__);
 
 	return 0;
 
+out3:
+	aeon_destroy_stats(sbi);
 out2:
 	aeon_delete_free_lists(sb);
 out1:
@@ -556,7 +566,7 @@ static int __init init_aeon_fs(void)
 
 	err = init_inodecache();
 	if (err)
-		goto out2;
+		goto out;
 
 	err = init_rangenode_cache();
 	if (err)
@@ -564,14 +574,20 @@ static int __init init_aeon_fs(void)
 
 	err = register_filesystem(&aeon_fs_type);
 	if (err)
-		goto out;
+		goto out2;
+
+	err = aeon_create_root_stats();
+	if (err)
+		goto out3;
 
 	return 0;
-out:
+out3:
+	unregister_filesystem(&aeon_fs_type);
+out2:
 	destroy_rangenode_cache();
 out1:
 	destroy_inodecache();
-out2:
+out:
 	return err;
 }
 
@@ -579,9 +595,9 @@ static void __exit exit_aeon_fs(void)
 {
 	aeon_dbg("---GOOD BYE AEON---\n");
 	unregister_filesystem(&aeon_fs_type);
-	//remove_proc_entry(proc_dirname, NULL);
 	destroy_inodecache();
 	destroy_rangenode_cache();
+	aeon_destroy_root_stats();
 }
 
 MODULE_AUTHOR("Fumiya Shigemitsu");

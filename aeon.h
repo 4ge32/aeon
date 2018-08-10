@@ -96,6 +96,8 @@ struct aeon_sb_info {
 	//struct free_list shared_free_list;
 
 	int max_inodes_in_page;
+
+	struct aeon_stat_info *stat_info;
 };
 
 struct aeon_range_node {
@@ -522,5 +524,11 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 /* symlink.c */
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 		       const char *symname, int len);
+
+/* debug.c */
+int aeon_build_stats(struct aeon_sb_info *sbi);
+void aeon_destroy_stats(struct aeon_sb_info *sbi);
+int __init aeon_create_root_stats(void);
+void aeon_destroy_root_stats(void);
 
 #endif

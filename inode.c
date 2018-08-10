@@ -45,7 +45,6 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 	int i;
 	int ret;
 
-	aeon_dbg("%s: START\n", __func__);
 	sbi->s_inodes_used_count = inode_start;
 
 	range_high = (inode_start) / sbi->cpus;
@@ -62,7 +61,6 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 		}
 		range_node->range_low = 0;
 		range_node->range_high = range_high;
-		aeon_dbg("%s: range_hig %lu insert_inodetree\n", __func__, range_high);
 		ret = aeon_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			aeon_err(sb, "%s failed\n", __func__);
@@ -408,8 +406,6 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
 					 inode->i_ctime.tv_nsec = 0;
 	set_nlink(inode, le16_to_cpu(pi->i_links_count));
-	aeon_dbg("%s %lld", __func__, inode->i_size);
-	aeon_dbg("%s: LAST\n", __func__);
 
 	return 0;
 

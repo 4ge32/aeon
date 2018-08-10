@@ -102,12 +102,6 @@ void aeon_init_blockmap(struct super_block *sb)
 		free_list->first_node = blknode;
 		free_list->last_node = blknode;
 		free_list->num_blocknode = 1;
-
-		aeon_dbg("%s: free list %d: block start %lu, end %lu, %lu free blocks\n",
-			 __func__, i,
-			 free_list->block_start,
-			 free_list->block_end,
-			 free_list->num_free_blocks);
 	}
 }
 

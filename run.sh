@@ -24,6 +24,10 @@ nvdimm_set () {
    sudo ndctl create-namespace -e "namespace0.0" -m memory -f
 }
 
+show_info () {
+  sudo cat /sys/kernel/debug/aeon/free_list
+}
+
 case "$1" in
   clean)
     clean
@@ -33,6 +37,9 @@ case "$1" in
     ;;
   rm)
     rrun
+    ;;
+  info)
+    show_info
     ;;
   *)
     run
