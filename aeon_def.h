@@ -6,10 +6,12 @@
 
 #define AEON_MAGIC 0xEFF10
 
-#define AEON_INODE_SIZE         128
+#define AEON_I_SHIFT            7
+#define AEON_INODE_SIZE         (1 << AEON_I_SHIFT)
 #define AEON_SB_SIZE            512
 #define AEON_SHIFT              12
 #define AEON_DEF_BLOCK_SIZE_4K  (1 << AEON_SHIFT)
+#define AEON_I_NUM_PER_PAGE     (AEON_DEF_BLOCK_SIZE_4K / AEON_INODE_SIZE)
 #define AEON_NAME_LEN 		128
 
 #define AEON_ROOT_INO		(1)

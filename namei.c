@@ -181,6 +181,7 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	struct inode *inode = NULL;
 	struct super_block *sb = dir->i_sb;
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	u64 ino;
 	u64 pi_addr = 0;
 	int err = -EMLINK;
@@ -201,6 +202,8 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 	d_instantiate(dentry, inode);
+
+	aeon_sb->s_num_inodes++;
 
 	return 0;
 out:

@@ -25,6 +25,9 @@ struct aeon_stat_info {
 	/* about inode map */
 	int allocated;
 	int freed;
+
+	/* super block information on disk */
+	unsigned int s_num_inodes;
 };
 
 static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *si, int cpu)
@@ -34,6 +37,7 @@ static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *s
 	struct aeon_range_node *curr;
 	struct rb_node *temp;
 	struct inode_map *inode_map;
+	struct aeon_super_block *aeon_sb = aeon_get_super(sbi->sb);
 
 	free_list = &sbi->free_lists[cpu];
 
@@ -52,6 +56,8 @@ static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *s
 
 	si->allocated = inode_map->allocated;
 	si->freed = inode_map->freed;
+
+	si->s_num_inodes = aeon_sb->s_num_inodes;
 }
 
 static int stat_show(struct seq_file *s, void *v)
@@ -77,7 +83,7 @@ static int stat_show(struct seq_file *s, void *v)
 		seq_printf(s, "========== cpu core:  %d ==========\n", i++);
 		seq_printf(s, "block_start: %lu, block_end: %lu\n", si->block_start, si->block_end);
 		seq_printf(s, "Free blocks: %lu\n", si->num_free_blocks);
-		seq_printf(s, "Used blocks: %lu\n ", (si->block_end - si->block_start + 1) - si->num_free_blocks);
+		seq_printf(s, "Used blocks: %lu\n", (si->block_end - si->block_start + 1) - si->num_free_blocks);
 		seq_printf(s, "Current free range: %lu - %lu\n", si->range_low, si->range_high);
 
 		seq_printf(s, "Allocated inodes: %d\n", si->allocated);
@@ -95,6 +101,7 @@ static int stat_show(struct seq_file *s, void *v)
 	seq_printf(s, "Used block: %lu\n", used_blocks);
 	seq_printf(s, "Allocated inodes: %d\n", allocated_inodes);
 	seq_printf(s, "freed inodes: %d\n", freed_inodes);
+	seq_printf(s, "Allocated inodes: %u\n", si->s_num_inodes);
 	mutex_unlock(&aeon_stat_mutex);
 
 	return 0;

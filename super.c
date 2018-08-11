@@ -81,7 +81,6 @@ static void aeon_evict_inode(struct inode *inode)
 	int destroy = 0;
 	int ret;
 
-	aeon_dbg("%s: START\n", __func__);
 
 	if (!sih) {
 		aeon_err(sb, "%s: ino %lu sih is NULL!\n",
@@ -118,8 +117,6 @@ out:
 	truncate_inode_pages(&inode->i_data, 0);
 
 	clear_inode(inode);
-
-	aeon_dbg("%s: FINISH\n", __func__);
 }
 
 static int aeon_statfs(struct dentry *d, struct kstatfs *buf)
@@ -398,9 +395,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	int i;
 
 
-	BUILD_BUG_ON(sizeof(struct aeon_super_block) == AEON_SB_SIZE);
-	BUILD_BUG_ON(sizeof(struct aeon_inode) == AEON_INODE_SIZE);
-	BUILD_BUG_ON(sizeof(struct aeon_dentry) == AEON_DENTRY_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_super_block) > AEON_SB_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_INODE_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_dentry) > AEON_DENTRY_SIZE);
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
