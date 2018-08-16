@@ -1,4 +1,5 @@
 #include <linux/fs.h>
+#include <linux/slab.h>
 
 #include "aeon.h"
 
@@ -183,11 +184,13 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	struct inode_map *inode_map;
 	struct aeon_range_node *i, *next_i;
 	struct rb_node *temp, *next;
+	struct aeon_inode_table *ait;
 	unsigned long next_range_low;
 	unsigned long new_ino;
 	unsigned long MAX_INODE = 1UL << 31;
 
 	inode_map = &sbi->inode_maps[cpuid];
+	ait = AEON_I_TABLE(inode_map);
 	i = inode_map->first_inode_range;
 
 	temp = &i->node;
@@ -220,7 +223,7 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 
 	*ino = new_ino * sbi->cpus + cpuid;
 	sbi->s_inodes_used_count++;
-	inode_map->allocated++;
+	ait->allocated++;
 
 	aeon_dbg("%s: Alloc ino %lu\n", __func__, *ino);
 	return 0;
@@ -229,29 +232,24 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 *pi_addr, int cpuid)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_inode *pi;
-	u64 prev_addr;
-	int ret = 1;
-	int order = (sbi->inode_maps[cpuid].allocated - 1) % 32;
+	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
 
-	if (sbi->inode_maps[cpuid].allocated % 32 == 0) {
-		prev_addr = (u64)sbi->inode_maps[cpuid].virt_addr;
-		pi = (struct aeon_inode *)prev_addr;
-		/* update addr */
-		ret = aeon_get_new_inode_block(sb, cpuid);
-		pi->next_inode_block = ret;
-		*pi_addr = prev_addr;
-	} else
-		*pi_addr = (u64)sbi->inode_maps[cpuid].virt_addr;
+	aeon_dbg("cpuid - %d\n", cpuid);
 
-	*pi_addr += order * AEON_INODE_SIZE;
+	if (!aeon_get_new_inode_block(sb, cpuid, free_ino))
+		goto err;
+
+	*pi_addr = search_imem_cache(sbi, inode_map, free_ino);
+	if (*pi_addr == 0)
+		goto err;
+
 	aeon_dbg("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
 
-	/*
-	 * Handle the situation that the number of inode increase
-	 * over thirty-two in the future.
-	 */
-	return ret;
+	return 1;
+
+err:
+	aeon_err(sb, "can't alloc inode address\n");
+	return 0;
 }
 
 u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
@@ -279,7 +277,7 @@ u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 
 	ret = aeon_get_new_inode_address(sb, free_ino, pi_addr, map_id);
 	if (!ret) {
-		aeon_dbg("%s: get inode address failed %d\n", __func__, ret);
+		aeon_err(sb, "%s: get inode address failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);
 		return 0;
 	}
@@ -521,6 +519,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	struct inode_map *inode_map;
 	struct aeon_range_node *i = NULL;
 	struct aeon_range_node *curr_node;
+	struct aeon_inode_table *ait;
 	int cpuid = ino % sbi->cpus;
 	unsigned long internal_ino = ino / sbi->cpus;
 	int found;
@@ -528,6 +527,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 
 	aeon_dbg("Free inuse ino: %lu\n", ino);
 	inode_map = &sbi->inode_maps[cpuid];
+	ait = AEON_I_TABLE(inode_map);
 
 	mutex_lock(&inode_map->inode_table_mutex);
 	found = aeon_search_inodetree(sbi, ino, &i);
@@ -574,7 +574,7 @@ err:
 	return ret;
 block_found:
 	sbi->s_inodes_used_count--;
-	inode_map->freed++;
+	ait->freed++;
 	mutex_unlock(&inode_map->inode_table_mutex);
 	return ret;
 }
@@ -582,11 +582,18 @@ block_found:
 static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 			   struct aeon_inode_info_header *sih)
 {
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	ino_t ino = le32_to_cpu(pi->aeon_ino);
+	int cpuid = ino % sbi->cpus;
+	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
+	struct imem_cache *im;
 	int err = 0;
 
-	sih->pi_addr = 0;
-
-	err = aeon_free_inuse_inode(sb, pi->aeon_ino);
+	err = aeon_free_inuse_inode(sb, ino);
+	im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	im->ino = sih->ino;
+	im->addr = sih->pi_addr;
+	list_add(&im->imem_list, &inode_map->im->imem_list);
 
 	return err;
 }

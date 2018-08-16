@@ -38,6 +38,7 @@ static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *s
 	struct rb_node *temp;
 	struct inode_map *inode_map;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sbi->sb);
+	struct aeon_inode_table *ait;
 
 	free_list = &sbi->free_lists[cpu];
 
@@ -53,9 +54,10 @@ static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *s
 	si->range_high = curr->range_high;
 
 	inode_map = &sbi->inode_maps[cpu];
+	ait = AEON_I_TABLE(inode_map);
 
-	si->allocated = inode_map->allocated;
-	si->freed = inode_map->freed;
+	si->allocated = le64_to_cpu(ait->allocated);
+	si->freed = le64_to_cpu(ait->freed);
 
 	si->s_num_inodes = aeon_sb->s_num_inodes;
 }
@@ -107,14 +109,121 @@ static int stat_show(struct seq_file *s, void *v)
 	return 0;
 }
 
+static int stat_imem_show(struct seq_file *s, void *v)
+{
+	struct aeon_stat_info *si;
+	struct inode_map *inode_map;
+	int i = 0;
+
+	mutex_lock(&aeon_stat_mutex);
+	list_for_each_entry(si, &aeon_stat_list, stat_list) {
+		if (i == 0) {
+			seq_printf(s, "=========== imem cache Info ==========\n");
+		}
+		aeon_update_stats(si->sbi, si, i);
+
+		seq_printf(s, "cpu-id: %d\n", i);
+
+		inode_map = &si->sbi->inode_maps[i];
+
+		if (inode_map->im) {
+			struct imem_cache *im;
+			list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
+				seq_printf(s, "ino: %3lu : 0x%llx\n", im->ino, im->addr);
+			}
+		}
+
+		i++;
+		seq_printf(s, "\n");
+
+	}
+	mutex_unlock(&aeon_stat_mutex);
+
+	return 0;
+}
+
+static int stat_den_show(struct seq_file *s, void *v)
+{
+	struct aeon_stat_info *si;
+	struct aeon_sb_info *sbi;
+	struct aeon_inode *pi;
+	struct aeon_dentry_map *de_map;
+	struct aeon_dentry *de;
+	unsigned long blocknr;
+	int num_entry = 0;
+	int global;
+	int internal;
+
+	si = list_first_entry(&aeon_stat_list, struct aeon_stat_info, stat_list);
+	sbi = si->sbi;
+	pi = aeon_get_reserved_inode(sbi->sb, AEON_ROOT_INO);
+	de_map = aeon_get_first_dentry_map(sbi->sb, pi);
+
+	num_entry = le64_to_cpu(de_map->num_dentries);
+	global = 0;
+	internal = 2;
+
+	mutex_lock(&aeon_stat_mutex);
+	seq_printf(s, "========== dentry map ==========\n");
+	seq_printf(s, "dentries %u\n\n", num_entry);
+
+	seq_printf(s, "internal : global : blocknr : ino : name\n");
+
+	while (num_entry > 2) {
+		if (internal == 8) {
+			global++;
+			internal = 0;
+		}
+
+		blocknr = le64_to_cpu(de_map->block_dentry[global]);
+		de = (struct aeon_dentry *)(sbi->virt_addr +
+					   (blocknr << AEON_SHIFT) +
+					   (internal << AEON_D_SHIFT));
+		seq_printf(s, "%u : %u : %lu : %u : %s\n", internal, global, blocknr, le32_to_cpu(de->ino), de->name);
+
+		internal++;
+		num_entry--;
+	}
+
+	mutex_unlock(&aeon_stat_mutex);
+
+	return 0;
+}
+
 static int stat_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, stat_show, inode->i_private);
 }
 
+static int stat_imem_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, stat_imem_show, inode->i_private);
+}
+
+static int stat_den_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, stat_den_show, inode->i_private);
+}
+
 static const struct file_operations stat_fops = {
 	.owner   = THIS_MODULE,
 	.open    = stat_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = single_release,
+};
+
+static const struct file_operations stat_imem_fops = {
+	.owner   = THIS_MODULE,
+	.open    = stat_imem_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = single_release,
+};
+
+static const struct file_operations stat_den_fops = {
+	.owner   = THIS_MODULE,
+	.open    = stat_den_open,
 	.read    = seq_read,
 	.llseek  = seq_lseek,
 	.release = single_release,
@@ -157,17 +266,36 @@ void aeon_destroy_stats(struct aeon_sb_info *sbi)
 
 int __init aeon_create_root_stats(void)
 {
-	struct dentry *file;
+	struct dentry *free_list_file;
+	struct dentry *imem_cache_file;
+	struct dentry *d_allocated;
 
 	aeon_debugfs_root = debugfs_create_dir("aeon", NULL);
 	if (!aeon_debugfs_root)
 		return -ENOMEM;
 
-	file = debugfs_create_file("free_list", S_IRUGO, aeon_debugfs_root,
+	free_list_file = debugfs_create_file("free_list", S_IRUGO, aeon_debugfs_root,
 				   NULL, &stat_fops);
 
-	if (!file) {
+	if (!free_list_file) {
 		debugfs_remove(aeon_debugfs_root);
+		aeon_debugfs_root = NULL;
+		return -ENOMEM;
+	}
+
+	imem_cache_file = debugfs_create_file("imem_cache", S_IRUGO, aeon_debugfs_root,
+				   NULL, &stat_imem_fops);
+
+	if (!imem_cache_file) {
+		debugfs_remove_recursive(aeon_debugfs_root);
+		aeon_debugfs_root = NULL;
+		return -ENOMEM;
+	}
+
+	d_allocated = debugfs_create_file("dentries", S_IRUGO, aeon_debugfs_root,
+				   NULL, &stat_den_fops);
+	if (!d_allocated) {
+		debugfs_remove_recursive(aeon_debugfs_root);
 		aeon_debugfs_root = NULL;
 		return -ENOMEM;
 	}
