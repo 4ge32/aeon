@@ -539,26 +539,78 @@ create:
 	return allocated;
 }
 
-// Allocate inode block.  The offset for the allocated block comes back in
-// blocknr.  Return the number of blocks allocated (should be 1).
-unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid)
+static void imem_cache_create(struct aeon_sb_info *sbi, struct inode_map *inode_map, unsigned blocknr, u64 start_ino)
+{
+	struct imem_cache *init;
+	struct imem_cache *ims;
+	struct imem_cache *im;
+	u64 virt_addr = (u64)inode_map->virt_addr + (blocknr << AEON_SHIFT);
+	int ino_off = sbi->cpus;
+	int ino = start_ino;
+	int i;
+
+	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	inode_map->im = init;
+
+	INIT_LIST_HEAD(&inode_map->im->imem_list);
+
+	ims = kmalloc(AEON_I_NUM_PER_PAGE * sizeof(struct imem_cache), GFP_KERNEL);
+	for (i = 0; i < AEON_I_NUM_PER_PAGE; i++) {
+		im = &ims[i];
+		im->ino = ino;
+		im->addr = (u64)virt_addr + (i << AEON_I_SHIFT);
+		im->head = ims;
+		list_add_tail(&im->imem_list, &inode_map->im->imem_list);
+
+		ino += ino_off;
+	}
+}
+
+u64 search_imem_cache(struct aeon_sb_info *sbi, struct inode_map *inode_map, ino_t ino)
+{
+	struct imem_cache *im;
+	u64 addr;
+
+	list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
+		aeon_dbg("%lu\n", im->ino);
+		if (im->ino == ino)
+			goto found;
+	}
+
+	return 0;
+
+found:
+	addr = im->addr;
+	list_del(&im->imem_list);
+	if (list_empty(&inode_map->im->imem_list))
+		kfree(im->head);
+
+	return addr;
+}
+
+
+int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
 
-	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
-
-	/*
-	 * TODO:
-	 * Change multiple form to bit manipulation form.
-	 */
-	sbi->inode_maps[cpuid].virt_addr = (void *)(blocknr * AEON_DEF_BLOCK_SIZE_4K + (u64)sbi->virt_addr);
+	if (!inode_map->im || list_empty(&inode_map->im->imem_list)) {
+		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
+		if (allocated != 1)
+			goto out;
+		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
+		imem_cache_create(sbi, inode_map, blocknr, ino);
+	}
 
 	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, (u64)sbi->inode_maps[cpuid].virt_addr);
+	return 1;
 
-	return blocknr;
+out:
+	aeon_err(sb, "can't alloc region for inode\n");
+	return 0;
 }
 
 // Allocate dentry block.  The offset for the allocated block comes back in
@@ -569,15 +621,15 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, in
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 
-	//aeon_dbg("%s:\n", __func__);
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 
-	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
+	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 
 	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
 	return blocknr;
 }
+
 
 unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid)
 {

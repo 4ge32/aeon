@@ -47,7 +47,10 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 	aeon_dbg("%s: blocknr - %lu ino - %llu\n", __func__, blocknr, le64_to_cpu(pi->aeon_ino));
 	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr + (blocknr << AEON_SHIFT));
+	aeon_dbg("%s: blocknr - 0x%px\n", __func__, &de_map->block_dentry[0]);
 	aeon_dbg("%s: blocknr - %llu\n", __func__, le64_to_cpu(de_map->block_dentry[0]));
+	aeon_dbg("%s: blocknr - %llu\n", __func__, le64_to_cpu(de_map->num_dentries));
+	aeon_dbg("%s: blocknr - %llu\n", __func__, le64_to_cpu(de_map->num_latest_dentry));
 
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	if (num_entry == 2)

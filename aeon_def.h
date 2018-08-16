@@ -79,6 +79,13 @@ struct aeon_inode {
 
 } __attribute((__packed__));
 
+struct aeon_inode_table {
+	__le64 allocated;
+	__le64 freed;
+	__le32 num_allocated_pages;
+	char pad[108];
+};
+
 struct aeon_super_block {
 	/* static fields. they never change after file system creation.
 	 * checksum only validates up to s_start_dynamic field below */

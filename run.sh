@@ -28,6 +28,14 @@ show_info () {
   sudo cat /sys/kernel/debug/aeon/free_list
 }
 
+show_imem_info () {
+  sudo cat /sys/kernel/debug/aeon/imem_cache
+}
+
+show_dentries_info () {
+  sudo cat /sys/kernel/debug/aeon/dentries
+}
+
 case "$1" in
   clean)
     clean
@@ -40,6 +48,12 @@ case "$1" in
     ;;
   info)
     show_info
+    ;;
+  imem)
+    show_imem_info
+    ;;
+  dentry)
+    show_dentries_info
     ;;
   *)
     run

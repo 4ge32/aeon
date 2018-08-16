@@ -47,6 +47,7 @@ static void aeon_put_super(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map;
+	struct aeon_inode_table *ait;
 	int i;
 
 	/* It's unmount time, so unmap the aeon memory */
@@ -59,8 +60,9 @@ static void aeon_put_super(struct super_block *sb)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		aeon_dbg("CPU %d: inode allocated %d, freed %d\n",
-			i, inode_map->allocated, inode_map->freed);
+		ait = AEON_I_TABLE(inode_map);
+		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
+			i, le64_to_cpu(ait->allocated), le64_to_cpu(ait->freed));
 	}
 	kfree(sbi->inode_maps);
 
@@ -88,8 +90,8 @@ static void aeon_evict_inode(struct inode *inode)
 		goto out;
 	}
 
-	//if (sih->de_info != NULL)
-	//	aeon_free_invalid_dentry_list(sb, sih);
+	if (sih->de_info != NULL)
+		aeon_free_invalid_dentry_list(sb, sih);
 
 	aeon_dbg("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
@@ -354,6 +356,24 @@ static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root
 	aeon_memlock_inode(sb, root_i);
 }
 
+static void aeon_fill_inode_table(struct super_block *sb, int cpu)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_inode_table *ait;
+	struct inode_map *inode_map;
+
+	inode_map = &sbi->inode_maps[cpu];
+	inode_map->i_table_addr = inode_map->virt_addr;
+
+	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
+		ait = AEON_I_TABLE(inode_map);
+
+		ait->allocated = 0;
+		ait->freed = 0;
+		ait->num_allocated_pages = 0;
+	}
+}
+
 static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -378,8 +398,11 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 		return NULL;
 	}
 
-	for (i = 0; i < sbi->cpus; i++)
-		aeon_get_new_inode_block(sb, i);
+	for (i = 0; i < sbi->cpus; i++) {
+		int inode_start = AEON_INODE_START;
+		aeon_get_new_inode_block(sb, i, inode_start + i);
+		aeon_fill_inode_table(sb, i);
+	}
 
 	return root_i;
 }
@@ -398,6 +421,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct aeon_super_block) > AEON_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_dentry) > AEON_DENTRY_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_inode_table) > AEON_INODE_SIZE);
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
@@ -428,10 +452,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
 		inode_map->virt_addr = 0;
+		inode_map->i_table_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
-		inode_map->allocated = 0;
-		inode_map->freed = 0;
 	}
 
 	mutex_init(&sbi->s_lock);

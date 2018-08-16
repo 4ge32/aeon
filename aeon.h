@@ -25,14 +25,21 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 
 extern int wprotect;
 
+struct imem_cache {
+	ino_t ino;
+	u64 addr;
+	struct imem_cache *head;
+	struct list_head imem_list;
+};
+
 struct inode_map {
 	struct mutex inode_table_mutex;
 	struct rb_root	inode_inuse_tree;
 	unsigned long	num_range_node_inode;
 	struct aeon_range_node *first_inode_range;
+	struct imem_cache *im;
 	void *virt_addr;
-	int allocated;
-	int freed;
+	void *i_table_addr;
 };
 
 /*
@@ -196,6 +203,12 @@ struct aeon_dentry_invalid {
 	unsigned long global;
 };
 
+struct aeon_dentry_entry {
+	u64 addr;
+	ino_t ino;
+	struct list_head dmem_cache;
+};
+
 struct aeon_dentry_info {
 	unsigned int internal;
 	unsigned long global;
@@ -299,6 +312,11 @@ static inline struct aeon_inode_info *AEON_I(struct inode *inode)
 	return container_of(inode, struct aeon_inode_info, vfs_inode);
 }
 
+static inline struct aeon_inode_table *AEON_I_TABLE(struct inode_map *inode_map)
+{
+	return (struct aeon_inode_table *)(inode_map->i_table_addr);
+}
+
 static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi) {
 	return (u64)sbi->virt_addr;
 }
@@ -341,9 +359,24 @@ static inline struct aeon_inode *aeon_get_inode(struct super_block *sb, struct a
 		return NULL;
 	}
 
-	aeon_dbg("%s: addr - 0x%lx\n", __func__, sih->pi_addr);
-
 	return (struct aeon_inode *)addr;
+}
+
+static inline struct aeon_dentry_map *aeon_get_first_dentry_map(struct super_block *sb, struct aeon_inode *pi)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
+	struct aeon_dentry_map *de_map;
+
+	if (blocknr == 0)
+		return NULL;
+
+	de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
+	if (le64_to_cpu(de_map->num_dentries) == 2)
+		return NULL;
+
+	return de_map;
+
 }
 
 static inline void aeon_init_header(struct super_block *sb, struct aeon_inode_info_header *sih, u16 i_mode)
@@ -482,7 +515,8 @@ int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
-unsigned long aeon_get_new_inode_block(struct super_block *sb, int cpuid);
+u64 search_imem_cache(struct aeon_sb_info *sbi, struct inode_map *inode_map, ino_t ino);
+int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t start_ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, int cpuid);
@@ -505,7 +539,7 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr);
 /* dir.c */
 int aeon_insert_dir_tree(struct super_block *sb, struct aeon_inode_info_header *sih,
 			 const char *name, int namelen, struct aeon_dentry *direntry);
-int aeon_add_dentry(struct dentry *dentry, u64 ino, int inc_link);
+int aeon_add_dentry(struct dentry *dentry, ino_t ino, int inc_link);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
