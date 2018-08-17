@@ -279,7 +279,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct qstr *new_name = &new_dentry->d_name;
 	int err;
 
-	aeon_dbg("SEE IT !!! - %s\n", old_name->name);
 
 	old_de = aeon_find_dentry(sb, pi, old_dir, old_name->name, old_name->len);
 	if (old_de == NULL) {
@@ -295,7 +294,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	if (new_inode) {
-		aeon_dbg("1: HELLO\n");
 		err = -ENOTEMPTY;
 		if (dir_de && !aeon_empty_dir(new_inode))
 			goto out_dir;
@@ -324,7 +322,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	old_de->valid = 0;
 
 	if (dir_de) {
-		aeon_dbg("2: HELLO\n");
 		if (old_dir != new_dir)
 			aeon_set_link(old_inode, dir_de, new_dir, 0);
 		inode_dec_link_count(old_dir);

@@ -1,5 +1,9 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
+#include <linux/iomap.h>
+#include <linux/posix_acl.h>
+#include <linux/mm.h>
+#include <linux/buffer_head.h>
 
 #include "aeon.h"
 
@@ -643,4 +647,58 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
 
 	return ret;
+}
+
+static void aeon_setsize(struct inode *inode, struct aeon_inode *pi,
+			 loff_t oldsize, loff_t newsize)
+{
+	if (!(S_ISREG(inode->i_mode))) {
+		aeon_err(inode->i_sb, "%s: wrong file mode %x\n", inode->i_mode);
+		return;
+	}
+
+	inode_dio_wait(inode);
+
+	aeon_dbg("%s: inode %lu, old size %llu, new size %llu\n",
+			__func__, inode->i_ino, oldsize, newsize);
+
+	if (newsize != oldsize) {
+		i_size_write(inode, newsize);
+		pi->i_size = cpu_to_le64(newsize);
+	}
+
+	truncate_pagecache(inode, newsize);
+}
+
+int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode *inode = d_inode(dentry);
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	loff_t oldsize = inode->i_size;
+	int err;
+
+	if (!pi) {
+		err = -EACCES;
+		goto out;
+	}
+
+	err = setattr_prepare(dentry, iattr);
+	if (err)
+		goto out;
+
+	setattr_copy(inode, iattr);
+
+	if (iattr->ia_valid & ATTR_SIZE && iattr->ia_size != inode->i_size)
+		aeon_setsize(inode, pi, oldsize, iattr->ia_size);
+
+	if (iattr->ia_valid & ATTR_MODE)
+		err = posix_acl_chmod(inode, inode->i_mode);
+
+	return err;
+
+out:
+	return err;
 }

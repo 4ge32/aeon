@@ -210,6 +210,8 @@ struct aeon_dentry_entry {
 };
 
 struct aeon_dentry_info {
+	struct mutex dentry_mutex;
+
 	unsigned int internal;
 	unsigned long global;
 	struct aeon_dentry_invalid *di;
@@ -334,7 +336,6 @@ static inline struct aeon_inode *aeon_get_reserved_inode(struct super_block *sb,
 	u64 addr;
 
 	addr = _aeon_get_reserved_inode_addr(sb, inode_number);
-	aeon_dbg("%s : 0x%lx\n", __func__, (unsigned long)addr);
 
 	return (struct aeon_inode *)addr;
 }

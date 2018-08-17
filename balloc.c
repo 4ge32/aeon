@@ -553,7 +553,6 @@ static void imem_cache_create(struct aeon_sb_info *sbi, struct inode_map *inode_
 	inode_map->im = init;
 
 	INIT_LIST_HEAD(&inode_map->im->imem_list);
-
 	ims = kmalloc(AEON_I_NUM_PER_PAGE * sizeof(struct imem_cache), GFP_KERNEL);
 	for (i = 0; i < AEON_I_NUM_PER_PAGE; i++) {
 		im = &ims[i];
@@ -605,7 +604,6 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 		imem_cache_create(sbi, inode_map, blocknr, ino);
 	}
 
-	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, (u64)sbi->inode_maps[cpuid].virt_addr);
 	return 1;
 
 out:

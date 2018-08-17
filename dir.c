@@ -170,10 +170,10 @@ static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 	unsigned long head_addr = le64_to_cpu(de_map->block_dentry[latest_entry]) << AEON_SHIFT;
 	unsigned int internal_offset = internal_entry << AEON_D_SHIFT;
 
-
-	aeon_dbg("%s: %u - %u\n", __func__, internal_entry, latest_entry);
-
+	mutex_lock(&de_info->dentry_mutex);
 	list_del(&adi->invalid_list);
+	mutex_unlock(&de_info->dentry_mutex);
+
 	kfree(adi);
 
 	return (struct aeon_dentry *)((u64)sbi->virt_addr + head_addr + internal_offset);
@@ -379,12 +379,11 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
-	struct dentry *parent = dentry->d_parent;
-	struct aeon_dentry_info *de_info = (struct aeon_dentry_info *)parent->d_fsdata;
 	struct super_block *sb = dir->i_sb;
 	struct qstr *entry = &dentry->d_name;
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
+	struct aeon_dentry_info *de_info = sih->de_info;
 	struct aeon_inode *pidir = aeon_get_inode(sb, sih);
 	struct aeon_dentry_invalid *adi = kmalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
 	struct aeon_dentry_map *de_map = aeon_get_dentry_map(sb, pidir);
@@ -399,13 +398,14 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 
 	adi->internal = le64_to_cpu(de->internal_offset);
 	adi->global = le32_to_cpu(de->global_offset);
+
+	mutex_lock(&de_info->dentry_mutex);
 	list_add(&adi->invalid_list, &de_info->di->invalid_list);
-	aeon_dbg("%s: %u - %lu\n", __func__, adi->internal, adi->global);
+	mutex_unlock(&de_info->dentry_mutex);
 
 	de_map->num_dentries--;
-	aeon_dbg("%s: num_dentries - %llu\n", __func__, le64_to_cpu(de_map->num_dentries));
 	de->valid = 0;
-	memset(de->name, '\0', de->name_len);
+	memset(de->name, '\0', de->name_len + 1);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
@@ -450,27 +450,16 @@ int aeon_empty_dir(struct inode *inode)
 	return 1;
 }
 
-static struct aeon_dentry *aeon_pull_dentry(struct super_block *sb, struct aeon_dentry_map *de_map,
-				     unsigned int internal, unsigned long global)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long head_addr = le64_to_cpu(de_map->block_dentry[global]) << AEON_SHIFT;
-
-	return (struct aeon_dentry *)((u64)sbi->virt_addr + head_addr + (internal << AEON_D_SHIFT));
-}
-
 void aeon_free_invalid_dentry_list(struct super_block *sb, struct aeon_inode_info_header *sih)
 {
 	struct aeon_dentry_info *de_info = sih->de_info;
 	struct aeon_dentry_invalid *adi;
 	struct aeon_dentry_invalid *dend = NULL;
-	struct aeon_dentry_map *de_map = de_info->de_map;
-	struct aeon_dentry *direntry;
 
 	list_for_each_entry_safe(adi, dend, &de_info->di->invalid_list, invalid_list) {
-		/* TODO: Still in progress */
 		aeon_dbg("%s: Free invalid list (%u - %lu)\n", __func__, adi->internal, adi->global);
-		direntry = aeon_pull_dentry(sb, de_map, adi->internal, adi->global);
+		list_del(&adi->invalid_list);
+		kfree(adi);
 	}
 }
 
