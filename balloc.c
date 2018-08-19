@@ -539,12 +539,13 @@ create:
 	return allocated;
 }
 
-static void imem_cache_create(struct aeon_sb_info *sbi, struct inode_map *inode_map, unsigned blocknr, u64 start_ino)
+static void imem_cache_create(struct aeon_sb_info *sbi, struct inode_map *inode_map,
+			      unsigned long blocknr, u64 start_ino, int space)
 {
 	struct imem_cache *init;
 	struct imem_cache *ims;
 	struct imem_cache *im;
-	u64 virt_addr = (u64)inode_map->virt_addr + (blocknr << AEON_SHIFT);
+	u64 virt_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 	int ino_off = sbi->cpus;
 	int ino = start_ino;
 	int i;
@@ -554,10 +555,10 @@ static void imem_cache_create(struct aeon_sb_info *sbi, struct inode_map *inode_
 
 	INIT_LIST_HEAD(&inode_map->im->imem_list);
 	ims = kmalloc(AEON_I_NUM_PER_PAGE * sizeof(struct imem_cache), GFP_KERNEL);
-	for (i = 0; i < AEON_I_NUM_PER_PAGE; i++) {
+	for (i = space; i < AEON_I_NUM_PER_PAGE; i++) {
 		im = &ims[i];
 		im->ino = ino;
-		im->addr = (u64)virt_addr + (i << AEON_I_SHIFT);
+		im->addr = virt_addr + (i << AEON_I_SHIFT);
 		im->head = ims;
 		list_add_tail(&im->imem_list, &inode_map->im->imem_list);
 
@@ -571,7 +572,6 @@ u64 search_imem_cache(struct aeon_sb_info *sbi, struct inode_map *inode_map, ino
 	u64 addr;
 
 	list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
-		aeon_dbg("%lu\n", im->ino);
 		if (im->ino == ino)
 			goto found;
 	}
@@ -581,7 +581,7 @@ u64 search_imem_cache(struct aeon_sb_info *sbi, struct inode_map *inode_map, ino
 found:
 	addr = im->addr;
 	list_del(&im->imem_list);
-	if (list_empty(&inode_map->im->imem_list))
+	if (list_empty(&inode_map->im->imem_list) || im->independent == 1)
 		kfree(im->head);
 
 	return addr;
@@ -592,6 +592,7 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
+	struct aeon_inode_table *ait = AEON_I_TABLE(inode_map);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
@@ -600,8 +601,9 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != 1)
 			goto out;
+		ait->num_allocated_pages++;
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
-		imem_cache_create(sbi, inode_map, blocknr, ino);
+		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 	}
 
 	return 1;
@@ -609,6 +611,25 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 out:
 	aeon_err(sb, "can't alloc region for inode\n");
 	return 0;
+}
+
+void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
+	struct aeon_inode_table *ait = AEON_I_TABLE(inode_map);
+	unsigned long blocknr = 0;
+	int num_blocks = 1;
+
+	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT))
+		return;
+
+	if (!inode_map->im || list_empty(&inode_map->im->imem_list)) {
+		aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
+		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
+		imem_cache_create(sbi, inode_map, blocknr, ino, 1);
+	}
+
 }
 
 // Allocate dentry block.  The offset for the allocated block comes back in

@@ -28,6 +28,7 @@ extern int wprotect;
 struct imem_cache {
 	ino_t ino;
 	u64 addr;
+	int independent;
 	struct imem_cache *head;
 	struct list_head imem_list;
 };
@@ -518,6 +519,7 @@ int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
 u64 search_imem_cache(struct aeon_sb_info *sbi, struct inode_map *inode_map, ino_t ino);
 int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t start_ino);
+void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, int cpuid);
@@ -555,6 +557,7 @@ void aeon_free_invalid_dentry_list(struct super_block *sb, struct aeon_inode_inf
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 		                u64 pi_addr, struct aeon_inode_info_header *sih);
+void aeon_rebuild_inode_cache(struct super_block *sb, int cpu);
 
 /* symlink.c */
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,

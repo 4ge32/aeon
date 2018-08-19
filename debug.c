@@ -128,13 +128,19 @@ static int stat_imem_show(struct seq_file *s, void *v)
 
 		if (inode_map->im) {
 			struct imem_cache *im;
+			int count = 0;
 			list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
-				seq_printf(s, "ino: %3lu : 0x%llx\n", im->ino, im->addr);
-			}
-		}
+				seq_printf(s, "ino: %3lu : 0x%llx", im->ino, im->addr);
 
+				if (count % 2 == 1)
+					seq_printf(s, "\n");
+				else
+					seq_printf(s, "  ");
+				count++;
+			}
+			seq_printf(s, "inodes cache: %d\n\n", count);
+		}
 		i++;
-		seq_printf(s, "\n");
 
 	}
 	mutex_unlock(&aeon_stat_mutex);

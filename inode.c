@@ -43,29 +43,21 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_range_node *range_node;
 	struct inode_map *inode_map;
-	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
-	unsigned long range_high;
-	unsigned long long used_inodes = le64_to_cpu(aeon_sb->s_num_inodes);
-	int inode_start = used_inodes;
+	struct aeon_inode_table *ait;
 	int i;
 	int ret;
-
-	sbi->s_inodes_used_count = inode_start;
-
-	range_high = (inode_start) / sbi->cpus;
-	if (inode_start % sbi->cpus)
-		range_high++;
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
 		mutex_lock(&inode_map->inode_table_mutex);
+		ait = AEON_I_TABLE(inode_map);
 		range_node = aeon_alloc_inode_node(sb);
 		if (range_node == NULL) {
 			mutex_unlock(&inode_map->inode_table_mutex);
 			return -ENOMEM;
 		}
 		range_node->range_low = 0;
-		range_node->range_high = range_high;
+		range_node->range_high = le32_to_cpu(ait->range_high);
 		ret = aeon_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			aeon_err(sb, "%s failed\n", __func__);
@@ -97,8 +89,6 @@ ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry)
 static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 {
 	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
-
-	pi->valid = 0;
 
 	pi->deleted = 0;
 	pi->i_new = 1;
@@ -226,7 +216,9 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	}
 
 	*ino = new_ino * sbi->cpus + cpuid;
+	aeon_dbg("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
 	sbi->s_inodes_used_count++;
+	ait->range_high = le32_to_cpu(i->range_high);
 	ait->allocated++;
 
 	aeon_dbg("%s: Alloc ino %lu\n", __func__, *ino);
@@ -237,8 +229,6 @@ static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
-
-	aeon_dbg("cpuid - %d\n", cpuid);
 
 	if (!aeon_get_new_inode_block(sb, cpuid, free_ino))
 		goto err;
@@ -259,14 +249,15 @@ err:
 u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode_map *inode_map;
 	int map_id;
 	int ret;
 	u64 ino = 0;
 	unsigned long free_ino = 0;
 
-	map_id = sbi->map_id;
-	sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
+	map_id = aeon_sb->s_map_id;
+	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
 
 	inode_map = &sbi->inode_maps[map_id];
 
@@ -299,11 +290,25 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u64 ino)
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	int num_cpu = sbi->cpus;
 	int cpu_id = (ino - AEON_INODE_START) % num_cpu;
-	struct inode_map inode_map = sbi->inode_maps[cpu_id];
-	u64 pi_addr = (u64)inode_map.virt_addr;
+	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
+	struct aeon_inode_table *ait = AEON_I_TABLE(inode_map);
+	unsigned int target_page = le32_to_cpu(ait->num_allocated_pages);
+	u64 addr = (u64)inode_map->i_table_addr;
+	u64 pi_addr = 0;
 
-	pi_addr += ((ino / sbi->cpus) - 2) * AEON_INODE_SIZE;
 
+	if ((ino >= AEON_INODE_START) && (ino <= (AEON_I_NUM_PER_PAGE - 1) * num_cpu
+						+ AEON_INODE_START - 1)) {
+		pi_addr = (addr + (1 << AEON_I_SHIFT));
+		pi_addr += ((ino - AEON_INODE_START - cpu_id) / num_cpu) << AEON_I_SHIFT;
+	} else {
+		/* TODO */
+		aeon_dbg("TODO\n");
+	}
+
+	aeon_dbg("%u - %llu\n", target_page, le64_to_cpu(((struct aeon_inode *)pi_addr)->aeon_ino));
+	aeon_dbg("%s: 0x%llx\n", __func__, addr);
+	aeon_dbg("%s: 0x%llx\n", __func__, pi_addr);
 	return pi_addr;
 }
 
@@ -320,7 +325,7 @@ static inline u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 ino)
 }
 
 static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si,
-		       u64 ino, u64 pi_addr, int rebuild_dir)
+		              u64 ino, u64 pi_addr, int rebuild_dir)
 {
 	struct aeon_inode_info_header *sih  = &si->header;
 	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
@@ -329,7 +334,7 @@ static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si
 	sih->pi_addr = pi_addr;
 	sih->ino = ino;
 
-	if (pi->i_new == 1)
+	if (pi->i_new)
 		goto end;
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
@@ -358,10 +363,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	int ret = -EIO;
 	unsigned long ino;
 
-	aeon_dbg("%s: pi_addr 0x%llx\n", __func__, pi_addr);
-
 	pi = aeon_get_inode(sb, sih);
-	aeon_dbg("%s: %p\n", __func__, pi);
 
 	inode->i_mode = le16_to_cpu(pi->i_mode);
 	i_uid_write(inode, le32_to_cpu(pi->i_uid));
@@ -597,6 +599,7 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 	im->ino = sih->ino;
 	im->addr = sih->pi_addr;
+	im->independent = 1;
 	list_add(&im->imem_list, &inode_map->im->imem_list);
 
 	return err;

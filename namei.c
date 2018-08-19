@@ -47,9 +47,6 @@ static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsi
 	struct inode *inode = NULL;
 	ino_t ino = 0;
 
-
-	aeon_dbg("%s %s %lu\n", __func__, dentry->d_name.name, ino);
-
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
 	aeon_dbg("%s %s %lu\n", __func__, dentry->d_name.name, ino);
 	if (ino) {

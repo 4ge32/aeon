@@ -17,20 +17,14 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	struct inode *inode = iocb->ki_filp->f_mapping->host;
 	ssize_t ret;
 
-	aeon_dbg("%s: START--------------------\n", __func__);
-	aeon_dbg("%s: inode ino %lu i_count - %lu kiocb->ki_pos - %llu\n", __func__, inode->i_ino, to->count, iocb->ki_pos);
-	aeon_dbg("%s: inode i_size %lld\n", __func__, inode->i_size);
-
 	if(!iov_iter_count(to))
 		return 0;
 
-	aeon_dbg("%s: START2\n", __func__);
 	inode_lock_shared(inode);
 	ret = dax_iomap_rw(iocb, to, &aeon_iomap_ops);
 	inode_unlock_shared(inode);
 
 	file_accessed(iocb->ki_filp);
-	aeon_dbg("%s: FINISH------------------\n", __func__);
 
 	return ret;
 }
@@ -40,11 +34,6 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
 	ssize_t ret;
-
-	aeon_dbg("%s: START-------------------\n", __func__);
-
-	aeon_dbg("%s: i_count - %lu iov_iter - %lu\n", __func__, from->count, from->iov_offset);
-	aeon_dbg("%s: inode ino %lu i_count - %lu kiocb->ki_pos - %llu\n", __func__, inode->i_ino, from->count, iocb->ki_pos);
 
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
@@ -72,7 +61,6 @@ out_unlock:
 	inode_unlock(inode);
 	if (ret > 0)
 		ret = generic_write_sync(iocb, ret);
-	aeon_dbg("%s: FINISH-------------------\n", __func__);
 	return ret;
 }
 

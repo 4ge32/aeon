@@ -90,17 +90,20 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
-	struct aeon_dentry_map *de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
+	struct aeon_dentry_map *de_map;
 	struct aeon_dentry_map *new_de_map;
-	unsigned long la_num_entries = le64_to_cpu(de_map->num_latest_dentry);
-	unsigned long num_internal = le64_to_cpu(de_map->num_internal_dentries);
+	unsigned long la_num_entries;
+	unsigned long num_internal;
 	unsigned long new_de_map_blocknr = 0;
 	u64 pi_addr = 0;
 
+	aeon_dbg("%s: %lu\n", __func__, blocknr);
+	de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
+	la_num_entries = le64_to_cpu(de_map->num_latest_dentry);
+	num_internal = le64_to_cpu(de_map->num_internal_dentries);
 
 	if (la_num_entries == MAX_ENTRY - 1 && num_internal == AEON_INTERNAL_ENTRY) {
 		/* create new map */
-		aeon_dbg("Hello\n");
 		new_de_map_blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
 		new_de_map = (struct aeon_dentry_map *)pi_addr;
 		new_de_map->num_dentries = 0;
@@ -115,7 +118,6 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 		de_map = new_de_map;
 	} else if (la_num_entries == MAX_ENTRY) {
 		/* return next map */
-		aeon_dbg("World\n");
 		blocknr = de_map->next_map;
 		de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
 		/* dead code so far ? */

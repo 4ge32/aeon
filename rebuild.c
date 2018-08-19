@@ -45,12 +45,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	int internal;
 	unsigned long d_blocknr;
 
-	aeon_dbg("%s: blocknr - %lu ino - %llu\n", __func__, blocknr, le64_to_cpu(pi->aeon_ino));
 	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr + (blocknr << AEON_SHIFT));
-	aeon_dbg("%s: blocknr - 0x%px\n", __func__, &de_map->block_dentry[0]);
-	aeon_dbg("%s: blocknr - %llu\n", __func__, le64_to_cpu(de_map->block_dentry[0]));
-	aeon_dbg("%s: blocknr - %llu\n", __func__, le64_to_cpu(de_map->num_dentries));
-	aeon_dbg("%s: blocknr - %llu\n", __func__, le64_to_cpu(de_map->num_latest_dentry));
 
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	if (num_entry == 2)
@@ -61,6 +56,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
 	adi = kzalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
 	de_info->di = adi;
+	de_info->de_map = de_map;
 	INIT_LIST_HEAD(&de_info->di->invalid_list);
 	sih->de_info = de_info;
 	while (num_entry > 2) {
@@ -92,4 +88,81 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 
 	return 0;
+}
+
+static void imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
+			       unsigned long blocknr, ino_t start_ino, unsigned allocated, int space)
+{
+	struct aeon_inode *pi;
+	struct imem_cache *im;
+	struct imem_cache *init;
+	u64 virt_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
+	int freed = (AEON_I_NUM_PER_PAGE - space) - allocated;
+	int ino = start_ino;
+	ino_t ino_off = sbi->cpus;
+	int count = 0;
+	int i;
+
+	aeon_dbg("%lu\n", blocknr);
+	aeon_dbg("0x%llx\n", virt_addr);
+	if (freed == 0)
+		return;
+
+	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	inode_map->im = init;
+	INIT_LIST_HEAD(&inode_map->im->imem_list);
+
+	for (i = space; i < AEON_I_NUM_PER_PAGE; i++) {
+		u64 addr;
+
+		addr = virt_addr + (i << AEON_I_SHIFT);
+		pi = (struct aeon_inode *)addr;
+		if (pi->valid)
+			ino += ino_off;
+		else {
+			if (freed == count++)
+				return;
+			im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+
+			im->ino = ino;
+			im->addr = addr;
+			im->head = im;
+			im->independent = 1;
+			list_add_tail(&im->imem_list, &inode_map->im->imem_list);
+
+			ino += ino_off;
+		}
+	}
+}
+
+void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map = &sbi->inode_maps[cpu];
+	struct aeon_inode_table *ait;
+	struct free_list *free_list;
+	unsigned long offset;
+	int ino = AEON_INODE_START + cpu;
+
+	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT)
+		return;
+
+	free_list = aeon_get_free_list(sb, cpu);
+
+	if (cpu == 0)
+		offset = 1;
+	else {
+		offset = free_list->block_start;
+		aeon_dbg("REHE: %lu\n", offset);
+	}
+	inode_map->i_table_addr = (void *)((u64)sbi->virt_addr +
+				   	   (offset << AEON_SHIFT));
+
+
+	ait = AEON_I_TABLE(inode_map);
+	// every each page that is not used fully
+//	if (le32_to_cpu(ait->num_allocated_pages) == 0)
+	imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(ait->allocated), 1);
+
+	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(ait->allocated));
 }
