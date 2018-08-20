@@ -560,6 +560,7 @@ static void imem_cache_create(struct aeon_sb_info *sbi, struct inode_map *inode_
 		im->ino = ino;
 		im->addr = virt_addr + (i << AEON_I_SHIFT);
 		im->head = ims;
+		im->independent = 0;
 		list_add_tail(&im->imem_list, &inode_map->im->imem_list);
 
 		ino += ino_off;
@@ -617,7 +618,6 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
-	struct aeon_inode_table *ait = AEON_I_TABLE(inode_map);
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
 
