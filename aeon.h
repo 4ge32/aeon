@@ -493,10 +493,11 @@ static inline struct aeon_extent *AEON_EXTENT(struct super_block *sb, struct aeo
 /* operations */
 extern const struct inode_operations aeon_dir_inode_operations;
 extern const struct inode_operations aeon_dir_inode_operations;
-extern const struct file_operations aeon_dax_file_operations;
+extern const struct inode_operations aeon_file_inode_operations;
 extern const struct inode_operations aeon_symlink_inode_operations;
-extern const struct iomap_ops aeon_iomap_ops;
+extern const struct file_operations aeon_dax_file_operations;
 extern const struct file_operations aeon_dir_operations;
+extern const struct iomap_ops aeon_iomap_ops;
 extern const struct address_space_operations aeon_aops_dax;
 
 /* super.c */

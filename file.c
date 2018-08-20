@@ -78,11 +78,15 @@ static int aeon_open(struct inode *inode, struct file *file)
 }
 
 const struct file_operations aeon_dax_file_operations = {
-	.llseek     = aeon_llseek,
-	.read_iter  = aeon_file_read_iter,
-	.write_iter = aeon_file_write_iter,
-	.fsync      = aeon_fsync,
-	.open       = aeon_open,
+	.llseek		= aeon_llseek,
+	.read_iter	= aeon_file_read_iter,
+	.write_iter 	= aeon_file_write_iter,
+	.fsync      	= aeon_fsync,
+	.open       	= aeon_open,
+};
+
+const struct inode_operations aeon_file_inode_operations = {
+	.setattr  	= aeon_setattr,
 };
 
 static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,

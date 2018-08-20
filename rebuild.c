@@ -151,10 +151,8 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 
 	if (cpu == 0)
 		offset = 1;
-	else {
+	else
 		offset = free_list->block_start;
-		aeon_dbg("REHE: %lu\n", offset);
-	}
 	inode_map->i_table_addr = (void *)((u64)sbi->virt_addr +
 				   	   (offset << AEON_SHIFT));
 

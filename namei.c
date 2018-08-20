@@ -347,4 +347,5 @@ const struct inode_operations aeon_dir_inode_operations = {
 	.rmdir   = aeon_rmdir,
 	.rename  = aeon_rename,
 	.mknod   = aeon_mknod,
+	.setattr = aeon_setattr,
 };

@@ -360,7 +360,6 @@ static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root
 static void aeon_fill_inode_table(struct super_block *sb, int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct aeon_inode_table *ait;
 	struct inode_map *inode_map;
 
@@ -508,8 +507,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		aeon_err(sb, "%s ERR root_i\n", __func__);
 		goto out3;
 	}
-	aeon_dbg("%s: root_i ino - %lu\n", __func__, root_i->i_ino);
-	aeon_dbg("%s: root_pi ino - %u\n", __func__, le32_to_cpu(root_pi->aeon_ino));
 
 	sb->s_root = d_make_root(root_i);
 	if (!sb->s_root) {

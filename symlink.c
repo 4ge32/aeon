@@ -45,4 +45,5 @@ static const char *aeon_get_link(struct dentry *dentry, struct inode *inode,
 
 const struct inode_operations aeon_symlink_inode_operations = {
 	.get_link	= aeon_get_link,
+	.setattr        = aeon_setattr,
 };

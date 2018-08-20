@@ -95,7 +95,8 @@ static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 	pi->i_links_count = cpu_to_le16(inode->i_nlink);
 	pi->i_mtime = pi->i_atime = pi->i_ctime =
 		pi->i_create_time = cpu_to_le32(current_time(inode).tv_sec);
-
+	pi->i_uid = cpu_to_le32(i_uid_read(inode));
+	pi->i_gid = cpu_to_le32(i_gid_read(inode));
 	pi->aeon_ino = inode->i_ino;
 	pi->num_pages = 0;
 	pi->i_block = 0;
@@ -139,7 +140,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 
 	switch (type) {
 	case TYPE_CREATE:
-		//inode->i_op = &aeon_file_inode_operations;
+		inode->i_op = &aeon_file_inode_operations;
 		inode->i_fop = &aeon_dax_file_operations;
 		//inode->i_mapping->a_ops = &aeon_aops_dax;
 		break;
@@ -383,18 +384,15 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
-		//inode->i_op = &aeon_file_inode_operations;
+		inode->i_op = &aeon_file_inode_operations;
 		inode->i_fop = &aeon_dax_file_operations;
-		aeon_dbg("%s: FILE\n", __func__);
 		break;
 	case S_IFDIR:
 		inode->i_op = &aeon_dir_inode_operations;
 		inode->i_fop = &aeon_dir_operations;
-		aeon_dbg("%s: DIR\n", __func__);
 		break;
 	case S_IFLNK:
 		inode->i_op = &aeon_symlink_inode_operations;
-		aeon_dbg("%s: LINK\n", __func__);
 		break;
 	default:
 	//	inode->i_op = &aeon_special_inode_operations;
@@ -652,25 +650,25 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	return ret;
 }
 
-static void aeon_setsize(struct inode *inode, struct aeon_inode *pi,
-			 loff_t oldsize, loff_t newsize)
+static void aeon_setattr_to_pmem(const struct inode *inode, struct aeon_inode *pi,
+		const struct iattr *attr)
 {
-	if (!(S_ISREG(inode->i_mode))) {
-		aeon_err(inode->i_sb, "%s: wrong file mode %x\n", inode->i_mode);
-		return;
-	}
+	unsigned int ia_valid = attr->ia_valid;
 
-	inode_dio_wait(inode);
+	aeon_dbg("%s: %u\n", __func__, i_uid_read(inode));
 
-	aeon_dbg("%s: inode %lu, old size %llu, new size %llu\n",
-			__func__, inode->i_ino, oldsize, newsize);
-
-	if (newsize != oldsize) {
-		i_size_write(inode, newsize);
-		pi->i_size = cpu_to_le64(newsize);
-	}
-
-	truncate_pagecache(inode, newsize);
+	if (ia_valid & ATTR_UID)
+		pi->i_uid = cpu_to_le32(i_uid_read(inode));
+	if (ia_valid & ATTR_GID)
+		pi->i_gid = cpu_to_le32(i_gid_read(inode));
+	if (ia_valid & ATTR_ATIME)
+		pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	if (ia_valid & ATTR_MTIME)
+		pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	if (ia_valid & ATTR_CTIME)
+		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	if (ia_valid & ATTR_MODE)
+		pi->i_mode = cpu_to_le16(inode->i_mode);
 }
 
 int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
@@ -680,8 +678,10 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-	loff_t oldsize = inode->i_size;
-	int err;
+	//loff_t oldsize = inode->i_size;
+	unsigned int ia_valid = iattr->ia_valid;
+	unsigned int attr_mask = attr_mask;
+	int err = 0;
 
 	if (!pi) {
 		err = -EACCES;
@@ -690,18 +690,23 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	err = setattr_prepare(dentry, iattr);
 	if (err)
-		goto out;
+		return err;
 
 	setattr_copy(inode, iattr);
+	aeon_setattr_to_pmem(inode, pi, iattr);
+
+	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE | ATTR_ATIME
+			| ATTR_MTIME | ATTR_CTIME;
+	ia_valid = ia_valid & attr_mask;
+
+	if (ia_valid == 0)
+		return 0;
 
 	if (iattr->ia_valid & ATTR_SIZE && iattr->ia_size != inode->i_size)
-		aeon_setsize(inode, pi, oldsize, iattr->ia_size);
+		return -EPERM;
 
-	if (iattr->ia_valid & ATTR_MODE)
-		err = posix_acl_chmod(inode, inode->i_mode);
-
-	return err;
+	return 0;
 
 out:
-	return err;
+	return 0;
 }

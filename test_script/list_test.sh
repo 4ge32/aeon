@@ -265,3 +265,66 @@ test-link-3 ()
 
   clean
 }
+
+test-attr-1 ()
+{
+  init
+
+  empty_file
+  touch $DIR/$NAME
+  touch $TMP/$NAME
+  sudo chown root $DIR/$NAME
+  sudo chown root $TMP/$NAME
+  diff <(ls -l $DIR | awk '{print $3}') <(ls -l $TMP | awk '{print $3}')
+  res=$?
+
+  clean
+}
+
+test-attr-2 ()
+{
+  init
+
+  empty_file
+  touch $DIR/$NAME
+  touch $TMP/$NAME
+  sudo chmod 777 $DIR/$NAME
+  sudo chmod 777 $TMP/$NAME
+  diff <(ls -l $DIR | awk '{print $1}') <(ls -l $TMP | awk '{print $1}')
+  res=$?
+
+  clean
+}
+
+test-attr-3 ()
+{
+  init
+
+  empty_file
+  touch $DIR/$NAME
+  touch $TMP/$NAME
+  sudo chown root $DIR/$NAME
+  sudo chown root $TMP/$NAME
+  ./run.sh rm
+  diff <(ls -l $DIR | awk '{print $3}') <(ls -l $TMP | awk '{print $3}')
+  res=$?
+
+  clean
+}
+
+
+test-attr-4 ()
+{
+  init
+
+  empty_file
+  touch $DIR/$NAME
+  touch $TMP/$NAME
+  sudo chmod 777 $DIR/$NAME
+  sudo chmod 777 $TMP/$NAME
+  ./run.sh rm
+  diff <(ls -l $DIR | awk '{print $1}') <(ls -l $TMP | awk '{print $1}')
+  res=$?
+
+  clean
+}

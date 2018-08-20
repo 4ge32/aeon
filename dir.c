@@ -485,9 +485,6 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		return 0;
 
 	pidir = aeon_get_inode(sb, sih);
-	aeon_dbg("%s: ino %llu, size %llu, pos %llu\n",
-			__func__, (u64)inode->i_ino,
-			pidir->i_size, ctx->pos);
 
 	if (!sih) {
 		aeon_dbg("%s: inode %lu sih does not exist!\n",
