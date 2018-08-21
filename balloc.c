@@ -588,6 +588,24 @@ found:
 	return addr;
 }
 
+static void aeon_register_next_inode_block(struct aeon_sb_info *sbi, struct inode_map *inode_map,
+					   struct aeon_inode_table *ait, unsigned long blocknr)
+{
+	unsigned int offset = le32_to_cpu(ait->num_allocated_pages);
+	struct aeon_inode *pi;
+
+	/* TODO:
+	 * it can be integrated.
+	 */
+	if (offset == 1)
+		pi = (struct aeon_inode *)((u64)inode_map->i_table_addr + (1 << AEON_I_SHIFT));
+	else
+		pi = (struct aeon_inode *)((u64)inode_map->i_block_addr + (1 << AEON_I_SHIFT));
+
+	aeon_dbg("%s: %lu\n", __func__, blocknr);
+	pi->i_next_inode_block = cpu_to_le64(blocknr);
+	inode_map->i_block_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
+}
 
 int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 {
@@ -602,6 +620,7 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != 1)
 			goto out;
+		aeon_register_next_inode_block(sbi, inode_map, ait, blocknr);
 		ait->num_allocated_pages++;
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);

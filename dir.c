@@ -364,10 +364,10 @@ int aeon_add_dentry(struct dentry *dentry, ino_t ino, int inc_link)
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
 	latest_entry = le64_to_cpu(de_info->de_map->num_latest_dentry);
-	aeon_dbg("%s: %lu\n", __func__, (latest_entry));
-	aeon_dbg("%s: %llu\n", __func__, (le64_to_cpu(de_info->de_map->block_dentry[latest_entry])));
-	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_internal_dentries));
-	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_dentries));
+	//aeon_dbg("%s: %lu\n", __func__, (latest_entry));
+	//aeon_dbg("%s: %llu\n", __func__, (le64_to_cpu(de_info->de_map->block_dentry[latest_entry])));
+	//aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_internal_dentries));
+	//aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_dentries));
 
 	return 0;
 out2:

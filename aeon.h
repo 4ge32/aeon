@@ -41,6 +41,7 @@ struct inode_map {
 	struct imem_cache *im;
 	void *virt_addr;
 	void *i_table_addr;
+	void *i_block_addr;
 };
 
 /*

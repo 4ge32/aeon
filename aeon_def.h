@@ -59,15 +59,14 @@ struct aeon_inode {
 	__le32	i_gid;		 /* Group Id */
 	__le32	i_generation;	 /* File version (for NFS) */
 	__le32	i_create_time;	 /* Create time */
-	__le64	aeon_ino;	 /* aeon inode number */
+	__le32	aeon_ino;	 /* aeon inode number */
 
-	__le64	next_inode_block;
-	__le64  num_pages;
+	__le64	i_next_inode_block;
+	u8      i_internal_allocated;
 
 	/* last 40 bytes */
 	__le64	dentry_map_block;
 	__le64  i_block;        /* point extent_header */
-
 	__le64	i_blocks;       /* point extent log */
 	__le64	sym_block;      /* for symbolic link */
 
@@ -76,7 +75,7 @@ struct aeon_inode {
 	} dev;			 /* device inode */
 
 	__le32	csum;            /* CRC32 checksum */
-
+	char    pad[4 * 4 + 3];
 } __attribute((__packed__));
 
 struct aeon_inode_table {

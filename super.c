@@ -260,7 +260,7 @@ static int aeon_root_check(struct super_block *sb, struct aeon_inode *root_pi)
 		goto err;
 	}
 
-	if (le64_to_cpu(root_pi->aeon_ino) != AEON_ROOT_INO) {
+	if (le32_to_cpu(root_pi->aeon_ino) != AEON_ROOT_INO) {
 		aeon_err(sb, "root has invalid inode number\n");
 		goto err;
 	}
@@ -349,7 +349,7 @@ static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root
 	root_i->i_size = cpu_to_le64(sb->s_blocksize);
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
-	root_i->aeon_ino = cpu_to_le64(AEON_ROOT_INO);
+	root_i->aeon_ino = cpu_to_le32(AEON_ROOT_INO);
 	root_i->valid = 1;
 	root_i->deleted = 0;
 	root_i->i_new = 1;
@@ -465,6 +465,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		inode_map = &sbi->inode_maps[i];
 		inode_map->virt_addr = 0;
 		inode_map->i_table_addr = 0;
+		inode_map->i_block_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
 	}

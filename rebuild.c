@@ -91,37 +91,42 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 }
 
 static void imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
-			       unsigned long blocknr, ino_t start_ino, unsigned allocated, int space)
+			       unsigned long blocknr, ino_t start_ino, unsigned allocated,
+			       unsigned long *next_blocknr, int space)
 {
 	struct aeon_inode *pi;
 	struct imem_cache *im;
 	struct imem_cache *init;
 	u64 virt_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
-	int freed = (AEON_I_NUM_PER_PAGE - space) - allocated;
+	//int freed = (AEON_I_NUM_PER_PAGE - space) - allocated;
 	int ino = start_ino;
 	ino_t ino_off = sbi->cpus;
-	int count = 0;
 	int i;
 
-	aeon_dbg("%lu\n", blocknr);
-	aeon_dbg("0x%llx\n", virt_addr);
-	if (freed == 0)
-		return;
+	/* TODO:
+	 * Pruning
+	 */
+	//if (freed == 0)
+	//	return;
 
-	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
-	inode_map->im = init;
-	INIT_LIST_HEAD(&inode_map->im->imem_list);
+	if (!inode_map->im) {
+		init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+		inode_map->im = init;
+		INIT_LIST_HEAD(&inode_map->im->imem_list);
+	}
 
 	for (i = space; i < AEON_I_NUM_PER_PAGE; i++) {
 		u64 addr;
 
 		addr = virt_addr + (i << AEON_I_SHIFT);
 		pi = (struct aeon_inode *)addr;
+		if (space == i)
+			*next_blocknr = pi->i_next_inode_block;
 		if (pi->valid)
 			ino += ino_off;
 		else {
-			if (freed == count++)
-				return;
+			//if (freed == count++)
+			//	return;
 			im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 
 			im->ino = ino;
@@ -142,7 +147,9 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	struct aeon_inode_table *ait;
 	struct free_list *free_list;
 	unsigned long offset;
+	unsigned long blocknr = 0;
 	int ino = AEON_INODE_START + cpu;
+	int i;
 
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT)
 		return;
@@ -156,11 +163,16 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	inode_map->i_table_addr = (void *)((u64)sbi->virt_addr +
 				   	   (offset << AEON_SHIFT));
 
-
 	ait = AEON_I_TABLE(inode_map);
-	// every each page that is not used fully
-//	if (le32_to_cpu(ait->num_allocated_pages) == 0)
-	imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(ait->allocated), 1);
 
+	imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(ait->allocated), &blocknr, 1);
+	offset = blocknr;
+	ino = ino + (AEON_I_NUM_PER_PAGE - 1) * 2;
+	for (i = 1; i < le32_to_cpu(ait->num_allocated_pages); i++) {
+		imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(ait->allocated), &blocknr, 0);
+		offset = blocknr;
+		ino = ino + (AEON_I_NUM_PER_PAGE) * 2;
+	}
+	aeon_dbg("%s: %u\n", __func__, le32_to_cpu(ait->num_allocated_pages));
 	aeon_dbg("%s: %llu\n", __func__, le64_to_cpu(ait->allocated));
 }

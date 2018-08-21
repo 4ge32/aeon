@@ -97,10 +97,10 @@ static void fill_new_aeon_inode(u64 pi_addr, struct inode *inode)
 		pi->i_create_time = cpu_to_le32(current_time(inode).tv_sec);
 	pi->i_uid = cpu_to_le32(i_uid_read(inode));
 	pi->i_gid = cpu_to_le32(i_gid_read(inode));
-	pi->aeon_ino = inode->i_ino;
-	pi->num_pages = 0;
+	pi->aeon_ino = le32_to_cpu(inode->i_ino);
 	pi->i_block = 0;
 	pi->i_blocks = 0;
+	pi->i_internal_allocated = 0;
 	pi->dentry_map_block = 0;
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
@@ -307,7 +307,7 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u64 ino)
 		aeon_dbg("TODO\n");
 	}
 
-	aeon_dbg("%u - %llu\n", target_page, le64_to_cpu(((struct aeon_inode *)pi_addr)->aeon_ino));
+	aeon_dbg("%u - %u\n", target_page, le32_to_cpu(((struct aeon_inode *)pi_addr)->aeon_ino));
 	aeon_dbg("%s: 0x%llx\n", __func__, addr);
 	aeon_dbg("%s: 0x%llx\n", __func__, pi_addr);
 	return pi_addr;
@@ -654,8 +654,6 @@ static void aeon_setattr_to_pmem(const struct inode *inode, struct aeon_inode *p
 		const struct iattr *attr)
 {
 	unsigned int ia_valid = attr->ia_valid;
-
-	aeon_dbg("%s: %u\n", __func__, i_uid_read(inode));
 
 	if (ia_valid & ATTR_UID)
 		pi->i_uid = cpu_to_le32(i_uid_read(inode));
