@@ -6,12 +6,12 @@ MOUNT_POINT=/mnt
 
 run () {
   sudo insmod ../$FS.ko
-  sudo mount -t $FS -o init $DEV $MOUNT_POINT
+  sudo mount -t $FS -o init,dax,dbgmask=16 $DEV $MOUNT_POINT
 }
 
 rrun() {
   sudo umount $MOUNT_POINT
-  sudo mount -t $FS $DEV $MOUNT_POINT
+  sudo mount -t $FS -o dax,dbgmask=16 $DEV $MOUNT_POINT
 }
 
 clean () {

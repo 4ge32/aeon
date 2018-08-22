@@ -194,9 +194,9 @@ static int not_enough_blocks(struct free_list *free_list, unsigned long num_bloc
 	struct aeon_range_node *last = free_list->last_node;
 
 	if (free_list->num_free_blocks < num_blocks || !first || !last) {
-		aeon_dbg("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
-			 __func__, free_list->num_free_blocks, num_blocks,
-			 first, last);
+		aeon_dbgv("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
+			  __func__, free_list->num_free_blocks, num_blocks,
+			  first, last);
 		return 1;
 	}
 
@@ -215,9 +215,9 @@ static long aeon_alloc_blocks_in_free_list(struct super_block *sb, struct free_l
 	unsigned long step = 0;
 
 	if (!free_list->first_node || free_list->num_free_blocks == 0) {
-		aeon_dbg("%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
-			  __func__, free_list->first_node,
-			  free_list->num_free_blocks);
+		aeon_err(sb, "%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
+			 __func__, free_list->first_node,
+			 free_list->num_free_blocks);
 		return -ENOSPC;
 	}
 
@@ -602,7 +602,7 @@ static void aeon_register_next_inode_block(struct aeon_sb_info *sbi, struct inod
 	else
 		pi = (struct aeon_inode *)((u64)inode_map->i_block_addr + (1 << AEON_I_SHIFT));
 
-	aeon_dbg("%s: %lu\n", __func__, blocknr);
+	aeon_dbgv("%s: %lu\n", __func__, blocknr);
 	pi->i_next_inode_block = cpu_to_le64(blocknr);
 	inode_map->i_block_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
 }
@@ -663,7 +663,7 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, in
 
 	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 
-	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+	aeon_dbgv("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
 	return blocknr;
 }
@@ -679,7 +679,7 @@ unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr
 
 	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
 
-	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+	aeon_dbgv("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
 	return blocknr;
 }
@@ -694,7 +694,7 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, i
 
 	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
 
-	aeon_dbg("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
+	aeon_dbgv("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
 	return blocknr;
 }

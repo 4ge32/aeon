@@ -13,10 +13,14 @@
 /* #define aeon_dbg(s, args...)         pr_debug(s, ## args) */
 extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define aeon_dbg(s, args ...)           pr_info(s, ## args)
-#define aeon_dbg1(s, args ...)
 #define aeon_err(sb, s, args ...)       aeon_err_msg(sb, s, ## args)
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
 #define aeon_info(s, args ...)          pr_info(s, ## args)
+extern unsigned int aeon_dbgmask;
+#define AEON_DBGMASK_VERBOSE	(0x00000010)
+#define aeon_dbg_verbose(s, args ...)		 \
+	((aeon_dbgmask & AEON_DBGMASK_VERBOSE) ? aeon_dbg(s, ##args) : 0)
+#define aeon_dbgv(s, args ...) aeon_dbg_verbose(s, ##args)
 
 #define set_opt(o, opt)		(o |= AEON_MOUNT_ ## opt)
 

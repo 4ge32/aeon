@@ -20,7 +20,7 @@ static inline int aeon_insert_inodetree(struct aeon_sb_info *sbi, struct aeon_ra
 	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
 	ret = aeon_insert_range_node(tree, new_node, NODE_INODE);
 	if (ret)
-		aeon_dbg("ERROR: %s failed %d\n", __func__, ret);
+		aeon_err(sbi->sb, "ERROR: %s failed %d\n", __func__, ret);
 
 	return ret;
 }
@@ -133,7 +133,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_size = size;
 	inode->i_mode = mode;
 
-	aeon_dbg("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
+	aeon_dbgv("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
@@ -154,7 +154,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 		inode->i_op = &aeon_symlink_inode_operations;
 		break;
 	default:
-		aeon_dbg("Unknown new inode type %d\n", type);
+		aeon_dbgv("Unknown new inode type %d\n", type);
 		break;
 	}
 
@@ -217,12 +217,12 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	}
 
 	*ino = new_ino * sbi->cpus + cpuid;
-	aeon_dbg("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
+	aeon_dbgv("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
 	sbi->s_inodes_used_count++;
 	ait->range_high = le32_to_cpu(i->range_high);
 	ait->allocated++;
 
-	aeon_dbg("%s: Alloc ino %lu\n", __func__, *ino);
+	aeon_dbgv("%s: Alloc ino %lu\n", __func__, *ino);
 	return 0;
 }
 
@@ -238,7 +238,7 @@ static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 
 	if (*pi_addr == 0)
 		goto err;
 
-	aeon_dbg("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
+	aeon_dbgv("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
 
 	return 1;
 
@@ -282,7 +282,7 @@ u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 
 	ino = free_ino;
 
-	aeon_dbg("%s: free_ino is %llu\n", __func__, ino);
+	aeon_dbgv("%s: free_ino is %llu\n", __func__, ino);
 	return ino;
 }
 
@@ -307,9 +307,9 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u64 ino)
 		aeon_dbg("TODO\n");
 	}
 
-	aeon_dbg("%u - %u\n", target_page, le32_to_cpu(((struct aeon_inode *)pi_addr)->aeon_ino));
-	aeon_dbg("%s: 0x%llx\n", __func__, addr);
-	aeon_dbg("%s: 0x%llx\n", __func__, pi_addr);
+	aeon_dbgv("%u - %u\n", target_page, le32_to_cpu(((struct aeon_inode *)pi_addr)->aeon_ino));
+	aeon_dbgv("%s: 0x%llx\n", __func__, addr);
+	aeon_dbgv("%s: 0x%llx\n", __func__, pi_addr);
 	return pi_addr;
 }
 
@@ -326,7 +326,7 @@ static inline u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 ino)
 }
 
 static int aeon_rebuild_inode(struct super_block *sb, struct aeon_inode_info *si,
-		              u64 ino, u64 pi_addr, int rebuild_dir)
+			      u64 ino, u64 pi_addr, int rebuild_dir)
 {
 	struct aeon_inode_info_header *sih  = &si->header;
 	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
@@ -371,7 +371,7 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 	aeon_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 	ino = le32_to_cpu(pi->aeon_ino);
-	aeon_dbg("%s: ino - %lu\n", __func__, ino);
+	aeon_dbgv("%s: ino - %lu\n", __func__, ino);
 
 	if (inode->i_mode == 0 || pi->deleted == 1) {
 		ret = -ESTALE;
@@ -436,7 +436,7 @@ struct inode *aeon_iget(struct super_block *sb, unsigned long ino)
 
 	pi_addr = aeon_get_reserved_inode_addr(sb, ino);
 
-	aeon_dbg("%s: nvmm 0x%llx\n", __func__, pi_addr);
+	aeon_dbgv("%s: nvmm 0x%llx\n", __func__, pi_addr);
 
 	if (pi_addr == 0) {
 		aeon_err(sb, "%s: failed to get pi_addr for inode %lu\n", __func__, ino);
@@ -475,7 +475,7 @@ static unsigned long aeon_get_last_blocknr(struct super_block *sb, struct aeon_i
 	return 0;
 
 	if (ret) {
-		aeon_dbg("%s: read pi @ 0x%lx failed\n",
+		aeon_dbgv("%s: read pi @ 0x%lx failed\n",
 				__func__, sih->pi_addr);
 		btype = 0;
 	} else {
@@ -529,14 +529,14 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	int found;
 	int ret;
 
-	aeon_dbg("Free inuse ino: %lu\n", ino);
+	aeon_dbgv("Free inuse ino: %lu\n", ino);
 	inode_map = &sbi->inode_maps[cpuid];
 	ait = AEON_I_TABLE(inode_map);
 
 	mutex_lock(&inode_map->inode_table_mutex);
 	found = aeon_search_inodetree(sbi, ino, &i);
 	if (!found) {
-		aeon_dbg("%s ERROR: ino %lu not found \n", __func__, ino);
+		aeon_err(sb, "%s ERROR: ino %lu not found \n", __func__, ino);
 		mutex_unlock(&inode_map->inode_table_mutex);
 		return -EINVAL;
 	}
@@ -593,11 +593,15 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	struct imem_cache *im;
 	int err = 0;
 
+	/* TODO:
+	 * improve it
+	 */
 	err = aeon_free_inuse_inode(sb, ino);
 	im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 	im->ino = sih->ino;
 	im->addr = sih->pi_addr;
 	im->independent = 1;
+	im->head = im;
 	list_add(&im->imem_list, &inode_map->im->imem_list);
 
 	return err;
@@ -613,7 +617,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	pi->deleted = 1;
 
 	if (pi->valid) {
-		aeon_dbg("%s: inode %lu still valid\n",
+		aeon_dbgv("%s: inode %lu still valid\n",
 				__func__, sih->ino);
 		pi->valid = 0;
 	}
@@ -622,23 +626,23 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		last_blocknr = aeon_get_last_blocknr(sb, sih);
-		aeon_dbg("%s: file ino %lu\n", __func__, sih->ino);
+		aeon_dbgv("%s: file ino %lu\n", __func__, sih->ino);
 		//freed = aeon_delete_file_tree(sb, sih, 0,
 		//			last_blocknr, true, true);
 		break;
 	case S_IFDIR:
-		aeon_dbg("%s: dir ino %lu\n", __func__, sih->ino);
+		aeon_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
 		aeon_delete_dir_tree(sb, sih);
 		break;
 	case S_IFLNK:
 		/* Log will be freed later */
-		aeon_dbg("%s: symlink ino %lu\n",
+		aeon_dbgv("%s: symlink ino %lu\n",
 				__func__, sih->ino);
 		//freed = aeon_delete_file_tree(sb, sih, 0, 0,
 		//				true, true);
 		break;
 	default:
-		aeon_dbg("%s: special ino %lu\n",
+		aeon_dbgv("%s: special ino %lu\n",
 				__func__, sih->ino);
 		break;
 	}

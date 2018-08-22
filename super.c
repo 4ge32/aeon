@@ -15,6 +15,7 @@
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
 int wprotect = 0;
+unsigned int aeon_dbgmask;
 
 static struct inode *aeon_alloc_inode(struct super_block *sb)
 {
@@ -39,7 +40,7 @@ static void aeon_i_callback(struct rcu_head *head)
 
 static void aeon_destroy_inode(struct inode *inode)
 {
-	aeon_info("%s: %lu\n", __func__, inode->i_ino);
+	aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	call_rcu(&inode->i_rcu, aeon_i_callback);
 }
 
@@ -93,7 +94,7 @@ static void aeon_evict_inode(struct inode *inode)
 	if (sih->de_info != NULL)
 		aeon_free_invalid_dentry_list(sb, sih);
 
-	aeon_dbg("%s: %lu\n", __func__, inode->i_ino);
+	aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
@@ -112,7 +113,7 @@ static void aeon_evict_inode(struct inode *inode)
 	}
 out:
 	if (destroy == 0) {
-		aeon_dbg("%s: destroying %lu\n", __func__, inode->i_ino);
+		aeon_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
 		aeon_free_dram_resource(sb, sih);
 	}
 
@@ -134,8 +135,6 @@ static int aeon_statfs(struct dentry *d, struct kstatfs *buf)
 	buf->f_bfree = buf->f_bavail = aeon_count_free_blocks(sb);
 	buf->f_files = aeon_sb->s_num_inodes;
 	buf->f_namelen = AEON_NAME_LEN;
-
-	aeon_dbg("__func__, %llu -- %llu\n", buf->f_blocks, buf->f_bfree);
 
 	return 0;
 }
@@ -214,8 +213,8 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 
 
 	ret = bdev_dax_supported(sb, PAGE_SIZE);
-	aeon_dbg("%s: dax_supported = %d; bdev->super=0x%p",
-		 __func__, ret, sb->s_bdev->bd_super);
+	aeon_dbgv("%s: dax_supported = %d; bdev->super=0x%p",
+		  __func__, ret, sb->s_bdev->bd_super);
 	if (ret) {
 		aeon_dbg("device does not support DAX\n");
 		return ret;
@@ -247,9 +246,9 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
 
-	aeon_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
-		__func__, sbi->s_bdev->bd_disk->disk_name,
-		sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
+	aeon_dbgv("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
+		 __func__, sbi->s_bdev->bd_disk->disk_name,
+		 sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
 	return 0;
 }
 
@@ -272,18 +271,20 @@ err:
 }
 
 enum {
-	Opt_init, Opt_dax
+	Opt_init, Opt_dax, Opt_dbgmask,
 };
 
 static const match_table_t tokens = {
-	{ Opt_init,  "init" },
-	{ Opt_dax,   "dax" },
+	{ Opt_init,	"init" 	     },
+	{ Opt_dax,	"dax" 	     },
+	{ Opt_dbgmask,	"dbgmask=%u" },
 };
 
 static int aeon_parse_options(char *options, struct aeon_sb_info *sbi, bool remount)
 {
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
+	int option;
 
 	if (!options)
 		return 0;
@@ -302,12 +303,20 @@ static int aeon_parse_options(char *options, struct aeon_sb_info *sbi, bool remo
 		case Opt_dax:
 			set_opt(sbi->s_mount_opt, DAX);
 			break;
+		case Opt_dbgmask:
+			if (match_int(&args[0], &option))
+				goto bad_val;
+			aeon_dbgmask = option;
+			break;
 		default:
 			break;
 		}
 	}
 
 	return 0;
+bad_val:
+	aeon_info("Bad value '%s' for mount option %s'\n'", args[0].from, p);
+	return -EINVAL;
 }
 
 static void aeon_set_blocksize(struct super_block *sb, unsigned long size)
@@ -515,7 +524,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		goto out3;
 	}
 
-	aeon_dbg("%s:FINISH\n", __func__);
+	aeon_dbgv("%s:FINISH\n", __func__);
 
 	return 0;
 
