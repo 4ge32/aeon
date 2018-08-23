@@ -330,9 +330,9 @@ static inline struct aeon_inode_info *AEON_I(struct inode *inode)
 	return container_of(inode, struct aeon_inode_info, vfs_inode);
 }
 
-static inline struct aeon_inode_table *AEON_I_TABLE(struct inode_map *inode_map)
+static inline struct aeon_region_table *AEON_R_TABLE(struct inode_map *inode_map)
 {
-	return (struct aeon_inode_table *)(inode_map->i_table_addr);
+	return (struct aeon_region_table *)(inode_map->i_table_addr);
 }
 
 static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi) {

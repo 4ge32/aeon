@@ -43,21 +43,21 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_range_node *range_node;
 	struct inode_map *inode_map;
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 	int i;
 	int ret;
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
 		mutex_lock(&inode_map->inode_table_mutex);
-		ait = AEON_I_TABLE(inode_map);
+		art = AEON_R_TABLE(inode_map);
 		range_node = aeon_alloc_inode_node(sb);
 		if (range_node == NULL) {
 			mutex_unlock(&inode_map->inode_table_mutex);
 			return -ENOMEM;
 		}
 		range_node->range_low = 0;
-		range_node->range_high = le32_to_cpu(ait->i_range_high);
+		range_node->range_high = le32_to_cpu(art->i_range_high);
 		ret = aeon_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			aeon_err(sb, "%s failed\n", __func__);
@@ -179,13 +179,13 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	struct inode_map *inode_map;
 	struct aeon_range_node *i, *next_i;
 	struct rb_node *temp, *next;
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 	unsigned long next_range_low;
 	unsigned long new_ino;
 	unsigned long MAX_INODE = 1UL << 31;
 
 	inode_map = &sbi->inode_maps[cpuid];
-	ait = AEON_I_TABLE(inode_map);
+	art = AEON_R_TABLE(inode_map);
 	i = inode_map->first_inode_range;
 
 	temp = &i->node;
@@ -219,8 +219,8 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	*ino = new_ino * sbi->cpus + cpuid;
 	aeon_dbgv("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
 	sbi->s_inodes_used_count++;
-	ait->i_range_high = le32_to_cpu(i->range_high);
-	ait->allocated++;
+	art->i_range_high = le32_to_cpu(i->range_high);
+	art->allocated++;
 
 	aeon_dbgv("%s: Alloc ino %lu\n", __func__, *ino);
 	return 0;
@@ -525,7 +525,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	struct inode_map *inode_map;
 	struct aeon_range_node *i = NULL;
 	struct aeon_range_node *curr_node;
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 	int cpuid = ino % sbi->cpus;
 	unsigned long internal_ino = ino / sbi->cpus;
 	int found;
@@ -533,7 +533,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 
 	aeon_dbgv("Free inuse ino: %lu\n", ino);
 	inode_map = &sbi->inode_maps[cpuid];
-	ait = AEON_I_TABLE(inode_map);
+	art = AEON_R_TABLE(inode_map);
 
 	mutex_lock(&inode_map->inode_table_mutex);
 	found = aeon_search_inodetree(sbi, ino, &i);
@@ -580,7 +580,7 @@ err:
 	return ret;
 block_found:
 	sbi->s_inodes_used_count--;
-	ait->freed++;
+	art->freed++;
 	mutex_unlock(&inode_map->inode_table_mutex);
 	return ret;
 }

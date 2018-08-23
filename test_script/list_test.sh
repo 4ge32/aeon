@@ -119,7 +119,7 @@ test-create-2 ()
   clean
 }
 
-test-create-2 ()
+test-create-3 ()
 {
   init
 

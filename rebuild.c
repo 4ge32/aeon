@@ -148,7 +148,7 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpu];
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 	struct free_list *free_list;
 	unsigned long offset;
 	unsigned long blocknr = 0;
@@ -167,22 +167,22 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	inode_map->i_table_addr = (void *)((u64)sbi->virt_addr +
 				   	   (offset << AEON_SHIFT));
 
-	ait = AEON_I_TABLE(inode_map);
+	art = AEON_R_TABLE(inode_map);
 
 	/* the first page for inode contains inode_table
 	 * so it leaves space of a inode size between head
 	 * of page and firtst inode (last argument).
 	 */
 	imem_cache_rebuild(sbi, inode_map, offset, ino,
-			le64_to_cpu(ait->allocated), &blocknr, 1);
+			le64_to_cpu(art->allocated), &blocknr, 1);
 	offset = blocknr;
 	ino = ino + (AEON_I_NUM_PER_PAGE - 1) * 2;
 
-	for (i = 1; i < le32_to_cpu(ait->num_allocated_pages); i++) {
-		imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(ait->allocated), &blocknr, 0);
+	for (i = 1; i < le32_to_cpu(art->num_allocated_pages); i++) {
+		imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(art->allocated), &blocknr, 0);
 		offset = blocknr;
 		ino = ino + (AEON_I_NUM_PER_PAGE) * 2;
 	}
-	aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(ait->num_allocated_pages));
-	aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(ait->allocated));
+	aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->num_allocated_pages));
+	aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(art->allocated));
 }

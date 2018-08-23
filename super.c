@@ -40,7 +40,7 @@ static void aeon_i_callback(struct rcu_head *head)
 
 static void aeon_destroy_inode(struct inode *inode)
 {
-	aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
+	//aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	call_rcu(&inode->i_rcu, aeon_i_callback);
 }
 
@@ -48,7 +48,7 @@ static void aeon_put_super(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map;
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 	int i;
 
 	/* It's unmount time, so unmap the aeon memory */
@@ -61,9 +61,9 @@ static void aeon_put_super(struct super_block *sb)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		ait = AEON_I_TABLE(inode_map);
+		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
-			i, le64_to_cpu(ait->allocated), le64_to_cpu(ait->freed));
+			i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
 	}
 	kfree(sbi->inode_maps);
 
@@ -209,15 +209,10 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 	pfn_t __pfn_t;
 	long size;
 	struct dax_device *dax_dev;
-	int ret;
 
-
-	ret = bdev_dax_supported(sb, PAGE_SIZE);
-	aeon_dbgv("%s: dax_supported = %d; bdev->super=0x%p",
-		  __func__, ret, sb->s_bdev->bd_super);
-	if (ret) {
+	if (!bdev_dax_supported(sb->s_bdev, AEON_DEF_BLOCK_SIZE_4K)) {
 		aeon_dbg("device does not support DAX\n");
-		return ret;
+		return -EINVAL;
 	}
 
 	sbi->s_bdev = sb->s_bdev;
@@ -264,9 +259,15 @@ static int aeon_root_check(struct super_block *sb, struct aeon_inode *root_pi)
 		goto err;
 	}
 
+	if (le32_to_cpu(AEON_SB(sb)->aeon_sb->s_magic) != AEON_MAGIC) {
+		aeon_err(sb, " has invalid magic number");
+		goto err;
+	}
+
+
 	return 0;
 err:
-	aeon_dbg("%s: 0x%px", __func__, root_pi);
+	aeon_err(sb, "%s: 0x%px", __func__, root_pi);
 	return 1;
 }
 
@@ -336,6 +337,7 @@ static void aeon_init_super_block(struct super_block *sb, unsigned long size)
 	aeon_memunlock_super(sb);
 
 	aeon_sb->s_map_id = 0;
+	aeon_sb->s_cpus = cpu_to_le16(sbi->cpus);
 	aeon_sb->s_magic = cpu_to_le32(AEON_MAGIC);
 	aeon_sb->s_size = cpu_to_le64(size);
 	aeon_sb->s_blocksize = AEON_DEF_BLOCK_SIZE_4K;
@@ -366,30 +368,34 @@ static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root
 	aeon_memlock_inode(sb, root_i);
 }
 
-static void aeon_fill_inode_table(struct super_block *sb, int cpu)
+static void aeon_fill_region_table(struct super_block *sb, int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 	struct inode_map *inode_map;
+	struct free_list *free_list;
 
 	inode_map = &sbi->inode_maps[cpu];
-	inode_map->i_table_addr = inode_map->virt_addr;
+	free_list = aeon_get_free_list(sb, cpu);
+	art = AEON_R_TABLE(inode_map);
 
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
 		unsigned long range_high;
 		unsigned long long inode_start;
-
-		ait = AEON_I_TABLE(inode_map);
 
 		inode_start = AEON_INODE_START;
 		range_high = (inode_start - 2) / sbi->cpus;
 		if (inode_start % sbi->cpus)
 			range_high++;
 
-		ait->allocated = 0;
-		ait->freed = 0;
-		ait->num_allocated_pages = le32_to_cpu(1);
-		ait->range_high = le32_to_cpu(range_high);
+		art->allocated = 0;
+		art->freed = 0;
+		art->num_allocated_pages = le32_to_cpu(1);
+		art->i_range_high = le32_to_cpu(range_high);
+		art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
+	} else {
+		aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
+		free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
 	}
 }
 
@@ -415,7 +421,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 		int inode_start = AEON_INODE_START;
 
 		aeon_init_new_inode_block(sb, i, inode_start + i);
-		aeon_fill_inode_table(sb, i);
+		aeon_fill_region_table(sb, i);
 		aeon_rebuild_inode_cache(sb, i);
 	}
 
@@ -438,11 +444,10 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	int ret = -EINVAL;
 	int i;
 
-
 	BUILD_BUG_ON(sizeof(struct aeon_super_block) > AEON_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_dentry) > AEON_DENTRY_SIZE);
-	BUILD_BUG_ON(sizeof(struct aeon_inode_table) > AEON_INODE_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_region_table) > AEON_INODE_SIZE);
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
@@ -493,9 +498,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	root_pi = aeon_init(sb, sbi->initsize);
-	if (le32_to_cpu(sbi->aeon_sb->s_magic) != AEON_MAGIC)
-		goto out2;
-
 	if (aeon_root_check(sb, root_pi)) {
 		ret = -ENOTDIR;
 		goto out2;

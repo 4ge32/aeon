@@ -48,7 +48,7 @@ remove ()
 
 create ()
 {
-  N=2
+  N=3
   for num in `seq 1 $N`
   do
     res=1
@@ -124,7 +124,7 @@ case "$1" in
     hard_and_sym_link
     remove
     rename
-    #create
+    create
     ;;
   *)
     echo "remoe rename create all"

@@ -38,7 +38,7 @@ static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *s
 	struct rb_node *temp;
 	struct inode_map *inode_map;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sbi->sb);
-	struct aeon_inode_table *ait;
+	struct aeon_region_table *art;
 
 	free_list = &sbi->free_lists[cpu];
 
@@ -54,10 +54,10 @@ static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *s
 	si->range_high = curr->range_high;
 
 	inode_map = &sbi->inode_maps[cpu];
-	ait = AEON_I_TABLE(inode_map);
+	art = AEON_R_TABLE(inode_map);
 
-	si->allocated = le64_to_cpu(ait->allocated);
-	si->freed = le64_to_cpu(ait->freed);
+	si->allocated = le64_to_cpu(art->allocated);
+	si->freed = le64_to_cpu(art->freed);
 
 	si->s_num_inodes = aeon_sb->s_num_inodes;
 }

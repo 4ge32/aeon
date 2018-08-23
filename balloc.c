@@ -296,7 +296,6 @@ static int aeon_get_candidate_free_list(struct super_block *sb)
 	int num_free_blocks = 0;
 	int i;
 
-	aeon_dbg("%s\n", __func__);
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = aeon_get_free_list(sb, i);
 		if (free_list->num_free_blocks > num_free_blocks) {
@@ -312,6 +311,9 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned int num, unsigned short btype, int cpuid)
 {
 	struct free_list *free_list;
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map;
+	struct aeon_region_table *art;
 	unsigned long num_blocks = 0;
 	unsigned long new_blocknr = 0;
 	long ret_blocks = 0;
@@ -357,6 +359,11 @@ alloc:
 	}
 
 	*blocknr = new_blocknr;
+	inode_map = &sbi->inode_maps[cpuid];
+	art = AEON_R_TABLE(inode_map);
+	art->b_range_low += cpu_to_le32(ret_blocks);
+
+	aeon_dbgv("%s block number - %lu\n", __func__, *blocknr);
 
 	return ret_blocks / aeon_get_numblocks(btype);
 }
@@ -419,7 +426,7 @@ static u32 seach_extent(struct super_block *sb, struct aeon_inode *pi, unsigned 
 	//aeon_dbg("%s: %lu\n", __func__, iblock);
 	for (i = 0; i < iblock; i++) {
 		block = le64_to_cpu(ae->next_block);
-		aeon_dbg("%s: 0x%lx\n", __func__, block);
+		//aeon_dbgv("%s: 0x%lx\n", __func__, block);
 		ae = (struct aeon_extent *)((block << 12) + sbi->virt_addr);
 	}
 
@@ -471,7 +478,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 
 	if (create == 0) {
 		/* return page offset */
-		aeon_dbg("%s: create == 0\n", __func__);
+		//aeon_dbgv("%s: create == 0\n", __func__);
 		*bno = seach_extent(sb, pi, iblock);
 		return num_blocks;
 	}
@@ -484,7 +491,6 @@ create:
 		 * Try to allocate continuous region.
 		 */
 		allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
-		aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 		pi->i_block = blocknr;
 		aeh = AEON_EXTENT_HEADER(sb, pi);
 		aeh->eh_entries = 0;
@@ -501,14 +507,14 @@ create:
 		return num_blocks;
 
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
-	aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
+	aeon_dbgv("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 	if (pi->i_blocks == 0) {
 		pi->i_blocks = blocknr;
 		ae = AEON_EXTENT(sb, pi);
 		ae->next_block = 0;
 
 		allocated = aeon_new_data_blocks(sb, sih, &blocknr, iblock, num_blocks, ANY_CPU);
-		aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
+		aeon_dbgv("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 		ae->ex_length = allocated;
 		ae->ex_block = blocknr;
 
@@ -524,7 +530,7 @@ create:
 		ae->next_block = blocknr;
 
 		allocated = aeon_new_data_blocks(sb, sih, &blocknr, iblock, num_blocks, ANY_CPU);
-		aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
+		aeon_dbgv("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 		new_ae->ex_length = allocated;
 		new_ae->ex_block = blocknr;
 		new_ae->next_block = 0;
@@ -589,9 +595,9 @@ found:
 }
 
 static void aeon_register_next_inode_block(struct aeon_sb_info *sbi, struct inode_map *inode_map,
-					   struct aeon_inode_table *ait, unsigned long blocknr)
+					   struct aeon_region_table *art, unsigned long blocknr)
 {
-	unsigned int offset = le32_to_cpu(ait->num_allocated_pages);
+	unsigned int offset = le32_to_cpu(art->num_allocated_pages);
 	struct aeon_inode *pi;
 
 	/* TODO:
@@ -602,7 +608,6 @@ static void aeon_register_next_inode_block(struct aeon_sb_info *sbi, struct inod
 	else
 		pi = (struct aeon_inode *)((u64)inode_map->i_block_addr + (1 << AEON_I_SHIFT));
 
-	aeon_dbgv("%s: %lu\n", __func__, blocknr);
 	pi->i_next_inode_block = cpu_to_le64(blocknr);
 	inode_map->i_block_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
 }
@@ -611,7 +616,7 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
-	struct aeon_inode_table *ait = AEON_I_TABLE(inode_map);
+	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
@@ -620,8 +625,8 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != 1)
 			goto out;
-		aeon_register_next_inode_block(sbi, inode_map, ait, blocknr);
-		ait->num_allocated_pages++;
+		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
+		art->num_allocated_pages++;
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 	}
@@ -637,16 +642,47 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
+	struct free_list *free_list = aeon_get_free_list(sb, cpuid);
 	unsigned long blocknr = 0;
-	int num_blocks = 1;
+	u64 addr = (u64)sbi->virt_addr + AEON_SB_SIZE + AEON_INODE_SIZE;
+	__le64 *table_blocknr;
 
-	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT))
+	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
+		table_blocknr = (__le64 *)(cpuid * 64 + addr);
+		blocknr = le64_to_cpu(*table_blocknr);
+		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
+		inode_map->i_table_addr = inode_map->virt_addr;
 		return;
+	}
 
 	if (!inode_map->im || list_empty(&inode_map->im->imem_list)) {
-		aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
+		struct rb_root *tree;
+		struct rb_node *temp;
+		struct aeon_range_node *node;
+		struct aeon_region_table_blocknrartb;
+
+		spin_lock(&free_list->s_lock);
+
+		tree = &(free_list->block_free_tree);
+		temp = &(free_list->first_node->node);
+		node = container_of(temp, struct aeon_range_node, node);
+
+		blocknr = node->range_low;
+		node->range_low++;
+
+		free_list->num_free_blocks--;
+		free_list->alloc_data_count++;
+		free_list->alloc_data_pages++;
+
+		table_blocknr = (__le64 *)(cpuid * 64 + addr);
+		*table_blocknr = cpu_to_le64(blocknr);
+
+		spin_unlock(&free_list->s_lock);
+
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) + (u64)sbi->virt_addr);
+		inode_map->i_table_addr = inode_map->virt_addr;
 		imem_cache_create(sbi, inode_map, blocknr, ino, 1);
+		aeon_dbgv("%s: %lu\n", __func__, blocknr);
 	}
 
 }
@@ -663,11 +699,8 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *pi_addr, in
 
 	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 
-	aeon_dbgv("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
-
 	return blocknr;
 }
-
 
 unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr, int cpuid)
 {
@@ -678,8 +711,6 @@ unsigned long aeon_get_new_dentry_map_block(struct super_block *sb, u64 *pi_addr
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 
 	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
-
-	aeon_dbgv("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
 	return blocknr;
 }
@@ -693,8 +724,6 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, i
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
 
 	*pi_addr = (u64)sbi->virt_addr + blocknr * AEON_DEF_BLOCK_SIZE_4K;
-
-	aeon_dbgv("%s: blocknr %lu, pi_addr %llx\n", __func__, blocknr, *pi_addr);
 
 	return blocknr;
 }
