@@ -20,6 +20,11 @@ debug_run() {
   sudo mount -t $FS -o init,dax,dbgmask=16 $DEV $MOUNT_POINT
 }
 
+debug_remount_run() {
+  sudo umount $MOUNT_POINT
+  sudo mount -t $FS -o dax,dbgmask=16 $DEV $MOUNT_POINT
+}
+
 clean () {
   sudo umount $MOUNT_POINT
   sudo rmmod $FS
@@ -54,6 +59,9 @@ case "$1" in
     ;;
   debug)
     debug_run
+    ;;
+  drm)
+    debug_remount_run
     ;;
   info)
     show_info

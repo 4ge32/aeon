@@ -8,7 +8,7 @@
 
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 {
-	aeon_dbg("%s\n", __func__);
+	aeon_dbgv("%s\n", __func__);
 	return generic_file_llseek(file, offset, origin);
 }
 
@@ -126,8 +126,8 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	if (new)
 		iomap->flags |= IOMAP_F_NEW;
 
-	aeon_dbg("%s: FINISH, head addr - 0x%lx first_block - 0x%lx ret - 0x%x addr - 0x%llx length - 0x%llx\n", __func__, head_addr, first_block, ret, iomap->addr, iomap->length);
-	aeon_dbg("0x%llx\n", (u64)bno);
+	aeon_dbgv("%s: FINISH, head addr - 0x%lx first_block - 0x%lx ret - 0x%x addr - 0x%llx length - 0x%llx\n", __func__, head_addr, first_block, ret, iomap->addr, iomap->length);
+	aeon_dbgv("0x%llx\n", (u64)bno);
 	return 0;
 }
 

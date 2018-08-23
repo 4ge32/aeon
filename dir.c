@@ -97,7 +97,6 @@ static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb, struc
 	unsigned long new_de_map_blocknr = 0;
 	u64 pi_addr = 0;
 
-	aeon_dbg("%s: %lu\n", __func__, blocknr);
 	de_map = (struct aeon_dentry_map *)(sbi->virt_addr + (blocknr << AEON_SHIFT));
 	la_num_entries = le64_to_cpu(de_map->num_latest_dentry);
 	num_internal = le64_to_cpu(de_map->num_internal_dentries);
@@ -509,7 +508,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 
 
 			child_pi = aeon_get_inode(sb, sih);
-			aeon_dbg("ctx: ino %llu, name %s, name_len %u\n",
+			aeon_dbgv("ctx: ino %llu, name %s, name_len %u\n",
 					(u64)ino, entry->name, entry->name_len);
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 						ino, IF2DT(child_pi->i_mode))) {

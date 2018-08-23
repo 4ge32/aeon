@@ -57,7 +57,7 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 			return -ENOMEM;
 		}
 		range_node->range_low = 0;
-		range_node->range_high = le32_to_cpu(ait->range_high);
+		range_node->range_high = le32_to_cpu(ait->i_range_high);
 		ret = aeon_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			aeon_err(sb, "%s failed\n", __func__);
@@ -219,7 +219,7 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	*ino = new_ino * sbi->cpus + cpuid;
 	aeon_dbgv("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
 	sbi->s_inodes_used_count++;
-	ait->range_high = le32_to_cpu(i->range_high);
+	ait->i_range_high = le32_to_cpu(i->range_high);
 	ait->allocated++;
 
 	aeon_dbgv("%s: Alloc ino %lu\n", __func__, *ino);
@@ -292,24 +292,27 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u64 ino)
 	int num_cpu = sbi->cpus;
 	int cpu_id = (ino - AEON_INODE_START) % num_cpu;
 	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
-	struct aeon_inode_table *ait = AEON_I_TABLE(inode_map);
-	unsigned int target_page = le32_to_cpu(ait->num_allocated_pages);
-	u64 addr = (u64)inode_map->i_table_addr;
+	struct i_valid_list *data;
+	struct i_valid_list *dend = NULL;
 	u64 pi_addr = 0;
 
+	/* TODO:
+	 * Make it possible to refactor following code.
+	 */
 
-	if ((ino >= AEON_INODE_START) && (ino <= (AEON_I_NUM_PER_PAGE - 1) * num_cpu
-						+ AEON_INODE_START - 1)) {
-		pi_addr = (addr + (1 << AEON_I_SHIFT));
-		pi_addr += ((ino - AEON_INODE_START - cpu_id) / num_cpu) << AEON_I_SHIFT;
-	} else {
-		/* TODO */
-		aeon_dbg("TODO\n");
+	list_for_each_entry_safe(data, dend, &inode_map->ivl->i_valid_list, i_valid_list) {
+		if (ino == data->ino) {
+			pi_addr = data->addr;
+			list_del(&data->i_valid_list);
+			kfree((void *)data);
+			goto found;
+		}
 	}
 
-	aeon_dbgv("%u - %u\n", target_page, le32_to_cpu(((struct aeon_inode *)pi_addr)->aeon_ino));
-	aeon_dbgv("%s: 0x%llx\n", __func__, addr);
-	aeon_dbgv("%s: 0x%llx\n", __func__, pi_addr);
+	aeon_err(sb, "not found corresponding inode\n");
+	BUG_ON(1);
+
+found:
 	return pi_addr;
 }
 
@@ -371,7 +374,6 @@ static int aeon_read_inode(struct super_block *sb, struct inode *inode, u64 pi_a
 	i_gid_write(inode, le32_to_cpu(pi->i_gid));
 	aeon_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
 	ino = le32_to_cpu(pi->aeon_ino);
-	aeon_dbgv("%s: ino - %lu\n", __func__, ino);
 
 	if (inode->i_mode == 0 || pi->deleted == 1) {
 		ret = -ESTALE;

@@ -119,7 +119,31 @@ test-create-2 ()
   clean
 }
 
-test-create-3 ()
+test-create-2 ()
+{
+  init
+
+  NUM=62
+  for i in `seq 1 $NUM`
+  do
+    empty_file
+    touch $DIR/$NAME
+    touch $TMP/$NAME
+  done
+  ./run.sh rm
+  for i in `seq 1 $NUM`
+  do
+    empty_file
+    touch $DIR/$NAME
+    touch $TMP/$NAME
+  done
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+test-create-4 ()
 {
   init
 
@@ -136,7 +160,7 @@ test-create-3 ()
   clean
 }
 
-test-create-4 ()
+test-create-5 ()
 {
   init
 

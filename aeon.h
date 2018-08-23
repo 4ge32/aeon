@@ -37,12 +37,22 @@ struct imem_cache {
 	struct list_head imem_list;
 };
 
+/*
+ * Use it when moount without init option
+ */
+struct i_valid_list {
+	ino_t ino;
+	u64 addr;
+	struct list_head i_valid_list;
+};
+
 struct inode_map {
 	struct mutex inode_table_mutex;
 	struct rb_root	inode_inuse_tree;
 	unsigned long	num_range_node_inode;
 	struct aeon_range_node *first_inode_range;
 	struct imem_cache *im;
+	struct i_valid_list *ivl;
 	void *virt_addr;
 	void *i_table_addr;
 	void *i_block_addr;

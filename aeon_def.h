@@ -82,7 +82,8 @@ struct aeon_inode_table {
 	__le64 allocated;
 	__le64 freed;
 	__le32 num_allocated_pages;
-	__le32 range_high;
+	__le32 i_range_high;
+	__le32 b_range_low;
 };
 
 struct aeon_super_block {
