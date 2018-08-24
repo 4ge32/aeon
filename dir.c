@@ -363,10 +363,10 @@ int aeon_add_dentry(struct dentry *dentry, ino_t ino, int inc_link)
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
 	latest_entry = le64_to_cpu(de_info->de_map->num_latest_dentry);
-	aeon_dbgv("%s: %lu\n", __func__, (latest_entry));
-	aeon_dbgv("%s: %llu\n", __func__, (le64_to_cpu(de_info->de_map->block_dentry[latest_entry])));
-	aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_internal_dentries));
-	aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_dentries));
+	//aeon_dbgv("%s: %lu\n", __func__, (latest_entry));
+	//aeon_dbgv("%s: %llu\n", __func__, (le64_to_cpu(de_info->de_map->block_dentry[latest_entry])));
+	//aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_internal_dentries));
+	//aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(de_info->de_map->num_dentries));
 
 	return 0;
 out2:
@@ -479,7 +479,6 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 	int i;
 	ino_t ino;
 
-
 	if (!dir_emit_dots(file, ctx))
 		return 0;
 
@@ -508,8 +507,8 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 
 
 			child_pi = aeon_get_inode(sb, sih);
-			aeon_dbgv("ctx: ino %llu, name %s, name_len %u\n",
-					(u64)ino, entry->name, entry->name_len);
+			//aeon_dbgv("ctx: ino %llu, name %s, name_len %u\n",
+			//		(u64)ino, entry->name, entry->name_len);
 			if (!dir_emit(ctx, entry->name, entry->name_len,
 						ino, IF2DT(child_pi->i_mode))) {
 				aeon_dbg("Here: pos %llu\n", ctx->pos);

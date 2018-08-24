@@ -183,6 +183,6 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 		offset = blocknr;
 		ino = ino + (AEON_I_NUM_PER_PAGE) * 2;
 	}
-	aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->num_allocated_pages));
-	aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(art->allocated));
+	//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->num_allocated_pages));
+	//aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(art->allocated));
 }

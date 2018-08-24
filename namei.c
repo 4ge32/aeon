@@ -48,10 +48,10 @@ static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsi
 	ino_t ino = 0;
 
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
-	aeon_dbgv("%s %s %lu\n", __func__, dentry->d_name.name, ino);
+	//aeon_dbgv("%s %s %lu\n", __func__, dentry->d_name.name, ino);
 	if (ino) {
 		inode = aeon_iget(dir->i_sb, ino);
-		aeon_dbgv("%s: %lu\n", __func__, ino);
+		//aeon_dbgv("%s: %lu\n", __func__, ino);
 		if (inode == ERR_PTR(-ESTALE) || inode == ERR_PTR(-ENOMEM)
 				|| inode == ERR_PTR(-EACCES)) {
 			aeon_err(dir->i_sb,

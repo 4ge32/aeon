@@ -94,7 +94,7 @@ static void aeon_evict_inode(struct inode *inode)
 	if (sih->de_info != NULL)
 		aeon_free_invalid_dentry_list(sb, sih);
 
-	aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
+	//aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
@@ -113,7 +113,7 @@ static void aeon_evict_inode(struct inode *inode)
 	}
 out:
 	if (destroy == 0) {
-		aeon_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
+		//aeon_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
 		aeon_free_dram_resource(sb, sih);
 	}
 
@@ -241,9 +241,9 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
 
-	aeon_dbgv("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
-		 __func__, sbi->s_bdev->bd_disk->disk_name,
-		 sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
+	//aeon_dbgv("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
+	//	 __func__, sbi->s_bdev->bd_disk->disk_name,
+	//	 sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
 	return 0;
 }
 
@@ -394,7 +394,7 @@ static void aeon_fill_region_table(struct super_block *sb, int cpu)
 		art->i_range_high = le32_to_cpu(range_high);
 		art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
 	} else {
-		aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
+		//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
 		free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
 	}
 }
@@ -526,7 +526,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		goto out3;
 	}
 
-	aeon_dbgv("%s:FINISH\n", __func__);
+	//aeon_dbgv("%s:FINISH\n", __func__);
 
 	return 0;
 

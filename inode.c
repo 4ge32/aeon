@@ -133,7 +133,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_size = size;
 	inode->i_mode = mode;
 
-	aeon_dbgv("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
+	//aeon_dbgv("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
@@ -154,7 +154,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 		inode->i_op = &aeon_symlink_inode_operations;
 		break;
 	default:
-		aeon_dbgv("Unknown new inode type %d\n", type);
+		aeon_dbg("Unknown new inode type %d\n", type);
 		break;
 	}
 
@@ -217,12 +217,12 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 	}
 
 	*ino = new_ino * sbi->cpus + cpuid;
-	aeon_dbgv("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
+	//aeon_dbgv("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
 	sbi->s_inodes_used_count++;
 	art->i_range_high = le32_to_cpu(i->range_high);
 	art->allocated++;
 
-	aeon_dbgv("%s: Alloc ino %lu\n", __func__, *ino);
+	//aeon_dbgv("%s: Alloc ino %lu\n", __func__, *ino);
 	return 0;
 }
 
@@ -238,7 +238,7 @@ static int aeon_get_new_inode_address(struct super_block *sb, u64 free_ino, u64 
 	if (*pi_addr == 0)
 		goto err;
 
-	aeon_dbgv("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
+	//aeon_dbgv("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
 
 	return 1;
 
@@ -282,7 +282,7 @@ u64 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 
 	ino = free_ino;
 
-	aeon_dbgv("%s: free_ino is %llu\n", __func__, ino);
+	//aeon_dbgv("%s: free_ino is %llu\n", __func__, ino);
 	return ino;
 }
 
@@ -438,7 +438,7 @@ struct inode *aeon_iget(struct super_block *sb, unsigned long ino)
 
 	pi_addr = aeon_get_reserved_inode_addr(sb, ino);
 
-	aeon_dbgv("%s: nvmm 0x%llx\n", __func__, pi_addr);
+	//aeon_dbgv("%s: nvmm 0x%llx\n", __func__, pi_addr);
 
 	if (pi_addr == 0) {
 		aeon_err(sb, "%s: failed to get pi_addr for inode %lu\n", __func__, ino);
@@ -477,8 +477,8 @@ static unsigned long aeon_get_last_blocknr(struct super_block *sb, struct aeon_i
 	return 0;
 
 	if (ret) {
-		aeon_dbgv("%s: read pi @ 0x%lx failed\n",
-				__func__, sih->pi_addr);
+		//aeon_dbgv("%s: read pi @ 0x%lx failed\n",
+		//		__func__, sih->pi_addr);
 		btype = 0;
 	} else {
 		btype = sih->i_blk_type;
@@ -531,7 +531,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	int found;
 	int ret;
 
-	aeon_dbgv("Free inuse ino: %lu\n", ino);
+	//aeon_dbgv("Free inuse ino: %lu\n", ino);
 	inode_map = &sbi->inode_maps[cpuid];
 	art = AEON_R_TABLE(inode_map);
 
