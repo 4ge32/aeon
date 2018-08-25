@@ -2,12 +2,12 @@
 
 OK ()
 {
-  echo " [OK]"
+  echo -e "\t [OK]"
 }
 
 FAILED ()
 {
-  echo " [FAILED]"
+  echo -e "\t [FAILED]"
 }
 
 rename ()
@@ -48,7 +48,7 @@ remove ()
 
 create ()
 {
-  N=3
+  N=4
   for num in `seq 1 $N`
   do
     res=1

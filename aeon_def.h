@@ -140,7 +140,7 @@ struct aeon_dentry {
 	__le64  internal_offset;
 	__le32  global_offset;
 	/*  8 bytes */
-	__le64	ino;			/* inode no pointed to by this entry */
+	__le32	ino;			/* inode no pointed to by this entry */
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
 	/* 96 bytes */

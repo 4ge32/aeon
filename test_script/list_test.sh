@@ -147,6 +147,20 @@ test-create-4 ()
 {
   init
 
+  cp hello.c $DIR/hello.c
+  cp hello.c $TMP/hello.c
+  gcc $DIR/hello.c -o $DIR/bin
+  gcc $TMP/hello.c -o $TMP/bin
+  cmp -s $DIR/bin $TMP/bin
+  res=$?
+
+  clean
+}
+
+test-create-5 ()
+{
+  init
+
   NUM=4096
   for i in `seq 1 $NUM`
   do
@@ -160,7 +174,7 @@ test-create-4 ()
   clean
 }
 
-test-create-5 ()
+test-create-6 ()
 {
   init
 

@@ -188,6 +188,20 @@ int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	return ret;
 }
 
+void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree)
+{
+	struct aeon_range_node *curr;
+	struct rb_node *temp;
+
+	temp = rb_first(tree);
+	while (temp) {
+		curr = container_of(temp, struct aeon_range_node, node);
+		temp = rb_next(temp);
+		rb_erase(&curr->node, tree);
+		aeon_free_dir_node(curr);
+	}
+}
+
 static int not_enough_blocks(struct free_list *free_list, unsigned long num_blocks)
 {
 	struct aeon_range_node *first = free_list->first_node;
@@ -507,14 +521,14 @@ create:
 		return num_blocks;
 
 	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, ANY_CPU);
-	aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
+	//aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 	if (pi->i_blocks == 0) {
 		pi->i_blocks = blocknr;
 		ae = AEON_EXTENT(sb, pi);
 		ae->next_block = 0;
 
 		allocated = aeon_new_data_blocks(sb, sih, &blocknr, iblock, num_blocks, ANY_CPU);
-		aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
+		//aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 		ae->ex_length = allocated;
 		ae->ex_block = blocknr;
 
@@ -530,7 +544,7 @@ create:
 		ae->next_block = blocknr;
 
 		allocated = aeon_new_data_blocks(sb, sih, &blocknr, iblock, num_blocks, ANY_CPU);
-		aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
+		//aeon_dbg("%s: allocated - %d, blocknr - %lu, num_blocks - %d\n", __func__, allocated, blocknr, num_blocks);
 		new_ae->ex_length = allocated;
 		new_ae->ex_block = blocknr;
 		new_ae->next_block = 0;

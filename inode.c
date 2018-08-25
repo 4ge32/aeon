@@ -133,7 +133,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_size = size;
 	inode->i_mode = mode;
 
-	//aeon_dbgv("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
+	//aeon_dbg("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
 
 	/* chosen inode is in ino */
 	inode->i_ino = ino;
@@ -295,10 +295,6 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u64 ino)
 	struct i_valid_list *data;
 	struct i_valid_list *dend = NULL;
 	u64 pi_addr = 0;
-
-	/* TODO:
-	 * Make it possible to refactor following code.
-	 */
 
 	list_for_each_entry_safe(data, dend, &inode_map->ivl->i_valid_list, i_valid_list) {
 		if (ino == data->ino) {

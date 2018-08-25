@@ -531,6 +531,7 @@ void aeon_init_blockmap(struct super_block *sb);
 int aeon_insert_range_node(struct rb_root *tree, struct aeon_range_node *new_node, enum node_type);
 int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node);
+void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 	unsigned long max_blocks, u32 *bno, bool *new, bool *boundary, int create);
 u64 search_imem_cache(struct aeon_sb_info *sbi, struct inode_map *inode_map, ino_t ino);
@@ -542,7 +543,7 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr, i
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *);
-int aeon_get_inode_address(struct aeon_inode_info_header *, u64 ino, u64 *pi_addr);
+int aeon_get_inode_address(struct aeon_inode_info_header *, ino_t ino, u64 *pi_addr);
 ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
