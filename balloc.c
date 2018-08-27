@@ -398,9 +398,9 @@ static int aeon_new_data_blocks(struct super_block *sb,
 			  sih->ino, start_blk, allocated, *blocknr,
 			  *blocknr + allocated - 1);
 	} else {
-		aeon_dbg("Inode %lu, start blk %lu, alloc %d data blocks from %lu to %lu\n",
-			  sih->ino, start_blk, allocated, *blocknr,
-			  *blocknr + allocated - 1);
+		//aeon_dbg("Inode %lu, start blk %lu, alloc %d data blocks from %lu to %lu\n",
+		//	  sih->ino, start_blk, allocated, *blocknr,
+		//	  *blocknr + allocated - 1);
 	}
 	return allocated;
 }

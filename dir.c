@@ -460,7 +460,7 @@ void aeon_free_invalid_dentry_list(struct super_block *sb, struct aeon_inode_inf
 	struct aeon_dentry_invalid *dend = NULL;
 
 	list_for_each_entry_safe(adi, dend, &de_info->di->invalid_list, invalid_list) {
-		aeon_dbg("%s: Free invalid list (%u - %lu)\n", __func__, adi->internal, adi->global);
+		//aeon_dbg("%s: Free invalid list (%u - %lu)\n", __func__, adi->internal, adi->global);
 		list_del(&adi->invalid_list);
 		kfree(adi);
 		adi = NULL;
