@@ -161,6 +161,30 @@ test-create-5 ()
 {
   init
 
+  NR="one two three four five"
+
+  NUM=4000
+  for dir in $NR
+  do
+    mkdir $DIR/$dir
+    mkdir $TMP/$dir
+    for i in `seq 1 $NUM`
+    do
+      empty_file
+      touch $DIR/$dir/$NAME
+      touch $TMP/$dir/$NAME
+    done
+  done
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+test-create-7 ()
+{
+  init
+
   NUM=4096
   for i in `seq 1 $NUM`
   do
