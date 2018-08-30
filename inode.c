@@ -216,7 +216,7 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid, unsigned l
 		return -ENOSPC;
 	}
 
-	*ino = new_ino * sbi->cpus + cpuid;
+	*ino = AEON_INODE_START + (new_ino - 2) * sbi->cpus + cpuid;
 	//aeon_dbgv("%s: %lu - %d - %d\n", __func__, new_ino, sbi->cpus, cpuid);
 	sbi->s_inodes_used_count++;
 	art->i_range_high = le32_to_cpu(i->range_high);
