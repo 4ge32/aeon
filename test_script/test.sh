@@ -100,6 +100,24 @@ attr ()
   done
 }
 
+mmap ()
+{
+  N=1
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-mmap-$num"
+    test-mmap-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
+
 source ./list_test.sh
 echo "===== TEST START ====="
 
@@ -118,6 +136,9 @@ case "$1" in
     ;;
   attr)
     attr
+    ;;
+  mmap)
+    mmap
     ;;
   all)
     attr

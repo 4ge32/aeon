@@ -390,3 +390,15 @@ test-attr-4 ()
 
   clean
 }
+
+test-mmap-1 ()
+{
+  cp hello.c $DIR/hello.c
+  gcc $DIR/hello.c -o $DIR/a.out
+  path=`pwd`
+  cd $DIR
+  res=`./a.out`
+  test "$res" = "Hello, World"
+  res=$?
+  cd $path
+}
