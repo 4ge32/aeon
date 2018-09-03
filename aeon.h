@@ -197,8 +197,8 @@ struct aeon_inode_info_header {
 	/* Map from file offsets to write log entries. */
 	struct radix_tree_root tree;
 	struct rb_root rb_tree;		/* RB tree for directory */
-	struct rb_root vma_tree;	/* Write vmas */
 	struct list_head list;		/* SB list of mmap sih */
+	struct rw_semaphore i_mmap_sem;
 	int num_vmas;
 	unsigned long ino;
 	unsigned long pi_addr;
@@ -403,7 +403,6 @@ static inline void aeon_init_header(struct super_block *sb, struct aeon_inode_in
 	sih->alter_pi_addr = 0;
 	INIT_RADIX_TREE(&sih->tree, GFP_ATOMIC);
 	sih->rb_tree = RB_ROOT;
-	sih->vma_tree = RB_ROOT;
 	sih->num_vmas = 0;
 	INIT_LIST_HEAD(&sih->list);
 	sih->last_setattr = 0;

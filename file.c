@@ -64,6 +64,58 @@ out_unlock:
 	return ret;
 }
 
+static int aeon_dax_huge_fault(struct vm_fault *vmf, enum page_entry_size pe_size)
+{
+	struct inode *inode = file_inode(vmf->vma->vm_file);
+	struct super_block *sb = inode->i_sb;
+	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info_header *sih = &si->header;
+	bool write;
+	pfn_t pfn;
+	int res = 0;
+	int err = 0;
+
+	write = (vmf->flags & FAULT_FLAG_WRITE) &&
+		(vmf->vma->vm_flags & VM_SHARED);
+
+	if (write) {
+		sb_start_pagefault(sb);
+		file_update_time(vmf->vma->vm_file);
+	}
+	down_read(&sih->i_mmap_sem);
+
+	res = dax_iomap_fault(vmf, pe_size, &pfn, &err, &aeon_iomap_ops);
+	if (write) {
+		if (res & VM_FAULT_NEEDDSYNC)
+			res = dax_finish_sync_fault(vmf, pe_size, pfn);
+		up_read(&sih->i_mmap_sem);
+		sb_end_pagefault(sb);
+	} else
+		up_read(&sih->i_mmap_sem);
+
+	return res;
+}
+
+static int aeon_dax_fault(struct vm_fault *vmf)
+{
+	return aeon_dax_huge_fault(vmf, PE_SIZE_PTE);
+}
+
+static const struct vm_operations_struct aeon_dax_vm_ops = {
+	.fault		= aeon_dax_fault,
+	.huge_fault	= aeon_dax_huge_fault,
+	.page_mkwrite	= aeon_dax_fault,
+	.pfn_mkwrite	= aeon_dax_fault,
+};
+
+static int aeon_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	file_accessed(file);
+	vma->vm_ops = &aeon_dax_vm_ops;
+	vma->vm_flags |= VM_MIXEDMAP;
+	return 0;
+}
+
 /*
  * Not need fsync. At least in the future.
  */
@@ -81,6 +133,7 @@ const struct file_operations aeon_dax_file_operations = {
 	.llseek		= aeon_llseek,
 	.read_iter	= aeon_file_read_iter,
 	.write_iter 	= aeon_file_write_iter,
+	.mmap           = aeon_mmap,
 	.fsync      	= aeon_fsync,
 	.open       	= aeon_open,
 };
