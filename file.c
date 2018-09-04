@@ -64,7 +64,8 @@ out_unlock:
 	return ret;
 }
 
-static int aeon_dax_huge_fault(struct vm_fault *vmf, enum page_entry_size pe_size)
+static int aeon_dax_huge_fault(struct vm_fault *vmf,
+			       enum page_entry_size pe_size)
 {
 	struct inode *inode = file_inode(vmf->vma->vm_file);
 	struct super_block *sb = inode->i_sb;
@@ -132,18 +133,18 @@ static int aeon_open(struct inode *inode, struct file *file)
 const struct file_operations aeon_dax_file_operations = {
 	.llseek		= aeon_llseek,
 	.read_iter	= aeon_file_read_iter,
-	.write_iter 	= aeon_file_write_iter,
+	.write_iter	= aeon_file_write_iter,
 	.mmap           = aeon_mmap,
-	.fsync      	= aeon_fsync,
-	.open       	= aeon_open,
+	.fsync		= aeon_fsync,
+	.open		= aeon_open,
 };
 
 const struct inode_operations aeon_file_inode_operations = {
-	.setattr  	= aeon_setattr,
+	.setattr	= aeon_setattr,
 };
 
 static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
-		            unsigned flags, struct iomap *iomap)
+			    unsigned flags, struct iomap *iomap)
 {
 	struct aeon_sb_info *sbi = AEON_SB(inode->i_sb);
 	unsigned int blkbits = inode->i_blkbits;
@@ -155,7 +156,7 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	int ret;
 
 	ret = aeon_dax_get_blocks(inode, first_block, max_blocks, &bno, &new,
-			          &boundary, flags & IOMAP_WRITE);
+				  &boundary, flags & IOMAP_WRITE);
 
 	if (ret < 0)
 		return ret;
@@ -187,7 +188,8 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 static int aeon_iomap_end(struct inode *inode, loff_t offset, loff_t length,
 			  ssize_t written, unsigned flags, struct iomap *iomap)
 {
-	if (iomap->type == IOMAP_MAPPED && written < length && (flags & IOMAP_WRITE))
+	if (iomap->type == IOMAP_MAPPED &&
+	    written < length && (flags & IOMAP_WRITE))
 		truncate_pagecache(inode, inode->i_size);
 	return 0;
 }

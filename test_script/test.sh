@@ -48,7 +48,7 @@ remove ()
 
 create ()
 {
-  N=5
+  N=4
   for num in `seq 1 $N`
   do
     res=1
@@ -118,6 +118,25 @@ mmap ()
   done
 }
 
+write ()
+{
+  N=3
+  func="write"
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-$func-$num"
+    test-$func-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
+
 source ./list_test.sh
 echo "===== TEST START ====="
 
@@ -140,7 +159,11 @@ case "$1" in
   mmap)
     mmap
     ;;
+  write)
+    write
+    ;;
   all)
+    mmap
     attr
     hard_and_sym_link
     remove

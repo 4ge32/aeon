@@ -5,7 +5,7 @@
 
 
 static int aeon_create(struct inode *dir, struct dentry *dentry,
-			umode_t mode, bool excl)
+		       umode_t mode, bool excl)
 {
 	struct aeon_inode *pidir;
 	struct super_block *sb = dir->i_sb;
@@ -14,10 +14,12 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	struct aeon_inode_info_header *sih = &si->header;
 	struct inode *inode = NULL;
 	u64 pi_addr = 0;
-	ino_t ino;
+	u32 ino;
 	int err = PTR_ERR(inode);
 
 	pidir = aeon_get_inode(sb, sih);
+	if (!pidir)
+		goto out;
 
 	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
@@ -27,13 +29,15 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode, 0, 0, &dentry->d_name);
+	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr,
+				   ino, mode, 0, 0, &dentry->d_name);
 	if (IS_ERR(inode))
 		goto out;
 
 	d_instantiate(dentry, inode);
 
 	aeon_sb->s_num_inodes++;
+	// update checksum
 
 	return 0;
 
@@ -42,20 +46,21 @@ out:
 	return err;
 }
 
-static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsigned int flag)
+static struct dentry *aeon_lookup(struct inode *dir,
+				  struct dentry *dentry,
+				  unsigned int flag)
 {
 	struct inode *inode = NULL;
-	ino_t ino = 0;
+	u32 ino = 0;
 
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
 	if (ino) {
 		inode = aeon_iget(dir->i_sb, ino);
-		//aeon_dbgv("%s: %lu\n", __func__, ino);
 		if (inode == ERR_PTR(-ESTALE) || inode == ERR_PTR(-ENOMEM)
-				|| inode == ERR_PTR(-EACCES)) {
+		    || inode == ERR_PTR(-EACCES)) {
 			aeon_err(dir->i_sb,
-				  "%s: get inode failed: %lu\n",
-				  __func__, (unsigned long)ino);
+				 "%s: get inode failed: %u\n",
+				 __func__, ino);
 			return ERR_PTR(-EIO);
 		}
 	}
@@ -63,7 +68,8 @@ static struct dentry *aeon_lookup(struct inode *dir, struct dentry *dentry, unsi
 	return d_splice_alias(inode, dentry);
 }
 
-static int aeon_link(struct dentry *dest_dentry, struct inode *dir, struct dentry *dentry)
+static int aeon_link(struct dentry *dest_dentry,
+		     struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = d_inode(dest_dentry);
 	int err;
@@ -95,20 +101,18 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	int ret = -ENOMEM;
 
 	pidir = aeon_get_inode(sb, sih);
+	if (!pidir)
+		goto out;
 
-	/* TODO:
-	 * store pointer of dentry structure on pmem in d_fsdata for
-	 * extracting data fastly. Following if statement assume the
-	 * situation. Maybe it can be implemented in lookup method?
-	 */
-	if (dentry->d_fsdata) {
-		struct aeon_dentry_info *di;
+	if (sih->de_info) {
+		struct aeon_dentry_info *de_info;
 
-		di = (struct aeon_dentry_info *)(dentry->d_fsdata);
-		remove_entry = di->de;
+		de_info = sih->de_info;
+		remove_entry = de_info->de;
 	} else {
 		struct qstr *name = &dentry->d_name;
-		remove_entry = aeon_find_dentry(sb, NULL, dir, name->name, name->len);
+		remove_entry = aeon_find_dentry(sb, NULL, dir,
+						name->name, name->len);
 	}
 
 	ret = aeon_remove_dentry(dentry, 0, &update_dir, remove_entry);
@@ -120,15 +124,18 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	if (inode->i_nlink)
 		drop_nlink(inode);
 
-	//pidir->i_links_count--;
+	pidir->i_links_count--;
 
 	return 0;
+
 out:
 	aeon_err(sb, "%s return %d\n", __func__, ret);
 	return ret;
 }
 
-static int aeon_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
+static int aeon_symlink(struct inode *dir,
+			struct dentry *dentry,
+			const char *symname)
 {
 	struct super_block *sb = dir->i_sb;
 	int err = -ENAMETOOLONG;
@@ -164,9 +171,9 @@ static int aeon_symlink(struct inode *dir, struct dentry *dentry, const char *sy
 		goto err;
 
 	d_instantiate(dentry, inode);
-	unlock_new_inode(inode);
 
 	return 0;
+
 err:
 	aeon_err(sb, "%s return %d\n", err);
 	return err;
@@ -201,6 +208,7 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	aeon_sb->s_num_inodes++;
 
 	return 0;
+
 out:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;
@@ -220,29 +228,30 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	struct aeon_dentry *remove_entry;
 	int err = ENOTEMPTY;
 
-
 	pidir = aeon_get_inode(sb, sih);
+	if (!pidir)
+		goto out;
 	pi = aeon_get_inode(sb, csih);
+	if (!pi)
+		goto out;
 
-	if (dentry->d_fsdata) {
-		/* TODO:
-		 * This block has meaning?
-		 */
-		struct aeon_dentry_info *di;
+	if (sih->de_info) {
+		struct aeon_dentry_info *de_info;
 
-		di = (struct aeon_dentry_info *)(dentry->d_fsdata);
-		remove_entry = di->de;
+		de_info = sih->de_info;
+		remove_entry = de_info->de;
 	} else {
 		struct qstr *name = &dentry->d_name;
 
 		if (!aeon_empty_dir(inode))
 			return -ENOTEMPTY;
-		remove_entry = aeon_find_dentry(sb, NULL, dir, name->name, name->len);
+		remove_entry = aeon_find_dentry(sb, NULL, dir,
+						name->name, name->len);
 	}
 
 	err = aeon_remove_dentry(dentry, -1, &update_dir, remove_entry);
 	if (err)
-		goto end_rmdir;
+		goto out;
 
 	clear_nlink(inode);
 	inode->i_ctime = dir->i_ctime;
@@ -252,7 +261,7 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 
 	return 0;
 
-end_rmdir:
+out:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;
 }
@@ -275,7 +284,8 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int err;
 
 
-	old_de = aeon_find_dentry(sb, pi, old_dir, old_name->name, old_name->len);
+	old_de = aeon_find_dentry(sb, pi, old_dir,
+				  old_name->name, old_name->len);
 	if (old_de == NULL) {
 		err = -ENOENT;
 		goto out_dir;
@@ -283,7 +293,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	if (S_ISDIR(old_inode->i_mode)) {
 		err = -EIO;
-	        dir_de = aeon_dotdot(sb, o_sih);
+		dir_de = aeon_dotdot(sb, o_sih);
 		if (!dir_de)
 			goto out_dir;
 	}
@@ -294,7 +304,8 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto out_dir;
 
 		err = -ENOENT;
-		new_de = aeon_find_dentry(sb, NULL, new_dir, new_name->name, new_name->len);
+		new_de = aeon_find_dentry(sb, NULL, new_dir,
+					  new_name->name, new_name->len);
 		if (!new_de)
 			goto out_dir;
 		aeon_set_link(new_dir, new_de, old_inode, 1);
@@ -329,7 +340,8 @@ out_dir:
 	return err;
 }
 
-static int aeon_mknod (struct inode * dir, struct dentry *dentry, umode_t mode, dev_t rdev)
+static int aeon_mknod (struct inode * dir, struct dentry *dentry,
+		       umode_t mode, dev_t rdev)
 {
 	aeon_dbg("%s\n", __func__);
 	return 0;

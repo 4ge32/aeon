@@ -30,7 +30,8 @@ struct aeon_stat_info {
 	unsigned int s_num_inodes;
 };
 
-static void aeon_update_stats(struct aeon_sb_info *sbi, struct aeon_stat_info *si, int cpu)
+static void aeon_update_stats(struct aeon_sb_info *sbi,
+			      struct aeon_stat_info *si, int cpu)
 {
 	struct free_list *free_list;
 	struct rb_root *tree;
@@ -289,8 +290,9 @@ int __init aeon_create_root_stats(void)
 	if (!aeon_debugfs_root)
 		return -ENOMEM;
 
-	free_list_file = debugfs_create_file("free_list", S_IRUGO, aeon_debugfs_root,
-				   NULL, &stat_fops);
+	free_list_file = debugfs_create_file("free_list", S_IRUGO,
+					     aeon_debugfs_root,
+					     NULL, &stat_fops);
 
 	if (!free_list_file) {
 		debugfs_remove(aeon_debugfs_root);
@@ -298,8 +300,9 @@ int __init aeon_create_root_stats(void)
 		return -ENOMEM;
 	}
 
-	imem_cache_file = debugfs_create_file("imem_cache", S_IRUGO, aeon_debugfs_root,
-				   NULL, &stat_imem_fops);
+	imem_cache_file = debugfs_create_file("imem_cache", S_IRUGO,
+					      aeon_debugfs_root,
+					      NULL, &stat_imem_fops);
 
 	if (!imem_cache_file) {
 		debugfs_remove_recursive(aeon_debugfs_root);
@@ -307,8 +310,9 @@ int __init aeon_create_root_stats(void)
 		return -ENOMEM;
 	}
 
-	d_allocated = debugfs_create_file("dentries", S_IRUGO, aeon_debugfs_root,
-				   NULL, &stat_den_fops);
+	d_allocated = debugfs_create_file("dentries", S_IRUGO,
+					  aeon_debugfs_root,
+					  NULL, &stat_den_fops);
 	if (!d_allocated) {
 		debugfs_remove_recursive(aeon_debugfs_root);
 		aeon_debugfs_root = NULL;

@@ -32,7 +32,7 @@ static void aeon_remove_used_block(struct super_block *sb, unsigned long blocknr
 }
 
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
-			       u64 pi_addr, struct aeon_inode_info_header *sih)
+				u64 pi_addr, struct aeon_inode_info_header *sih)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_dentry_info *de_info;
@@ -45,7 +45,8 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	int internal;
 	unsigned long d_blocknr;
 
-	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr + (blocknr << AEON_SHIFT));
+	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr +
+					    (blocknr << AEON_SHIFT));
 
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	if (num_entry == 2)
@@ -68,8 +69,8 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 		d_blocknr = le64_to_cpu(de_map->block_dentry[global]);
 		aeon_remove_used_block(sb, d_blocknr);
 		d = (struct aeon_dentry *)(sbi->virt_addr +
-					  (d_blocknr << AEON_SHIFT) +
-					  (internal << AEON_D_SHIFT));
+					   (d_blocknr << AEON_SHIFT) +
+					   (internal << AEON_D_SHIFT));
 
 		if (!d->valid) {
 			adi->global = le32_to_cpu(d->global_offset);
@@ -88,9 +89,11 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	return 0;
 }
 
-static void imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
-			       unsigned long blocknr, ino_t start_ino, unsigned allocated,
-			       unsigned long *next_blocknr, int space)
+static void imem_cache_rebuild(struct aeon_sb_info *sbi,
+			       struct inode_map *inode_map,
+			       unsigned long blocknr, ino_t start_ino,
+			       unsigned allocated, unsigned long *next_blocknr,
+			       int space)
 {
 	struct aeon_inode *pi;
 	struct imem_cache *im;
@@ -165,7 +168,7 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	else
 		offset = free_list->block_start;
 	inode_map->i_table_addr = (void *)((u64)sbi->virt_addr +
-				   	   (offset << AEON_SHIFT));
+					   (offset << AEON_SHIFT));
 
 	art = AEON_R_TABLE(inode_map);
 
@@ -174,12 +177,13 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	 * of page and firtst inode (last argument).
 	 */
 	imem_cache_rebuild(sbi, inode_map, offset, ino,
-			le64_to_cpu(art->allocated), &blocknr, 1);
+			   le64_to_cpu(art->allocated), &blocknr, 1);
 	offset = blocknr;
 	ino = ino + (AEON_I_NUM_PER_PAGE - 1) * 2;
 
 	for (i = 1; i < le32_to_cpu(art->num_allocated_pages); i++) {
-		imem_cache_rebuild(sbi, inode_map, offset, ino, le64_to_cpu(art->allocated), &blocknr, 0);
+		imem_cache_rebuild(sbi, inode_map, offset, ino,
+				   le64_to_cpu(art->allocated), &blocknr, 0);
 		offset = blocknr;
 		ino = ino + (AEON_I_NUM_PER_PAGE) * 2;
 	}

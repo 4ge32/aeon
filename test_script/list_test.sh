@@ -147,20 +147,6 @@ test-create-4 ()
 {
   init
 
-  cp hello.c $DIR/hello.c
-  cp hello.c $TMP/hello.c
-  gcc $DIR/hello.c -o $DIR/bin
-  gcc $TMP/hello.c -o $TMP/bin
-  cmp -s $DIR/bin $TMP/bin
-  res=$?
-
-  clean
-}
-
-test-create-5 ()
-{
-  init
-
   NR="one two three four five"
 
   NUM=4000
@@ -181,7 +167,7 @@ test-create-5 ()
   clean
 }
 
-test-create-7 ()
+test-create-6 ()
 {
   init
 
@@ -198,7 +184,7 @@ test-create-7 ()
   clean
 }
 
-test-create-6 ()
+test-create-7 ()
 {
   init
 
@@ -401,4 +387,44 @@ test-mmap-1 ()
   test "$res" = "Hello, World"
   res=$?
   cd $path
+}
+
+test-write-1 ()
+{
+  init
+
+  path=`pwd`
+  cp hello.c $DIR/hello.c
+  cp hello.c $TMP/hello.c
+  cd $DIR
+  gcc hello.c
+  cd $TMP
+  gcc hello.c
+  cmp -s $DIR/a.out $TMP/a.out
+  cd $path
+  res=$?
+
+  clean
+}
+
+test-write-2 ()
+{
+  init
+
+  cat article-1 > $TMP/art
+  cat article-1 > $DIR/art
+  diff $TMP $DIR
+  res=$?
+  clean
+}
+
+test-write-3 ()
+{
+  init
+
+  cat article-2 > $TMP/art
+  cat article-2 > $DIR/art
+  diff $TMP $DIR
+  res=$?
+  clean
 }

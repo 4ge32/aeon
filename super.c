@@ -63,7 +63,7 @@ static void aeon_put_super(struct super_block *sb)
 		inode_map = &sbi->inode_maps[i];
 		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
-			i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
+			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
 	}
 	kfree(sbi->inode_maps);
 
@@ -87,7 +87,7 @@ static void aeon_evict_inode(struct inode *inode)
 
 	if (!sih) {
 		aeon_err(sb, "%s: ino %lu sih is NULL!\n",
-				__func__, inode->i_ino);
+			 __func__, inode->i_ino);
 		goto out;
 	}
 
@@ -183,7 +183,8 @@ static struct aeon_range_node *aeon_alloc_range_node(struct super_block *sb)
 {
 	struct aeon_range_node *p;
 
-	p = (struct aeon_range_node *)kmem_cache_zalloc(aeon_range_node_cachep, GFP_NOFS);
+	p = (struct aeon_range_node *)kmem_cache_zalloc(aeon_range_node_cachep,
+							GFP_NOFS);
 
 	return p;
 }
@@ -276,12 +277,13 @@ enum {
 };
 
 static const match_table_t tokens = {
-	{ Opt_init,	"init" 	     },
-	{ Opt_dax,	"dax" 	     },
+	{ Opt_init,	"init"	     },
+	{ Opt_dax,	"dax"	     },
 	{ Opt_dbgmask,	"dbgmask=%u" },
 };
 
-static int aeon_parse_options(char *options, struct aeon_sb_info *sbi, bool remount)
+static int aeon_parse_options(char *options, struct aeon_sb_info *sbi,
+			      bool remount)
 {
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
@@ -346,7 +348,8 @@ static void aeon_init_super_block(struct super_block *sb, unsigned long size)
 	aeon_memlock_super(sb);
 }
 
-static void aeon_init_root_inode(struct super_block *sb, struct aeon_inode *root_i)
+static void aeon_init_root_inode(struct super_block *sb,
+				 struct aeon_inode *root_i)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
@@ -469,7 +472,8 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_set_blocksize(sb, sbi->blocksize);
 	sbi->mode = (0777);	/* it will be changed */
 	sbi->max_inodes_in_page = 32;
-	sbi->inode_maps = kcalloc(sbi->cpus, sizeof(struct inode_map), GFP_KERNEL);
+	sbi->inode_maps = kcalloc(sbi->cpus,
+				  sizeof(struct inode_map), GFP_KERNEL);
 	if(!sbi->inode_maps) {
 		ret = -ENOMEM;
 		goto out0;
@@ -545,7 +549,7 @@ out0:
 }
 
 static struct dentry *aeon_mount(struct file_system_type *fs_type,
-				  int flags, const char *dev_name, void *data)
+				 int flags, const char *dev_name, void *data)
 {
 	return mount_bdev(fs_type, flags, dev_name, data, aeon_fill_super);
 }
@@ -566,9 +570,9 @@ static void init_once(void *foo)
 static int __init init_inodecache(void)
 {
 	aeon_inode_cachep = kmem_cache_create("aeon_inode_cache",
-					       sizeof(struct aeon_inode_info),
-					       0, (SLAB_RECLAIM_ACCOUNT |
-						   SLAB_MEM_SPREAD), init_once);
+					      sizeof(struct aeon_inode_info),
+					      0, (SLAB_RECLAIM_ACCOUNT |
+						  SLAB_MEM_SPREAD), init_once);
 	if (aeon_inode_cachep == NULL)
 		return -ENOMEM;
 	return 0;
@@ -587,9 +591,9 @@ static void destroy_inodecache(void)
 static int __init init_rangenode_cache(void)
 {
 	aeon_range_node_cachep = kmem_cache_create("aeon_range_node_cache",
-					sizeof(struct aeon_range_node),
-					0, (SLAB_RECLAIM_ACCOUNT |
-					SLAB_MEM_SPREAD), NULL);
+						   sizeof(struct aeon_range_node),
+						   0, (SLAB_RECLAIM_ACCOUNT |
+						       SLAB_MEM_SPREAD), NULL);
 	if (aeon_range_node_cachep == NULL)
 		return -ENOMEM;
 	return 0;

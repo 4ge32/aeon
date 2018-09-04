@@ -12,7 +12,7 @@
 #define AEON_SHIFT              12
 #define AEON_DEF_BLOCK_SIZE_4K  (1 << AEON_SHIFT)
 #define AEON_I_NUM_PER_PAGE     (AEON_DEF_BLOCK_SIZE_4K / AEON_INODE_SIZE)
-#define AEON_NAME_LEN 		128
+#define AEON_NAME_LEN		128
 
 #define AEON_ROOT_INO		(1)
 #define AEON_INODE_START        (4)
@@ -112,7 +112,8 @@ struct aeon_super_block {
 #define AEON_D_SHIFT            8
 #define AEON_INTERNAL_ENTRY     AEON_D_SHIFT
 #define MAX_ENTRY               508
-#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
+#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + \
+		   ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
 /* TODO
  * scale a number of dentries in the future
  */
