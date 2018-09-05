@@ -366,8 +366,10 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 	mutex_lock(&de_info->dentry_mutex);
 
 	err = aeon_get_dentry_block(sb, de_info, &new_direntry);
-	if (err)
+	if (err) {
+		mutex_unlock(&de_info->dentry_mutex);
 		goto out;
+	}
 
 	aeon_fill_dentry_info(new_direntry, ino, i_blocknr, name, namelen);
 
