@@ -91,7 +91,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 			       struct inode_map *inode_map,
-			       unsigned long blocknr, ino_t start_ino,
+			       unsigned long blocknr, u32 start_ino,
 			       unsigned allocated, unsigned long *next_blocknr,
 			       int space)
 {
@@ -101,8 +101,8 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 	struct i_valid_list *ivl;
 	struct i_valid_list *ivl_init;
 	u64 virt_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
-	int ino = start_ino;
-	ino_t ino_off = sbi->cpus;
+	u32 ino = start_ino;
+	u32 ino_off = sbi->cpus;
 	int i;
 
 	/* TODO:
@@ -125,15 +125,15 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 
 		addr = virt_addr + (i << AEON_I_SHIFT);
 		pi = (struct aeon_inode *)addr;
-		if (space == i)
-			*next_blocknr = pi->i_next_inode_block;
+		if (space == i) {
+			*next_blocknr = le64_to_cpu(pi->i_next_inode_block);
+			inode_map->curr_i_blocknr = *next_blocknr;
+		}
 		if (pi->valid) {
 			ivl = kmalloc(sizeof(struct i_valid_list), GFP_KERNEL);
 			ivl->ino = ino;
 			ivl->addr = addr;
 			list_add_tail(&ivl->i_valid_list, &inode_map->ivl->i_valid_list);
-
-			ino += ino_off;
 		} else {
 			im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 			im->ino = ino;
@@ -141,9 +141,8 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 			im->head = im;
 			im->independent = 1;
 			list_add_tail(&im->imem_list, &inode_map->im->imem_list);
-
-			ino += ino_off;
 		}
+		ino += ino_off;
 	}
 }
 
@@ -160,6 +159,8 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT)
 		return;
+
+	mutex_lock(&inode_map->inode_table_mutex);
 
 	free_list = aeon_get_free_list(sb, cpu);
 
@@ -181,12 +182,14 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	offset = blocknr;
 	ino = ino + (AEON_I_NUM_PER_PAGE - 1) * 2;
 
-	for (i = 1; i < le32_to_cpu(art->num_allocated_pages); i++) {
+	for (i = 1; i < le32_to_cpu(art->i_num_allocated_pages); i++) {
 		imem_cache_rebuild(sbi, inode_map, offset, ino,
 				   le64_to_cpu(art->allocated), &blocknr, 0);
 		offset = blocknr;
 		ino = ino + (AEON_I_NUM_PER_PAGE) * 2;
 	}
-	//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->num_allocated_pages));
+
+	mutex_unlock(&inode_map->inode_table_mutex);
+	//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->i_num_allocated_pages));
 	//aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(art->allocated));
 }

@@ -41,7 +41,7 @@ struct imem_cache {
  * Use it when moount without init option
  */
 struct i_valid_list {
-	ino_t	ino;
+	u32	ino;
 	u64	addr;
 	struct	list_head i_valid_list;
 };
@@ -53,9 +53,10 @@ struct inode_map {
 	struct aeon_range_node	*first_inode_range;
 	struct imem_cache	*im;
 	struct i_valid_list	*ivl;
+	u64			curr_i_blocknr;
 	void			*virt_addr;
 	void			*i_table_addr;
-	void *			i_block_addr;
+	void			*i_block_addr;
 };
 
 /*
@@ -534,7 +535,7 @@ int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 			bool *boundary, int create);
 u64 search_imem_cache(struct aeon_sb_info *sbi,
 		      struct inode_map *inode_map, ino_t ino);
-int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t start_ino);
+u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 start_ino);
 void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
@@ -545,14 +546,14 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);
-int aeon_get_inode_address(struct aeon_inode_info_header *sih, ino_t ino,
-			   u64 *pi_addr);
-ino_t aeon_inode_by_name(struct inode *dir, struct qstr *entry);
+int aeon_get_inode_address(struct super_block *sb,
+			   u32 ino, u64 *pi_addr, struct aeon_dentry *de);
+u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr, u32 ino,
 				 umode_t mode, size_t size, dev_t rdev,
 				 const struct qstr *qstr);
-u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr);
+u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr);
 struct inode *aeon_iget(struct super_block *sb, u32 ino);
 int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih);
@@ -565,7 +566,8 @@ int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
 			 const char *name, int namelen,
 			 struct aeon_dentry *direntry);
-int aeon_add_dentry(struct dentry *dentry, u32 ino, int inc_link);
+int aeon_add_dentry(struct dentry *dentry, u32 ino,
+		    u64 i_blocknr, int inc_link);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,

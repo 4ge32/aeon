@@ -631,27 +631,24 @@ static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,
 					   struct aeon_region_table *art,
 					   unsigned long blocknr)
 {
-	unsigned int offset = le32_to_cpu(art->num_allocated_pages);
+	unsigned int offset = le32_to_cpu(art->i_num_allocated_pages);
 	struct aeon_inode *pi;
 
 	/* TODO:
 	 * it can be integrated.
 	 */
-	if (offset == 1) {
+	if (offset == 1)
 		pi = (struct aeon_inode *)((u64)inode_map->i_table_addr +
 					   (1 << AEON_I_SHIFT));
-	}
-	else {
-		pi = (struct aeon_inode *)((u64)inode_map->i_block_addr +
-					   (1 << AEON_I_SHIFT));
-	}
+	else
+		pi = (struct aeon_inode *)((u64)inode_map->i_block_addr);
 
 	pi->i_next_inode_block = cpu_to_le64(blocknr);
 	inode_map->i_block_addr = (void *)((blocknr << AEON_SHIFT) +
 					   (u64)sbi->virt_addr);
 }
 
-int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
+u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
@@ -665,13 +662,15 @@ int aeon_get_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 		if (allocated != 1)
 			goto out;
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
-		art->num_allocated_pages++;
+		art->i_num_allocated_pages++;
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) +
 						(u64)sbi->virt_addr);
+		inode_map->curr_i_blocknr = blocknr;
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
-	}
+	} else
+		blocknr = inode_map->curr_i_blocknr;
 
-	return 1;
+	return blocknr;
 
 out:
 	aeon_err(sb, "can't alloc region for inode\n");
@@ -723,6 +722,7 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) +
 						(u64)sbi->virt_addr);
 		inode_map->i_table_addr = inode_map->virt_addr;
+		inode_map->curr_i_blocknr = blocknr;
 		imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 		//aeon_dbgv("%s: %lu\n", __func__, blocknr);
 	}

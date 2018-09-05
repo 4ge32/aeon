@@ -147,6 +147,24 @@ test-create-4 ()
 {
   init
 
+  NUM=300
+  for i in `seq 1 $NUM`
+  do
+    empty_file
+    touch $DIR/$NAME
+    touch $TMP/$NAME
+  done
+  ./run.sh rm
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+test-create-5 ()
+{
+  init
+
   NR="one two three four five"
 
   NUM=4000
@@ -166,6 +184,7 @@ test-create-4 ()
 
   clean
 }
+
 
 test-create-6 ()
 {

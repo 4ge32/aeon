@@ -5,7 +5,6 @@
 
 
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
-#define FREE_BATCH 16
 
 int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
@@ -296,7 +295,6 @@ static int aeon_get_dentry_block(struct super_block *sb,
 		internal_de = le64_to_cpu(de_map->num_internal_dentries);
 
 		if (internal_de == AEON_INTERNAL_ENTRY) {
-
 			*direntry = aeon_alloc_new_dentry_block(sb, &blocknr);
 			if (IS_ERR(*direntry))
 				return -ENOSPC;
@@ -321,10 +319,11 @@ static int aeon_get_dentry_block(struct super_block *sb,
 }
 
 static void aeon_fill_dentry_info(struct aeon_dentry *de, u32 ino,
-				  const char *name, int namelen)
+				  u64 i_blocknr, const char *name, int namelen)
 {
 	de->name_len = le32_to_cpu(namelen);
 	de->ino = cpu_to_le32(ino);
+	de->i_blocknr = cpu_to_le64(i_blocknr);
 	strscpy(de->name, name, namelen + 1);
 	de->valid = 1;
 }
@@ -334,7 +333,7 @@ static void aeon_release_dentry_block(struct aeon_dentry *de)
 	de->valid = 0;
 }
 
-int aeon_add_dentry(struct dentry *dentry, u32 ino, int inc_link)
+int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -370,7 +369,7 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, int inc_link)
 	if (err)
 		goto out;
 
-	aeon_fill_dentry_info(new_direntry, ino, name, namelen);
+	aeon_fill_dentry_info(new_direntry, ino, i_blocknr, name, namelen);
 
 	mutex_unlock(&de_info->dentry_mutex);
 
@@ -491,18 +490,18 @@ void aeon_free_invalid_dentry_list(struct super_block *sb,
 static int aeon_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
+	struct super_block *sb = inode->i_sb;
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
-	//struct super_block *sb = inode->i_sb;
 	struct aeon_range_node *curr;
-	//struct aeon_inode *child_pi;
+	struct aeon_inode *child_pi;
 	struct aeon_dentry *entry;
 	struct rb_node *temp = NULL;
 	unsigned long pos = ctx->pos;
 	int found = 0;
-	//int ret;
-	ino_t ino;
-	//u64 pi_addr = 0;
+	u32 ino;
+	int err;
+	u64 pi_addr = 0;
 
 	if (pos == 0)
 		temp = rb_first(&sih->rb_tree);
@@ -525,17 +524,16 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		if (ino == 0)
 			continue;
 
-		//ret = aeon_get_inode_address(sih, ino, &pi_addr);
-		//if (ret) {
-		//      aeon_dbg("%s: get child inode %lu address failed %d\n",
-		//                      __func__, ino, ret);
-		//      ctx->pos = READDIR_END;
-		//      return ret;
-		//}
-		//child_pi = aeon_get_block(sb, pi_addr);
-		//aeon_dbg("ctx: ino %lu, name %s, name_len %u\n", ino, entry->name, entry->name_len);
+		err = aeon_get_inode_address(sb, ino, &pi_addr, entry);
+		if (err) {
+		      aeon_dbg("%s: get child inode %u address failed %d\n",
+		                      __func__, ino, err);
+		      ctx->pos = READDIR_END;
+		      return err;
+		}
+		child_pi = (struct aeon_inode *)pi_addr;
 		if (!dir_emit(ctx, entry->name, entry->name_len,
-			      ino, 0755)) {
+			      ino, le16_to_cpu(child_pi->i_mode))) {
 			aeon_dbg("%s: pos %lu\n", __func__, pos);
 			return 0;
 		}
@@ -548,5 +546,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 }
 
 const struct file_operations aeon_dir_operations = {
-	.iterate = aeon_readdir,
+	.llseek		= generic_file_llseek,
+	.read		= generic_read_dir,
+	.iterate	= aeon_readdir,
 };

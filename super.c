@@ -393,7 +393,7 @@ static void aeon_fill_region_table(struct super_block *sb, int cpu)
 
 		art->allocated = 0;
 		art->freed = 0;
-		art->num_allocated_pages = le32_to_cpu(1);
+		art->i_num_allocated_pages = le32_to_cpu(1);
 		art->i_range_high = le32_to_cpu(range_high);
 		art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
 	} else {

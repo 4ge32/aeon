@@ -81,7 +81,7 @@ struct aeon_inode {
 struct aeon_region_table {
 	__le64 allocated;
 	__le64 freed;
-	__le32 num_allocated_pages;
+	__le32 i_num_allocated_pages;
 	__le32 i_range_high;
 	__le32 b_range_low;
 };
@@ -142,10 +142,10 @@ struct aeon_dentry {
 	__le32  global_offset;
 	/*  8 bytes */
 	__le32	ino;			/* inode no pointed to by this entry */
+	__le64	i_blocknr;		/* related block that holds inode */
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
 	/* 96 bytes */
-	char    pad2[64];
 } __attribute((__packed__));
 
 /*
