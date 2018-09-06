@@ -288,6 +288,24 @@ test-remove-3 ()
   clean
 }
 
+test-remove-4 ()
+{
+  init
+
+  touch $DIR/hello
+  touch $TMP/hello
+  touch $DIR/world
+  touch $TMP/world
+  rm $DIR/hello
+  rm $TMP/hello
+  touch $DIR/uber
+  touch $TMP/uber
+  diff <(ls -l $DIR) <(ls -l $TMP)
+  res=$?
+
+  clean
+}
+
 test-link-1 ()
 {
   init

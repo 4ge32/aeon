@@ -177,7 +177,8 @@ static int stat_den_show(struct seq_file *s, void *v)
 	mutex_lock(&aeon_stat_mutex);
 
 	seq_printf(s, "dentries %u\n\n", num_entry - 1);
-	seq_printf(s, "  %8s : %8s : %8s : %8s : %8s\n", "internal", "global", "blocknr", "ino", "name");
+	seq_printf(s, "  %8s : %8s : %8s : %8s : %8s\n",
+		   "internal", "global", "blocknr", "ino", "name");
 
 	while (num_entry > 2) {
 		if (internal == 8) {
@@ -190,12 +191,14 @@ static int stat_den_show(struct seq_file *s, void *v)
 					   (blocknr << AEON_SHIFT) +
 					   (internal << AEON_D_SHIFT));
 		if (!de->valid) {
-			seq_printf(s, "X %8u : %8u : %8lu : %8u : %8s\n", internal, global, blocknr, le32_to_cpu(de->ino), de->name);
+			seq_printf(s, "X %8u : %8u : %8lu : %8u : %8s\n",
+				   internal, global, blocknr, le32_to_cpu(de->ino), de->name);
 			internal++;
 			continue;
 		}
 
-		seq_printf(s, "O %8u : %8u : %8lu : %8u : %8s\n", internal, global, blocknr, le32_to_cpu(de->ino), de->name);
+		seq_printf(s, "O %8u : %8u : %8lu : %8u : %8s\n",
+			   internal, global, blocknr, le32_to_cpu(de->ino), de->name);
 
 		num_entry--;
 		internal++;

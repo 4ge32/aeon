@@ -340,7 +340,6 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
-	struct aeon_dentry_info *de_info;
 	struct aeon_dentry *new_direntry = NULL;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
@@ -361,19 +360,18 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 			goto out;
 	}
 
-	de_info = sih->de_info;
+	mutex_lock(&sih->de_info->dentry_mutex);
 
-	mutex_lock(&de_info->dentry_mutex);
-
-	err = aeon_get_dentry_block(sb, de_info, &new_direntry);
+	err = aeon_get_dentry_block(sb, sih->de_info, &new_direntry);
 	if (err) {
-		mutex_unlock(&de_info->dentry_mutex);
+		mutex_unlock(&sih->de_info->dentry_mutex);
 		goto out;
 	}
 
 	aeon_fill_dentry_info(new_direntry, ino, i_blocknr, name, namelen);
+	dentry->d_fsdata = (void *)new_direntry;
 
-	mutex_unlock(&de_info->dentry_mutex);
+	mutex_unlock(&sih->de_info->dentry_mutex);
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);
 	if (err)

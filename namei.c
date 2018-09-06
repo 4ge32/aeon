@@ -1,5 +1,6 @@
 #include <linux/fs.h>
 #include <linux/pagemap.h>
+#include <linux/slab.h>
 
 #include "aeon.h"
 
@@ -116,11 +117,9 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	if (!pidir)
 		goto out;
 
-	if (sih->de_info) {
-		struct aeon_dentry_info *de_info;
-
-		de_info = sih->de_info;
-		remove_entry = de_info->de;
+	if (dentry->d_fsdata) {
+		remove_entry = (struct aeon_dentry *)dentry->d_fsdata;
+		dentry->d_fsdata = NULL;
 	} else {
 		struct qstr *name = &dentry->d_name;
 		remove_entry = aeon_find_dentry(sb, NULL, dir,
@@ -249,11 +248,9 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!pi)
 		goto out;
 
-	if (sih->de_info) {
-		struct aeon_dentry_info *de_info;
-
-		de_info = sih->de_info;
-		remove_entry = de_info->de;
+	if (dentry->d_fsdata) {
+		remove_entry = (struct aeon_dentry *)dentry->d_fsdata;
+		dentry->d_fsdata = NULL;
 	} else {
 		struct qstr *name = &dentry->d_name;
 
@@ -297,9 +294,12 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct qstr *new_name = &new_dentry->d_name;
 	int err;
 
-
-	old_de = aeon_find_dentry(sb, pi, old_dir,
-				  old_name->name, old_name->len);
+	if (old_dentry->d_fsdata) {
+		old_de = (struct aeon_dentry *)old_dentry->d_fsdata;
+		old_dentry->d_fsdata = NULL;
+	} else
+		old_de = aeon_find_dentry(sb, pi, old_dir,
+					  old_name->name, old_name->len);
 	if (old_de == NULL) {
 		err = -ENOENT;
 		goto out_dir;
