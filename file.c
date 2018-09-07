@@ -8,7 +8,6 @@
 
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 {
-	//aeon_dbgv("%s\n", __func__);
 	return generic_file_llseek(file, offset, origin);
 }
 
@@ -20,6 +19,7 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	if(!iov_iter_count(to))
 		return 0;
 
+	aeon_dbg("READ_ITER\n");
 	inode_lock_shared(inode);
 	ret = dax_iomap_rw(iocb, to, &aeon_iomap_ops);
 	inode_unlock_shared(inode);
@@ -150,16 +150,16 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	unsigned int blkbits = inode->i_blkbits;
 	unsigned long first_block = offset >> blkbits;
 	unsigned long max_blocks = (length + (1 << blkbits) - 1) >> blkbits;
-	//unsigned long head_addr = (unsigned long)sbi->virt_addr;
 	bool new = false, boundary = false;
 	u32 bno = 0;
 	int ret;
 
-	ret = aeon_dax_get_blocks(inode, first_block, max_blocks, &bno, &new,
-				  &boundary, flags & IOMAP_WRITE);
-
+	aeon_dbg("iomap start\n");
+	ret = aeon_dax_get_blocks(inode, first_block, max_blocks,
+				  &bno, &new, &boundary, flags & IOMAP_WRITE);
 	if (ret < 0)
 		return ret;
+
 
 	iomap->flags = 0;
 	iomap->bdev = inode->i_sb->s_bdev;
@@ -180,8 +180,10 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	if (new)
 		iomap->flags |= IOMAP_F_NEW;
 
-	//aeon_dbgv("%s: FINISH, head addr - 0x%lx first_block - 0x%lx ret - 0x%x addr - 0x%llx length - 0x%llx\n", __func__, head_addr, first_block, ret, iomap->addr, iomap->length);
-	//aeon_dbgv("0x%llx\n", (u64)bno);
+	aeon_dbg("%s: FINISH, head addr  first_block - 0x%lx ret - 0x%x addr - 0x%llx length - 0x%llx\n", __func__, first_block, ret, iomap->addr, iomap->length);
+	aeon_dbg("0x%llx\n", (u64)bno);
+	aeon_dbg("iomap finish\n");
+	aeon_dbg("-----------------------------------------------------------------------\n");
 	return 0;
 }
 
