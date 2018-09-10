@@ -451,6 +451,8 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_dentry) > AEON_DENTRY_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_region_table) > AEON_INODE_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_extent_header) > AEON_EXTENT_HEADER_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_extent) > AEON_EXTENT_SIZE);
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)

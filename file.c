@@ -154,7 +154,7 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	u32 bno = 0;
 	int ret;
 
-	aeon_dbg("iomap start\n");
+	//aeon_dbg("iomap start\n");
 	ret = aeon_dax_get_blocks(inode, first_block, max_blocks,
 				  &bno, &new, &boundary, flags & IOMAP_WRITE);
 	if (ret < 0)
@@ -180,10 +180,10 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	if (new)
 		iomap->flags |= IOMAP_F_NEW;
 
-	aeon_dbg("%s: FINISH, head addr  first_block - 0x%lx ret - 0x%x addr - 0x%llx length - 0x%llx\n", __func__, first_block, ret, iomap->addr, iomap->length);
-	aeon_dbg("0x%llx\n", (u64)bno);
-	aeon_dbg("iomap finish\n");
-	aeon_dbg("-----------------------------------------------------------------------\n");
+	//aeon_dbg("%s: FINISH, head addr  first_block - 0x%lx ret - 0x%x addr - 0x%llx length - 0x%llx\n", __func__, first_block, ret, iomap->addr, iomap->length);
+	//aeon_dbg("0x%llx\n", (u64)bno);
+	//aeon_dbg("iomap finish\n");
+	//aeon_dbg("-----------------------------------------------------------------------\n");
 	return 0;
 }
 

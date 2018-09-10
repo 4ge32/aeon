@@ -151,6 +151,7 @@ struct aeon_dentry {
 /*
  * extent tree's header referred from inode
  */
+#define AEON_EXTENT_HEADER_SIZE 32
 struct aeon_extent_header {
 	__le16  eh_entries;
 	__le16  eh_max;
@@ -159,6 +160,7 @@ struct aeon_extent_header {
 	__le32  eh_iblock;
 } __attribute((__packed__));
 
+#define AEON_EXTENT_SIZE 32
 struct aeon_extent {
 	__le64  ex_block;
 	__le16  ex_length;

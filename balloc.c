@@ -421,7 +421,6 @@ static int aeon_find_data_blocks(struct super_block *sb,
 				 unsigned long *bno, int *num_blocks)
 {
 	struct aeon_extent_header *aeh;
-	struct aeon_extent *ae;
 
 	if (pi->i_block == 0)
 		return 0;
@@ -431,10 +430,10 @@ static int aeon_find_data_blocks(struct super_block *sb,
 	if (aeh->eh_entries == 0)
 		return 0;
 
-	ae = AEON_EXTENT(sb, pi);
+	//ae = AEON_EXTENT(sb, pi);
 
-	*bno = le64_to_cpu(ae->ex_block);
-	*num_blocks = le16_to_cpu(ae->ex_length);
+	//*bno = le64_to_cpu(ae->ex_block);
+	//*num_blocks = le16_to_cpu(ae->ex_length);
 
 	return 1;
 }
@@ -469,18 +468,6 @@ static u32 _search_extent(struct super_block *sb,
 	return le64_to_cpu(ae->ex_block);
 }
 
-static u32 true_search_extent(struct super_block *sb,
-			 struct aeon_inode *pi, unsigned long iblock)
-{
-	return _search_extent(sb, pi, iblock, true);
-}
-
-static u32 false_search_extent(struct super_block *sb,
-			 struct aeon_inode *pi, unsigned long iblock)
-{
-	return _search_extent(sb, pi, iblock, false);
-}
-
 static u32 search_extent(struct super_block *sb,
 			 struct aeon_inode *pi, unsigned long iblock)
 {
@@ -491,27 +478,21 @@ static struct aeon_extent *__search_extent(struct super_block *sb,
 					   struct aeon_inode *pi, unsigned long iblock)
 {
 	struct aeon_extent_header *aeh;
-	struct aeon_extent *ae;
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long block;
-	int i;
+	u64 addr;
 
 	aeh = AEON_EXTENT_HEADER(sb, pi);
-	ae = AEON_EXTENT(sb, pi);
 
 	//aeon_dbg("%s: %d\n", __func__, le16_to_cpu(aeh->eh_entries));
 	//if (le16_to_cpu(aeh->eh_entries) < iblock)
 	//	return NULL;
 
 	//aeon_dbg("%s: %lu\n", __func__, iblock);
-	for (i = 1; i < le16_to_cpu(aeh->eh_entries); i++) {
-		block = le64_to_cpu(ae->next_block);
+	addr = (u64)sbi->virt_addr
+		+ (le64_to_cpu(pi->i_block) << AEON_SHIFT)
+		+ (1 << 5);
 
-		//aeon_dbg("%s: 0x%lx\n", __func__, block);
-		ae = (struct aeon_extent *)((block << 12) + sbi->virt_addr);
-	}
-
-	return ae;
+	return (struct aeon_extent *)addr;
 }
 
 static void aeon_init_extent_header(struct aeon_extent_header *aeh)
@@ -521,6 +502,20 @@ static void aeon_init_extent_header(struct aeon_extent_header *aeh)
 	aeh->eh_depth = 0;
 	aeh->eh_curr_block = 0;
 	aeh->eh_iblock = 0;
+}
+
+static struct aeon_extent *aeon_allocate_extent(struct aeon_sb_info *sbi,
+						    struct aeon_inode *pi)
+{
+	struct aeon_extent_header *aeh = AEON_EXTENT_HEADER(sbi->sb, pi);
+	int allocated = le16_to_cpu(aeh->eh_entries) + 1;
+	u64 addr;
+
+	addr = (u64)sbi->virt_addr + (le64_to_cpu(pi->i_block) << AEON_SHIFT)
+					+ (allocated << 5);
+	aeh->eh_entries++;
+
+	return (struct aeon_extent *)addr;
 }
 
 /**
@@ -540,15 +535,13 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh;
 	struct aeon_extent *ae;
-	struct aeon_extent *new_ae;
 	unsigned long d_blocknr = 0;
 	unsigned long e_blocknr = 0;
-	unsigned long new_e_blocknr = 0;
 	unsigned long new_d_blocknr = 0;
 	int num_blocks = 0;
 	int allocated;
 	int found;
-	int length;
+	int length = 0;
 
 	if (!pi)
 		return -ENOENT;
@@ -589,45 +582,20 @@ create:
 	if (le32_to_cpu(aeh->eh_iblock) == iblock && iblock != 0)
 		return num_blocks;
 
-	allocated = aeon_new_blocks(sb, &new_e_blocknr, 1, 0, ANY_CPU);
-	if (!pi->i_blocks) {
-		pi->i_blocks = new_e_blocknr;
-		ae = AEON_EXTENT(sb, pi);
-		ae->next_block = 0;
-
-		allocated = aeon_new_data_blocks(sb, sih, &new_d_blocknr,
-						 iblock, max_blocks, ANY_CPU);
-		aeon_dbg("%s: IF allocated - %d, blocknr - %lu, max_blocks - %lu\n",
-			 __func__, allocated, new_d_blocknr, max_blocks);
-		ae->ex_length = allocated;
-		ae->ex_block = new_d_blocknr;
-		aeh->eh_curr_block = new_d_blocknr;
-		aeh->eh_iblock = cpu_to_le32(iblock);
-	} else {
-		new_ae = (struct aeon_extent *)((new_e_blocknr << 12) + sbi->virt_addr);
-		ae = AEON_EXTENT(sb, pi);
-		//walk_extent(ae);
-		while (ae->next_block != 0) {
-			ae = (struct aeon_extent *)((le64_to_cpu(ae->next_block
-						<< 12)) + sbi->virt_addr);
-		}
-		ae->next_block = new_e_blocknr;
-
-		allocated = aeon_new_data_blocks(sb, sih, &new_d_blocknr, iblock, num_blocks, ANY_CPU);
-		aeon_dbg("%s: ELSE allocated - %d, blocknr - %lu, max_blocks - %lu\n", __func__, allocated, new_d_blocknr, max_blocks);
-		new_ae->ex_length = allocated;
-		new_ae->ex_block = new_d_blocknr;
-		new_ae->next_block = 0;
-
-		aeh->eh_curr_block = new_d_blocknr;
-		aeh->eh_iblock = cpu_to_le32(iblock);
-	}
+	ae = aeon_allocate_extent(sbi, pi);
+	allocated = aeon_new_data_blocks(sb, sih, &new_d_blocknr,
+					 iblock, max_blocks, ANY_CPU);
+	//aeon_dbg("%s: allocated - %d, blocknr - %lu, max_blocks - %lu\n",
+	//	 __func__, allocated, new_d_blocknr, max_blocks);
+	ae->ex_length = allocated;
+	ae->ex_block = new_d_blocknr;
+	aeh->eh_curr_block = new_d_blocknr;
+	aeh->eh_iblock = cpu_to_le32(iblock);
 
 	*new = true;
 	*bno = new_d_blocknr;
 	aeh->eh_entries++;
 
-	aeon_dbg("FINISH\n");
 	return allocated;
 }
 
