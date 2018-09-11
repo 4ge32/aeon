@@ -535,6 +535,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh;
 	struct aeon_extent *ae;
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	unsigned long d_blocknr = 0;
 	unsigned long e_blocknr = 0;
 	unsigned long new_d_blocknr = 0;
@@ -542,6 +543,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	int allocated;
 	int found;
 	int length = 0;
+	int map_id;
 
 	if (!pi)
 		return -ENOENT;
@@ -572,7 +574,9 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 
 create:
 	if (!pi->i_block) {
-		allocated = aeon_new_blocks(sb, &e_blocknr, 1, 0, ANY_CPU);
+		map_id = aeon_sb->s_map_id;
+		aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
+		allocated = aeon_new_blocks(sb, &e_blocknr, 1, 0, map_id);
 		pi->i_block = cpu_to_le64(e_blocknr);
 		aeh = AEON_EXTENT_HEADER(sb, pi);
 		aeon_init_extent_header(aeh);
@@ -583,8 +587,11 @@ create:
 		return num_blocks;
 
 	ae = aeon_allocate_extent(sbi, pi);
+
+	map_id = aeon_sb->s_map_id;
+	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
 	allocated = aeon_new_data_blocks(sb, sih, &new_d_blocknr,
-					 iblock, max_blocks, ANY_CPU);
+					 iblock, max_blocks, map_id);
 	//aeon_dbg("%s: allocated - %d, blocknr - %lu, max_blocks - %lu\n",
 	//	 __func__, allocated, new_d_blocknr, max_blocks);
 	ae->ex_length = allocated;
@@ -740,28 +747,6 @@ static void imem_cache_create(struct aeon_sb_info *sbi,
 
 		ino += ino_off;
 	}
-}
-
-u64 search_imem_cache(struct aeon_sb_info *sbi,
-		      struct inode_map *inode_map, ino_t ino)
-{
-	struct imem_cache *im;
-	u64 addr;
-
-	list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
-		if (im->ino == ino)
-			goto found;
-	}
-
-	return 0;
-
-found:
-	addr = im->addr;
-	list_del(&im->imem_list);
-	if (list_empty(&inode_map->im->imem_list) || im->independent == 1)
-		kfree(im->head);
-
-	return addr;
 }
 
 static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,

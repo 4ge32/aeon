@@ -263,6 +263,28 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid,
 	return 0;
 }
 
+static u64 search_imem_cache(struct aeon_sb_info *sbi,
+			     struct inode_map *inode_map, ino_t ino)
+{
+	struct imem_cache *im;
+	u64 addr;
+
+	list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
+		if (im->ino == ino)
+			goto found;
+	}
+
+	return 0;
+
+found:
+	addr = im->addr;
+	list_del(&im->imem_list);
+	if (list_empty(&inode_map->im->imem_list) || im->independent == 1)
+		kfree(im->head);
+
+	return addr;
+}
+
 static int aeon_get_new_inode_address(struct super_block *sb, u32 free_ino,
 				      u64 *pi_addr, u64 *i_blocknr, int cpuid,
 				      struct inode_map *inode_map)

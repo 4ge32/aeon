@@ -19,7 +19,6 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	if(!iov_iter_count(to))
 		return 0;
 
-	aeon_dbg("READ_ITER\n");
 	inode_lock_shared(inode);
 	ret = dax_iomap_rw(iocb, to, &aeon_iomap_ops);
 	inode_unlock_shared(inode);

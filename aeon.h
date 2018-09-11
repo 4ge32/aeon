@@ -101,6 +101,7 @@ struct aeon_sb_info {
 	struct mutex	s_lock;	/* protects the SB's buffer-head */
 
 	int cpus;
+	int trees;
 	//struct proc_dir_entry *s_proc;
 
 	/* ZEROED page for cache page initialized */
@@ -533,8 +534,6 @@ void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 			unsigned long max_blocks, u32 *bno, bool *new,
 			bool *boundary, int create);
-u64 search_imem_cache(struct aeon_sb_info *sbi,
-		      struct inode_map *inode_map, ino_t ino);
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 start_ino);
 void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb,
