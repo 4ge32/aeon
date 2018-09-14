@@ -531,6 +531,9 @@ int aeon_insert_range_node(struct rb_root *tree,
 int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 			 enum node_type type, struct aeon_range_node **ret_node);
 void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree);
+int aeon_new_data_blocks(struct super_block *sb,
+	struct aeon_inode_info_header *sih, unsigned long *blocknr,
+	unsigned long start_blk, unsigned int num, int cpu);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 			unsigned long max_blocks, u32 *bno, bool *new,
 			bool *boundary, int create);

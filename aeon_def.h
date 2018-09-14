@@ -6,13 +6,25 @@
 
 #define AEON_MAGIC 0xEFF10
 
-#define AEON_I_SHIFT            7
+/* manual */
+#define AEON_I_SHIFT            8
+#define AEON_PAGES_FOR_INODE    5
+#define AEON_PAGES_FOR_DENTRY   5
+
+/* auto */
 #define AEON_INODE_SIZE         (1 << AEON_I_SHIFT)
 #define AEON_SB_SIZE            512
 #define AEON_SHIFT              12
 #define AEON_DEF_BLOCK_SIZE_4K  (1 << AEON_SHIFT)
-#define AEON_I_NUM_PER_PAGE     (AEON_DEF_BLOCK_SIZE_4K / AEON_INODE_SIZE)
+#define AEON_I_NUM_PER_PAGE     ((AEON_DEF_BLOCK_SIZE_4K / AEON_INODE_SIZE) * \
+							AEON_PAGES_FOR_INODE)
 #define AEON_NAME_LEN		128
+#define AEON_DENTRY_SIZE        256
+#define AEON_D_SHIFT            8
+#define AEON_INTERNAL_ENTRY     (AEON_D_SHIFT * AEON_PAGES_FOR_DENTRY)
+#define MAX_ENTRY               508
+#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + \
+		   ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
 
 #define AEON_ROOT_INO		(1)
 #define AEON_INODE_START        (4)
@@ -33,6 +45,26 @@
 
 /* AEON supported data blocks */
 #define AEON_BLOCK_TYPE_4K     0
+
+/*
+ * extent tree's header referred from inode
+ */
+#define AEON_EXTENT_HEADER_SIZE 32
+struct aeon_extent_header {
+	__le16  eh_entries;
+	__le16  eh_max;
+	__le16  eh_depth;
+	__le64  eh_curr_block;
+	__le32  eh_iblock;
+	__le32  eh_blocks;
+} __attribute((__packed__));
+
+#define AEON_EXTENT_SIZE 32
+struct aeon_extent {
+	__le64  ex_block;
+	__le16  ex_length;
+	__le64  next_block;
+} __attribute((__packed__));
 
 /*
  * Structure of an inode in AEON.
@@ -74,6 +106,9 @@ struct aeon_inode {
 		__le32 rdev;	 /* major/minor # */
 	} dev;			 /* device inode */
 
+	struct aeon_extent_header aeh;
+	struct aeon_extent ae[4];
+
 	__le32	csum;            /* CRC32 checksum */
 	char    pad[4 * 4 + 3];
 } __attribute((__packed__));
@@ -84,6 +119,7 @@ struct aeon_region_table {
 	__le32 i_num_allocated_pages;
 	__le32 i_range_high;
 	__le32 b_range_low;
+	__le16 i_allocated;
 };
 
 struct aeon_super_block {
@@ -108,12 +144,6 @@ struct aeon_super_block {
 	__le64		s_num_free_blocks;
 } __attribute((__packed__));
 
-#define AEON_DENTRY_SIZE        256
-#define AEON_D_SHIFT            8
-#define AEON_INTERNAL_ENTRY     AEON_D_SHIFT
-#define MAX_ENTRY               508
-#define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + \
-		   ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
 /* TODO
  * scale a number of dentries in the future
  */
@@ -146,25 +176,6 @@ struct aeon_dentry {
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
 	/* 96 bytes */
-} __attribute((__packed__));
-
-/*
- * extent tree's header referred from inode
- */
-#define AEON_EXTENT_HEADER_SIZE 32
-struct aeon_extent_header {
-	__le16  eh_entries;
-	__le16  eh_max;
-	__le16  eh_depth;
-	__le64  eh_curr_block;
-	__le32  eh_iblock;
-} __attribute((__packed__));
-
-#define AEON_EXTENT_SIZE 32
-struct aeon_extent {
-	__le64  ex_block;
-	__le16  ex_length;
-	__le64  next_block;
 } __attribute((__packed__));
 
 #endif

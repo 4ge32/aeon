@@ -48,7 +48,7 @@ remove ()
 
 create ()
 {
-  N=4
+  N=2
   for num in `seq 1 $N`
   do
     res=1
@@ -164,7 +164,7 @@ case "$1" in
     ;;
   all)
     mmap
-    #write
+    write
     attr
     hard_and_sym_link
     remove

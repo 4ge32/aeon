@@ -360,8 +360,6 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 			goto out;
 	}
 
-	mutex_lock(&sih->de_info->dentry_mutex);
-
 	err = aeon_get_dentry_block(sb, sih->de_info, &new_direntry);
 	if (err) {
 		mutex_unlock(&sih->de_info->dentry_mutex);
@@ -370,8 +368,6 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 
 	aeon_fill_dentry_info(new_direntry, ino, i_blocknr, name, namelen);
 	dentry->d_fsdata = (void *)new_direntry;
-
-	mutex_unlock(&sih->de_info->dentry_mutex);
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);
 	if (err)
@@ -412,13 +408,9 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	if (ret)
 		goto out;
 
-	mutex_lock(&de_info->dentry_mutex);
-
 	adi->internal = le64_to_cpu(de->internal_offset);
 	adi->global = le32_to_cpu(de->global_offset);
 	list_add(&adi->invalid_list, &de_info->di->invalid_list);
-
-	mutex_unlock(&de_info->dentry_mutex);
 
 	de_map->num_dentries--;
 	de->valid = 0;

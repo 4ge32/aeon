@@ -386,16 +386,15 @@ static void aeon_fill_region_table(struct super_block *sb, int cpu)
 		unsigned long range_high;
 		unsigned long long inode_start;
 
-		inode_start = AEON_INODE_START;
-		range_high = (inode_start - 2) / sbi->cpus;
-		if (inode_start % sbi->cpus)
-			range_high++;
+		inode_start = sbi->cpus;
+		range_high = 0;
 
 		art->allocated = 0;
 		art->freed = 0;
 		art->i_num_allocated_pages = le32_to_cpu(1);
 		art->i_range_high = le32_to_cpu(range_high);
 		art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
+		art->i_allocated = 0;
 	} else {
 		//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
 		free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
@@ -421,7 +420,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	aeon_init_blockmap(sb);
 
 	for (i = 0; i < sbi->cpus; i++) {
-		int inode_start = AEON_INODE_START;
+		int inode_start = sbi->cpus;
 
 		aeon_init_new_inode_block(sb, i, inode_start + i);
 		aeon_fill_region_table(sb, i);
