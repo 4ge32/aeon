@@ -159,6 +159,8 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->aeh.eh_curr_block = 0;
 	pi->aeh.eh_iblock = 0;
 
+	pi->csum = SEED;
+
 	pi->valid = 1;
 }
 
@@ -281,6 +283,14 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 	unsigned long internal_ino;
 	int cpuid;
 	u64 addr;
+
+	if (inode_map->im) {
+		struct imem_cache *im;
+		list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
+			if (ino == im->ino)
+				return im->addr;
+		}
+	}
 
 	cpuid = ino % sbi->cpus;
 	if (cpuid >= sbi->cpus)

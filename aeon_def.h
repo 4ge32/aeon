@@ -10,6 +10,7 @@
 #define AEON_I_SHIFT            8
 #define AEON_PAGES_FOR_INODE    5
 #define AEON_PAGES_FOR_DENTRY   5
+#define SEED			131
 
 /* auto */
 #define AEON_INODE_SIZE         (1 << AEON_I_SHIFT)
@@ -125,7 +126,7 @@ struct aeon_region_table {
 struct aeon_super_block {
 	/* static fields. they never change after file system creation.
 	 * checksum only validates up to s_start_dynamic field below */
-	__le16		s_sum;              /* checksum of this sb */
+	__le32		s_csum;              /* checksum of this sb */
 	__le16          s_map_id;
 	__le16          s_cpus;
 	__le32		s_magic;            /* magic signature */

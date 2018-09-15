@@ -575,6 +575,7 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		inode_map->curr_i_blocknr = blocknr;
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 		art->i_allocated = 0;
+		inode_map->head_ino = ino;
 	} else
 		blocknr = inode_map->curr_i_blocknr;
 
@@ -631,6 +632,7 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 					(u64)sbi->virt_addr);
 	inode_map->i_table_addr = inode_map->virt_addr;
 	inode_map->curr_i_blocknr = blocknr;
+	inode_map->head_ino = ino;
 	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 
 }

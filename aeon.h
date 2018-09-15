@@ -30,7 +30,7 @@ extern unsigned int aeon_dbgmask;
 extern int wprotect;
 
 struct imem_cache {
-	ino_t	ino;
+	u32	ino;
 	u64	addr;
 	int	independent;
 	struct	imem_cache *head;
@@ -57,6 +57,7 @@ struct inode_map {
 	void			*virt_addr;
 	void			*i_table_addr;
 	void			*i_block_addr;
+	u32			head_ino;
 };
 
 /*
