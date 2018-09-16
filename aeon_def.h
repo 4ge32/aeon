@@ -121,6 +121,7 @@ struct aeon_region_table {
 	__le32 i_range_high;
 	__le32 b_range_low;
 	__le16 i_allocated;
+	__le32 i_head_ino;
 };
 
 struct aeon_super_block {
@@ -154,6 +155,7 @@ struct aeon_dentry_map {
 	__le64  num_dentries;
 	__le64  num_latest_dentry;
 	__le64  num_internal_dentries;
+	__le32  csum;
 }__attribute((__packed__));
 
 struct aeon_dentry {

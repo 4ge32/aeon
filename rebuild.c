@@ -58,8 +58,12 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	adi = kzalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
 	de_info->di = adi;
 	de_info->de_map = de_map;
+
+	mutex_lock(&de_info->dentry_mutex);
+
 	INIT_LIST_HEAD(&de_info->di->invalid_list);
 	sih->de_info = de_info;
+
 	while (num_entry > 2) {
 		if (internal == 8) {
 			global++;
@@ -73,6 +77,10 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 					   (internal << AEON_D_SHIFT));
 
 		if (!d->valid) {
+			adi = kmalloc(sizeof(struct aeon_dentry_invalid),
+				      GFP_KERNEL);
+			if (!adi)
+				return -ENOMEM;
 			adi->global = le32_to_cpu(d->global_offset);
 			adi->internal = le32_to_cpu(d->internal_offset);
 			list_add(&adi->invalid_list, &de_info->di->invalid_list);
@@ -85,6 +93,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 		num_entry--;
 	}
 
+	mutex_unlock(&de_info->dentry_mutex);
 
 	return 0;
 }
@@ -93,13 +102,14 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 			       struct inode_map *inode_map,
 			       unsigned long blocknr, u32 start_ino,
 			       unsigned allocated, unsigned long *next_blocknr,
-			       int space)
+			       int space, int cpu_id)
 {
 	struct aeon_inode *pi;
 	struct imem_cache *im;
 	struct imem_cache *init;
 	struct i_valid_list *ivl;
 	struct i_valid_list *ivl_init;
+	struct aeon_region_table *art;
 	u64 virt_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 	u32 ino = start_ino;
 	u32 ino_off = sbi->cpus;
@@ -120,6 +130,8 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 		INIT_LIST_HEAD(&inode_map->ivl->i_valid_list);
 	}
 
+	art = AEON_R_TABLE(inode_map);
+
 	for (i = space; i < AEON_I_NUM_PER_PAGE; i++) {
 		u64 addr;
 
@@ -130,11 +142,16 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 			inode_map->curr_i_blocknr = *next_blocknr;
 		}
 		if (pi->valid) {
+			/* Recovering created object */
 			ivl = kmalloc(sizeof(struct i_valid_list), GFP_KERNEL);
 			ivl->ino = ino;
 			ivl->addr = addr;
 			list_add_tail(&ivl->i_valid_list, &inode_map->ivl->i_valid_list);
 		} else {
+			/* Recovering space that had benn used */
+			u32 i = le32_to_cpu(art->i_range_high);
+			if (ino > (i * sbi->cpus + cpu_id))
+				goto next;
 			im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 			im->ino = ino;
 			im->addr = addr;
@@ -142,19 +159,20 @@ static void imem_cache_rebuild(struct aeon_sb_info *sbi,
 			im->independent = 1;
 			list_add_tail(&im->imem_list, &inode_map->im->imem_list);
 		}
+next:
 		ino += ino_off;
 	}
 }
 
-void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
+void aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct inode_map *inode_map = &sbi->inode_maps[cpu];
+	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
 	struct aeon_region_table *art;
 	struct free_list *free_list;
 	unsigned long offset;
 	unsigned long blocknr = 0;
-	int ino = AEON_INODE_START + cpu;
+	int ino = AEON_INODE_START + cpu_id;
 	int i;
 
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT)
@@ -162,9 +180,9 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 
 	mutex_lock(&inode_map->inode_table_mutex);
 
-	free_list = aeon_get_free_list(sb, cpu);
+	free_list = aeon_get_free_list(sb, cpu_id);
 
-	if (cpu == 0)
+	if (cpu_id == 0)
 		offset = 1;
 	else
 		offset = free_list->block_start;
@@ -178,13 +196,13 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu)
 	 * of page and firtst inode (last argument).
 	 */
 	imem_cache_rebuild(sbi, inode_map, offset, ino,
-			   le64_to_cpu(art->allocated), &blocknr, 1);
+			   le64_to_cpu(art->allocated), &blocknr, 1, cpu_id);
 	offset = blocknr;
 	ino = ino + (AEON_I_NUM_PER_PAGE - 1) * 2;
 
 	for (i = 1; i < le32_to_cpu(art->i_num_allocated_pages); i++) {
 		imem_cache_rebuild(sbi, inode_map, offset, ino,
-				   le64_to_cpu(art->allocated), &blocknr, 0);
+				   le64_to_cpu(art->allocated), &blocknr, 0, cpu_id);
 		offset = blocknr;
 		ino = ino + (AEON_I_NUM_PER_PAGE) * 2;
 	}

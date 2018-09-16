@@ -344,6 +344,7 @@ static void aeon_init_super_block(struct super_block *sb, unsigned long size)
 	aeon_sb->s_size = cpu_to_le64(size);
 	aeon_sb->s_blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_sb->s_num_inodes = 1;
+	aeon_sb->s_csum = SEED;
 
 	aeon_memlock_super(sb);
 }
@@ -371,22 +372,22 @@ static void aeon_init_root_inode(struct super_block *sb,
 	aeon_memlock_inode(sb, root_i);
 }
 
-static void aeon_fill_region_table(struct super_block *sb, int cpu)
+static void aeon_fill_region_table(struct super_block *sb, int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_region_table *art;
 	struct inode_map *inode_map;
 	struct free_list *free_list;
 
-	inode_map = &sbi->inode_maps[cpu];
-	free_list = aeon_get_free_list(sb, cpu);
+	inode_map = &sbi->inode_maps[cpu_id];
+	free_list = aeon_get_free_list(sb, cpu_id);
 	art = AEON_R_TABLE(inode_map);
 
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
 		unsigned long range_high;
 		unsigned long long inode_start;
 
-		inode_start = sbi->cpus;
+		inode_start = sbi->cpus + cpu_id;
 		range_high = 0;
 
 		art->allocated = 0;
@@ -394,7 +395,8 @@ static void aeon_fill_region_table(struct super_block *sb, int cpu)
 		art->i_num_allocated_pages = le32_to_cpu(1);
 		art->i_range_high = le32_to_cpu(range_high);
 		art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
-		art->i_allocated = 0;
+		art->i_allocated = le32_to_cpu(1);
+		art->i_head_ino = cpu_to_le32(inode_start);
 	} else {
 		//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
 		free_list->first_node->range_low = le32_to_cpu(art->b_range_low);

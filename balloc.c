@@ -564,7 +564,7 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 	unsigned long blocknr = 0;
 	int num_blocks = AEON_PAGES_FOR_INODE;
 
-	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE) {
+	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE + 1) {
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
@@ -575,6 +575,7 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		inode_map->curr_i_blocknr = blocknr;
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 		art->i_allocated = 0;
+		art->i_head_ino = cpu_to_le32(ino);
 		inode_map->head_ino = ino;
 	} else
 		blocknr = inode_map->curr_i_blocknr;
@@ -587,11 +588,11 @@ out:
 	return 0;
 }
 
-void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
+void aeon_init_new_inode_block(struct super_block *sb, int cpu_id, u32 ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
-	struct free_list *free_list = aeon_get_free_list(sb, cpuid);
+	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
+	struct free_list *free_list = aeon_get_free_list(sb, cpu_id);
 	struct rb_root *tree;
 	struct rb_node *temp;
 	struct aeon_range_node *node;
@@ -602,7 +603,7 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 	__le64 *table_blocknr;
 
 	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
-		table_blocknr = (__le64 *)(cpuid * 64 + addr);
+		table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 		blocknr = le64_to_cpu(*table_blocknr);
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) +
 						(u64)sbi->virt_addr);
@@ -623,7 +624,7 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 	free_list->alloc_data_count -= AEON_PAGES_FOR_INODE;
 	free_list->alloc_data_pages += AEON_PAGES_FOR_INODE;
 
-	table_blocknr = (__le64 *)(cpuid * 64 + addr);
+	table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 	*table_blocknr = cpu_to_le64(blocknr);
 
 	spin_unlock(&free_list->s_lock);
@@ -632,7 +633,7 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpuid, ino_t ino)
 					(u64)sbi->virt_addr);
 	inode_map->i_table_addr = inode_map->virt_addr;
 	inode_map->curr_i_blocknr = blocknr;
-	inode_map->head_ino = ino;
+	inode_map->head_ino = ino + cpu_id;
 	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 
 }

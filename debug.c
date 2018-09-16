@@ -125,6 +125,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		u64 addr;
 		u32 ino;
 		int i;
+		int space = 0;
 
 		if (cpu_id == 0)
 			seq_printf(s, "=========== imem cache Info ==========\n");
@@ -132,9 +133,10 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		seq_printf(s, "cpu-id: %d\n", cpu_id);
 		inode_map = &si->sbi->inode_maps[cpu_id];
 		art = AEON_R_TABLE(inode_map);
-		ino = inode_map->head_ino
-			+ le16_to_cpu(art->i_allocated) * si->sbi->cpus;
-
+		if (inode_map->head_ino < si->sbi->cpus * 2)
+			space = 1;
+		ino = inode_map->head_ino + (le16_to_cpu(art->i_allocated) -
+					     space) * si->sbi->cpus + cpu_id;
 		if (inode_map->im) {
 			struct imem_cache *im;
 			int count = 0;

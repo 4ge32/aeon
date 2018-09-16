@@ -1,5 +1,6 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
+#include <linux/crc32.h>
 
 #include "aeon.h"
 
@@ -222,6 +223,7 @@ static int aeon_init_dentry_map(struct super_block *sb,
 	de_map->num_dentries = 0;
 	de_map->num_latest_dentry = 0;
 	de_map->num_internal_dentries = cpu_to_le64(AEON_INTERNAL_ENTRY);
+	de_map->csum = SEED;
 
 	de_info->de_map = de_map;
 	de_info->di = adi;
@@ -252,12 +254,14 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 	direntry->name_len = 2;
 	direntry->ino = ino;
 	direntry->valid = 1;
+	direntry->csum = SEED;
 
 	direntry = (struct aeon_dentry *)(pi_addr + (1 << AEON_D_SHIFT));
 	strncpy(direntry->name, "..\0", 3);
 	direntry->name_len = 3;
 	direntry->ino = pidir->aeon_ino;
 	direntry->valid = 1;
+	direntry->csum = SEED;
 
 	de_map->num_internal_dentries = cpu_to_le64(2);
 	de_map->num_dentries = cpu_to_le64(2);
@@ -314,6 +318,9 @@ static int aeon_get_dentry_block(struct super_block *sb,
 
 	(*direntry)->valid = 1;
 	de_map->num_dentries++;
+	de_map->csum = cpu_to_le32(crc32_le(de_map->csum,
+					    (unsigned char *)de_map,
+					    AEON_DENTRY_SIZE));
 
 	return 0;
 }
@@ -326,11 +333,17 @@ static void aeon_fill_dentry_info(struct aeon_dentry *de, u32 ino,
 	de->i_blocknr = cpu_to_le64(i_blocknr);
 	strscpy(de->name, name, namelen + 1);
 	de->valid = 1;
+	de->csum = cpu_to_le32(crc32_le(de->csum,
+			       (unsigned char *)de,
+			       AEON_DENTRY_SIZE));
 }
 
 static void aeon_release_dentry_block(struct aeon_dentry *de)
 {
 	de->valid = 0;
+	de->csum = cpu_to_le32(crc32_le(de->csum,
+			       (unsigned char *)de,
+			       AEON_DENTRY_SIZE));
 }
 
 int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
@@ -415,6 +428,9 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	de_map->num_dentries--;
 	de->valid = 0;
 	memset(de->name, '\0', de->name_len + 1);
+	de->csum = cpu_to_le32(crc32_le(de->csum,
+			       (unsigned char *)de,
+			       AEON_DENTRY_SIZE));
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 

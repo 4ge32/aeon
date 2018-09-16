@@ -1,4 +1,5 @@
 #include <linux/fs.h>
+#include <linux/crc32.h>
 
 #include "aeon.h"
 
@@ -21,6 +22,9 @@ int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 	blockp[len] = '\0';
 
 	pi->sym_block = cpu_to_le64(blocknr);
+	pi->csum = cpu_to_le32(crc32_le(pi->csum,
+					(unsigned char *)pi,
+					AEON_INODE_SIZE));
 
 	return 0;
 }
