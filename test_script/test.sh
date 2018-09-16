@@ -9,6 +9,41 @@ FAILED ()
 {
   echo -e "\t [FAILED]"
 }
+rename ()
+{
+  N=5
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-rename-$num"
+    test-rename-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
+
+remove ()
+{
+  N=4
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-remove-$num"
+    test-remove-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
 
 create ()
 {
