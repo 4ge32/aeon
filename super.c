@@ -374,34 +374,38 @@ static void aeon_init_root_inode(struct super_block *sb,
 	aeon_memlock_inode(sb, root_i);
 }
 
-static void aeon_fill_region_table(struct super_block *sb, int cpu_id)
+static void aeon_fill_region_table(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_region_table *art;
 	struct inode_map *inode_map;
 	struct free_list *free_list;
+	int cpu_id;
 
-	inode_map = &sbi->inode_maps[cpu_id];
-	free_list = aeon_get_free_list(sb, cpu_id);
-	art = AEON_R_TABLE(inode_map);
+	for (cpu_id = 0; cpu_id < sbi->cpus; cpu_id++) {
 
-	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
-		unsigned long range_high;
-		unsigned long long inode_start;
+		inode_map = &sbi->inode_maps[cpu_id];
+		free_list = aeon_get_free_list(sb, cpu_id);
+		art = AEON_R_TABLE(inode_map);
 
-		inode_start = sbi->cpus + cpu_id;
-		range_high = 0;
+		if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
+			unsigned long range_high;
+			unsigned long long inode_start;
 
-		art->allocated = 0;
-		art->freed = 0;
-		art->i_num_allocated_pages = le32_to_cpu(1);
-		art->i_range_high = le32_to_cpu(range_high);
-		art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
-		art->i_allocated = le32_to_cpu(1);
-		art->i_head_ino = cpu_to_le32(inode_start);
-	} else {
-		//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
-		free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
+			inode_start = sbi->cpus + cpu_id;
+			range_high = 0;
+
+			art->allocated = 0;
+			art->freed = 0;
+			art->i_num_allocated_pages = le32_to_cpu(1);
+			art->i_range_high = le32_to_cpu(range_high);
+			art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
+			art->i_allocated = le32_to_cpu(1);
+			art->i_head_ino = cpu_to_le32(inode_start);
+		} else {
+			//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
+			free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
+		}
 	}
 }
 
@@ -409,7 +413,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *root_i = NULL;
-	int i;
+	int inode_start = sbi->cpus;
 
 	sbi->aeon_sb = aeon_get_super(sb);
 	root_i = aeon_get_inode_by_ino(sb, AEON_ROOT_INO);
@@ -422,14 +426,9 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	}
 
 	aeon_init_blockmap(sb);
-
-	for (i = 0; i < sbi->cpus; i++) {
-		int inode_start = sbi->cpus;
-
-		aeon_init_new_inode_block(sb, i, inode_start + i);
-		aeon_fill_region_table(sb, i);
-		aeon_rebuild_inode_cache(sb, i);
-	}
+	aeon_init_new_inode_block(sb, inode_start);
+	aeon_fill_region_table(sb);
+	aeon_rebuild_inode_cache(sb);
 
 	if (aeon_init_inode_inuse_list(sb) < 0) {
 		aeon_err(sb, "%s is failed\n", __func__, "aeon_init_inuse_list");

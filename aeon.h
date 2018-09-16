@@ -624,7 +624,7 @@ int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 			unsigned long max_blocks, u32 *bno, bool *new,
 			bool *boundary, int create);
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 start_ino);
-void aeon_init_new_inode_block(struct super_block *sb, int cpu_id, u32 ino);
+void aeon_init_new_inode_block(struct super_block *sb, u32 ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_dentry_map_block(struct super_block *sb,
@@ -675,7 +675,7 @@ void aeon_free_invalid_dentry_list(struct super_block *sb,
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 				u64 pi_addr, struct aeon_inode_info_header *sih);
-void aeon_rebuild_inode_cache(struct super_block *sb, int cpu);
+void aeon_rebuild_inode_cache(struct super_block *sb);
 
 /* symlink.c */
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,

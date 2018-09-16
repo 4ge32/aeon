@@ -587,11 +587,11 @@ out:
 	return 0;
 }
 
-void aeon_init_new_inode_block(struct super_block *sb, int cpu_id, u32 ino)
+static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
+					 int cpu_id, u32 ino)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
-	struct free_list *free_list = aeon_get_free_list(sb, cpu_id);
+	struct free_list *free_list = aeon_get_free_list(sbi->sb, cpu_id);
 	struct rb_root *tree;
 	struct rb_node *temp;
 	struct aeon_range_node *node;
@@ -635,6 +635,15 @@ void aeon_init_new_inode_block(struct super_block *sb, int cpu_id, u32 ino)
 	inode_map->head_ino = ino + cpu_id;
 	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 
+}
+
+void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++)
+		do_aeon_init_new_inode_block(sbi, i, ino + i);
 }
 
 // Allocate dentry block.  The offset for the allocated block comes back in

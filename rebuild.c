@@ -178,7 +178,7 @@ next:
 	}
 }
 
-void aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
+static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
@@ -224,4 +224,13 @@ void aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 	mutex_unlock(&inode_map->inode_table_mutex);
 	//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->i_num_allocated_pages));
 	//aeon_dbgv("%s: %llu\n", __func__, le64_to_cpu(art->allocated));
+}
+
+void aeon_rebuild_inode_cache(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++)
+		do_aeon_rebuild_inode_cache(sb, i);
 }
