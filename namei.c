@@ -64,7 +64,7 @@ static struct dentry *aeon_lookup(struct inode *dir,
 
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
 	if (ino) {
-		aeon_dbg("%s: %u %s\n", __func__, ino, dentry->d_name.name);
+		//aeon_dbg("%s: %u %s\n", __func__, ino, dentry->d_name.name);
 		inode = aeon_iget(dir->i_sb, ino);
 		if (inode == ERR_PTR(-ESTALE) || inode == ERR_PTR(-ENOMEM)
 		    || inode == ERR_PTR(-EACCES)) {

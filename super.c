@@ -68,6 +68,8 @@ static void aeon_put_super(struct super_block *sb)
 	kfree(sbi->inode_maps);
 
 	kfree(sbi);
+
+	aeon_dbg("Unmount filesystem\n");
 }
 
 static int aeon_write_inode(struct inode *inode, struct writeback_control *wbc)
@@ -534,6 +536,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	//aeon_dbgv("%s:FINISH\n", __func__);
+	aeon_dbg("Mount filesystem\n");
 
 	return 0;
 

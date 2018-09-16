@@ -65,7 +65,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	sih->de_info = de_info;
 
 	while (num_entry > 2) {
-		if (internal == 8) {
+		if (internal == AEON_INTERNAL_ENTRY) {
 			global++;
 			internal = 0;
 		}
@@ -84,13 +84,13 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 			adi->global = le32_to_cpu(d->global_offset);
 			adi->internal = le32_to_cpu(d->internal_offset);
 			list_add(&adi->invalid_list, &de_info->di->invalid_list);
-			continue;
+			goto next;
 		}
 
 		aeon_insert_dir_tree(sb, sih, d->name, d->name_len, d);
-
-		internal++;
 		num_entry--;
+next:
+		internal++;
 	}
 
 	mutex_unlock(&de_info->dentry_mutex);

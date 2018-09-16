@@ -569,17 +569,16 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
-		art->i_num_allocated_pages++;
+		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) +
 						(u64)sbi->virt_addr);
 		inode_map->curr_i_blocknr = blocknr;
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
-		art->i_allocated = 0;
+		art->i_allocated = 1;
 		art->i_head_ino = cpu_to_le32(ino);
 		inode_map->head_ino = ino;
 	} else
 		blocknr = inode_map->curr_i_blocknr;
-
 
 	return blocknr;
 

@@ -185,6 +185,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 	int num_entry = 0;
 	int global;
 	int internal;
+	int bound;
 
 	seq_printf(s, "========== dentry map ==========\n");
 
@@ -198,6 +199,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	global = 0;
 	internal = 2;
+	bound = AEON_D_SHIFT;
 
 	mutex_lock(&aeon_stat_mutex);
 
@@ -206,7 +208,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 		   "internal", "global", "blocknr", "ino", "name");
 
 	while (num_entry > 2) {
-		if (internal == 8) {
+		if (internal == AEON_INTERNAL_ENTRY) {
 			global++;
 			internal = 0;
 		}

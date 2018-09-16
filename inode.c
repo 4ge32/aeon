@@ -87,13 +87,13 @@ int aeon_get_inode_address(struct super_block *sb,
 	struct aeon_inode *pi;
 	unsigned long i_blocknr = le64_to_cpu(de->i_blocknr);
 	unsigned long internal_ino;
-	int cpuid;
+	int cpu_id;
 
-	cpuid = ino % sbi->cpus;
-	if (cpuid >= sbi->cpus)
-		cpuid -= sbi->cpus;
+	cpu_id = ino % sbi->cpus;
+	if (cpu_id >= sbi->cpus)
+		cpu_id -= sbi->cpus;
 
-	internal_ino = (((ino - cpuid) / sbi->cpus) %
+	internal_ino = (((ino - cpu_id) / sbi->cpus) %
 					AEON_I_NUM_PER_PAGE);
 
 	*pi_addr = (u64)sbi->virt_addr + (i_blocknr << AEON_SHIFT) +
@@ -101,8 +101,9 @@ int aeon_get_inode_address(struct super_block *sb,
 
 	pi = (struct aeon_inode *)(*pi_addr);
 	if (!(ino == le32_to_cpu(pi->aeon_ino))) {
-		aeon_err(sb, "%s: ino %u, pi_ino %u\n", __func__, ino,
-						    le32_to_cpu(pi->aeon_ino));
+		aeon_err(sb, "%s:ino %u, pi_ino %u iblock %lu\n", __func__, ino,
+						    le32_to_cpu(pi->aeon_ino),
+						    i_blocknr);
 		return -EINVAL;
 	}
 
