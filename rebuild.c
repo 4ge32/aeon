@@ -47,6 +47,10 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr +
 					    (blocknr << AEON_SHIFT));
+	if (!aeon_dentry_map_valid(de_map)) {
+		/* TODO: Add recovery handle */
+		aeon_err(sb, "INVALID DENTRY MAP\n");
+	}
 
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	if (num_entry == 2)
@@ -55,7 +59,11 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	global = 0;
 	internal = 2;
 	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
+	if (!de_info)
+		return -ENOMEM;
 	adi = kzalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
+	if (!adi)
+		return -ENOMEM;
 	de_info->di = adi;
 	de_info->de_map = de_map;
 
@@ -75,6 +83,12 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 		d = (struct aeon_dentry *)(sbi->virt_addr +
 					   (d_blocknr << AEON_SHIFT) +
 					   (internal << AEON_D_SHIFT));
+
+		if (!aeon_dentry_valid(d)) {
+			/* TODO: Add recovery handle */
+			aeon_dbg("%s\n", d->name);
+			aeon_err(sb, "INVALID DENTRY\n");
+		}
 
 		if (!d->valid) {
 			adi = kmalloc(sizeof(struct aeon_dentry_invalid),

@@ -1,11 +1,10 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
-#include <linux/crc32.h>
 
 #include "aeon.h"
 
-
 #define IF2DT(sif) (((sif) & S_IFMT) >> 12)
+
 
 int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
@@ -187,7 +186,7 @@ static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 
 	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
 				    head_addr + internal_offset);
-	de->internal_offset = adi->internal;
+	de->internal_offset = cpu_to_le32(adi->internal);
 	de->global_offset = adi->global;
 
 	list_del(&adi->invalid_list);
@@ -307,7 +306,7 @@ static int aeon_get_dentry_block(struct super_block *sb,
 			(*direntry)->global_offset = (de_map->num_latest_dentry - 1);
 		} else {
 			*direntry = aeon_get_internal_dentry(sb, de_map);
-			(*direntry)->internal_offset = de_map->num_internal_dentries;
+			(*direntry)->internal_offset = cpu_to_le32(de_map->num_internal_dentries);
 			(*direntry)->global_offset = de_map->num_latest_dentry;
 
 			de_map->num_internal_dentries++;
@@ -318,14 +317,12 @@ static int aeon_get_dentry_block(struct super_block *sb,
 
 	(*direntry)->valid = 1;
 	de_map->num_dentries++;
-	de_map->csum = cpu_to_le32(crc32_le(de_map->csum,
-					    (unsigned char *)de_map,
-					    AEON_DENTRY_SIZE));
+	aeon_update_dentry_map_csum(de_map);
 
 	return 0;
 }
 
-static void aeon_fill_dentry_info(struct aeon_dentry *de, u32 ino,
+static void aeon_fill_dentry_data(struct aeon_dentry *de, u32 ino,
 				  u64 i_blocknr, const char *name, int namelen)
 {
 	de->name_len = le32_to_cpu(namelen);
@@ -333,17 +330,13 @@ static void aeon_fill_dentry_info(struct aeon_dentry *de, u32 ino,
 	de->i_blocknr = cpu_to_le64(i_blocknr);
 	strscpy(de->name, name, namelen + 1);
 	de->valid = 1;
-	de->csum = cpu_to_le32(crc32_le(de->csum,
-			       (unsigned char *)de,
-			       AEON_DENTRY_SIZE));
+	aeon_update_dentry_csum(de);
 }
 
 static void aeon_release_dentry_block(struct aeon_dentry *de)
 {
 	de->valid = 0;
-	de->csum = cpu_to_le32(crc32_le(de->csum,
-			       (unsigned char *)de,
-			       AEON_DENTRY_SIZE));
+	aeon_update_dentry_csum(de);
 }
 
 int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
@@ -379,7 +372,7 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 		goto out;
 	}
 
-	aeon_fill_dentry_info(new_direntry, ino, i_blocknr, name, namelen);
+	aeon_fill_dentry_data(new_direntry, ino, i_blocknr, name, namelen);
 	dentry->d_fsdata = (void *)new_direntry;
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);
@@ -421,16 +414,14 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	if (ret)
 		goto out;
 
-	adi->internal = le64_to_cpu(de->internal_offset);
+	adi->internal = le32_to_cpu(de->internal_offset);
 	adi->global = le32_to_cpu(de->global_offset);
 	list_add(&adi->invalid_list, &de_info->di->invalid_list);
 
 	de_map->num_dentries--;
 	de->valid = 0;
 	memset(de->name, '\0', de->name_len + 1);
-	de->csum = cpu_to_le32(crc32_le(de->csum,
-			       (unsigned char *)de,
-			       AEON_DENTRY_SIZE));
+	aeon_update_dentry_csum(de);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 

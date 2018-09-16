@@ -453,6 +453,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct aeon_super_block) > AEON_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_dentry) > AEON_DENTRY_SIZE);
+	BUILD_BUG_ON(sizeof(struct aeon_dentry_map) > AEON_DEF_BLOCK_SIZE_4K);
 	BUILD_BUG_ON(sizeof(struct aeon_region_table) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_extent_header) > AEON_EXTENT_HEADER_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_extent) > AEON_EXTENT_SIZE);

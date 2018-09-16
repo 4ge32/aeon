@@ -8,24 +8,30 @@
 
 /* manual */
 #define AEON_I_SHIFT            8
+#define AEON_D_SHIFT            8
 #define AEON_PAGES_FOR_INODE    5
 #define AEON_PAGES_FOR_DENTRY   5
 #define SEED			131
 
 /* auto */
+#define CHECKSUM_SIZE		32
 #define AEON_INODE_SIZE         (1 << AEON_I_SHIFT)
+#define AEON_INODE_CSIZE        ((1 << AEON_I_SHIFT) - CHECKSUM_SIZE)
 #define AEON_SB_SIZE            512
+#define AEON_SB_CSIZE           (512 - CHECKSUM_SIZE)
 #define AEON_SHIFT              12
 #define AEON_DEF_BLOCK_SIZE_4K  (1 << AEON_SHIFT)
 #define AEON_I_NUM_PER_PAGE     ((AEON_DEF_BLOCK_SIZE_4K / AEON_INODE_SIZE) * \
 							AEON_PAGES_FOR_INODE)
 #define AEON_NAME_LEN		128
-#define AEON_DENTRY_SIZE        256
-#define AEON_D_SHIFT            8
+#define AEON_DENTRY_SIZE        (1 << AEON_D_SHIFT)
+#define AEON_DENTRY_CSIZE       ((1 << AEON_D_SHIFT) - CHECKSUM_SIZE)
 #define AEON_INTERNAL_ENTRY     (AEON_D_SHIFT * AEON_PAGES_FOR_DENTRY)
-#define MAX_ENTRY               508
+#define MAX_ENTRY               507
 #define MAX_DENTRY ((MAX_ENTRY << AEON_D_SHIFT ) + \
 		   ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
+#define AEON_DENTRY_MAP_SIZE	AEON_DEF_BLOCK_SIZE_4K
+#define AEON_DENTRY_MAP_CSIZE	(AEON_DENTRY_MAP_SIZE - CHECKSUM_SIZE)
 
 #define AEON_ROOT_INO		(1)
 #define AEON_INODE_START        (4)
@@ -110,8 +116,8 @@ struct aeon_inode {
 	struct aeon_extent_header aeh;
 	struct aeon_extent ae[4];
 
+	char	pad[53];
 	__le32	csum;            /* CRC32 checksum */
-	char    pad[4 * 4 + 3];
 } __attribute((__packed__));
 
 struct aeon_region_table {
@@ -125,25 +131,21 @@ struct aeon_region_table {
 };
 
 struct aeon_super_block {
-	/* static fields. they never change after file system creation.
-	 * checksum only validates up to s_start_dynamic field below */
-	__le32		s_csum;              /* checksum of this sb */
 	__le16          s_map_id;
 	__le16          s_cpus;
 	__le32		s_magic;            /* magic signature */
 	__le32		s_blocksize;        /* blocksize in bytes */
 	__le64		s_size;             /* total size of fs in bytes */
-
 	__le64		s_start_dynamic;
-	__le64          s_num_inodes;
 
-	/* all the dynamic fields should go here */
-	/* s_mtime and s_wtime should be together and their order should not be
-	 * changed. we use an 8 byte write to update both of them atomically */
 	__le32		s_mtime;            /* mount time */
 	__le32		s_wtime;            /* write time */
+	__le64          s_num_inodes;
 	/* fields for fast mount support. Always keep them together */
 	__le64		s_num_free_blocks;
+
+	char		pad[456];
+	__le32		s_csum;              /* checksum of this sb */
 } __attribute((__packed__));
 
 /* TODO
@@ -151,34 +153,33 @@ struct aeon_super_block {
  */
 struct aeon_dentry_map {
 	__le64  block_dentry[MAX_ENTRY];
+	/* 40 bytes */
 	__le64  next_map;
 	__le64  num_dentries;
 	__le64  num_latest_dentry;
 	__le64  num_internal_dentries;
+	char	pad[4];
 	__le32  csum;
 }__attribute((__packed__));
 
 struct aeon_dentry {
-	/* 8 bytes */
+	/* 36 bytes */
 	u8	entry_type;
 	u8	name_len;		/* length of the dentry name */
 	u8	valid;			/* Invalid now? */
 	u8      pad0;
-	/* 8 bytes */
 	__le16	de_len;			/* length of this dentry */
 	__le16	links_count;
 	__le32	mtime;			/* For both mtime and ctime */
-	/* 8 bytes */
-	__le32	csum;			/* entry checksum */
-	/* TODO: size of variable */
-	__le64  internal_offset;
+	__le32  internal_offset;
 	__le32  global_offset;
-	/*  8 bytes */
 	__le32	ino;			/* inode no pointed to by this entry */
 	__le64	i_blocknr;		/* related block that holds inode */
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
-	/* 96 bytes */
+	/* 92 bytes + 4 bytes */
+	char	pad[92];
+	__le32	csum;			/* entry checksum */
 } __attribute((__packed__));
 
 #endif

@@ -4,6 +4,7 @@
 #include "aeon_def.h"
 #include <linux/uaccess.h>
 #include <linux/fs.h>
+#include <linux/crc32.h>
 
 #ifdef pr_fmt
 #undef pr_fmt
@@ -502,6 +503,90 @@ static inline struct aeon_extent *AEON_EXTENT(struct super_block *sb,
 
 	addr = (u64)sbi->virt_addr + (pi->i_blocks << 12);
 	return (struct aeon_extent *)addr;
+}
+
+/* checksum */
+#define VALID	1
+#define INVALID 0
+
+static inline int aeon_dentry_valid(struct aeon_dentry *de)
+{
+	__le32 temp;
+
+	temp = cpu_to_le32(crc32_le(SEED,
+				    (unsigned char *)de,
+				    AEON_DENTRY_CSIZE));
+	if (temp != de->csum)
+		return INVALID;
+
+	return VALID;
+}
+
+static inline void aeon_update_dentry_csum(struct aeon_dentry *de)
+{
+	de->csum = cpu_to_le32(crc32_le(SEED,
+			       (unsigned char *)de,
+			       AEON_DENTRY_CSIZE));
+}
+
+static inline int aeon_dentry_map_valid(struct aeon_dentry_map *de_map)
+{
+	__le32 temp;
+
+	temp = cpu_to_le32(crc32_le(SEED,
+				    (unsigned char *)de_map,
+				    AEON_DENTRY_MAP_CSIZE));
+	if (temp != de_map->csum)
+		return INVALID;
+
+	return VALID;
+}
+
+static inline void aeon_update_dentry_map_csum(struct aeon_dentry_map *de_map)
+{
+	de_map->csum = cpu_to_le32(crc32_le(SEED,
+			       (unsigned char *)de_map,
+			       AEON_DENTRY_MAP_CSIZE));
+}
+
+static inline int aeon_inode_valid(struct aeon_inode *pi)
+{
+	__le32 temp;
+
+	temp = cpu_to_le32(crc32_le(SEED,
+				    (unsigned char *)pi,
+				    AEON_INODE_CSIZE));
+	if (temp != pi->csum)
+		return INVALID;
+
+	return VALID;
+}
+
+static inline void aeon_update_inode_csum(struct aeon_inode *pi)
+{
+	pi->csum = cpu_to_le32(crc32_le(SEED,
+					(unsigned char *)pi,
+					AEON_INODE_CSIZE));
+}
+
+static inline int aeon_super_block_valid(struct aeon_super_block *aeon_sb)
+{
+	__le32 temp;
+
+	temp = cpu_to_le32(crc32_le(SEED,
+				    (unsigned char *)aeon_sb,
+				    AEON_INODE_CSIZE));
+	if (temp != aeon_sb->s_csum)
+		return INVALID;
+
+	return VALID;
+}
+
+static inline void aeon_update_super_block_csum(struct aeon_super_block *aeon_sb)
+{
+	aeon_sb->s_csum = cpu_to_le32(crc32_le(SEED,
+					       (unsigned char *)aeon_sb,
+					       AEON_INODE_CSIZE));
 }
 
 /* operations */

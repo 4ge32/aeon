@@ -1,7 +1,6 @@
 #include <linux/fs.h>
 #include <linux/pagemap.h>
 #include <linux/slab.h>
-#include <linux/crc32.h>
 
 #include "aeon.h"
 
@@ -40,13 +39,10 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	d_instantiate(dentry, inode);
 
 	pidir->i_links_count++;
-	pidir->csum = cpu_to_le32(crc32_le(pidir->csum,
-					   (unsigned char *)pidir,
-					   AEON_INODE_SIZE));
+	aeon_update_inode_csum(pidir);
+
 	aeon_sb->s_num_inodes++;
-	aeon_sb->s_csum = cpu_to_le32(crc32_le(aeon_sb->s_csum,
-					       (unsigned char *)aeon_sb,
-					       AEON_INODE_SIZE));
+	aeon_update_super_block_csum(aeon_sb);
 
 	return 0;
 
@@ -110,13 +106,11 @@ static int aeon_link(struct dentry *dest_dentry,
 		d_instantiate(dentry, dest_inode);
 
 		pidir->i_links_count++;
-		pidir->csum = cpu_to_le32(crc32_le(pidir->csum,
-						   (unsigned char *)pidir,
-						   AEON_INODE_SIZE));
+		aeon_update_inode_csum(pidir);
+
 		aeon_sb->s_num_inodes--;
-		aeon_sb->s_csum = cpu_to_le32(crc32_le(aeon_sb->s_csum,
-						       (unsigned char *)aeon_sb,
-						       AEON_INODE_SIZE));
+		aeon_update_super_block_csum(aeon_sb);
+
 		return 0;
 	}
 	inode_dec_link_count(dest_inode);
@@ -161,13 +155,11 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 		drop_nlink(inode);
 
 	pidir->i_links_count--;
-	pidir->csum = cpu_to_le32(crc32_le(pidir->csum,
-					   (unsigned char *)pidir,
-					   AEON_INODE_SIZE));
+	aeon_update_inode_csum(pidir);
+
 	aeon_sb->s_num_inodes--;
-	aeon_sb->s_csum = cpu_to_le32(crc32_le(aeon_sb->s_csum,
-					       (unsigned char *)aeon_sb,
-					       AEON_INODE_SIZE));
+	aeon_update_super_block_csum(aeon_sb);
+
 	return 0;
 
 out:
@@ -222,13 +214,10 @@ static int aeon_symlink(struct inode *dir,
 	d_instantiate(dentry, inode);
 
 	pidir->i_links_count++;
-	pidir->csum = cpu_to_le32(crc32_le(pidir->csum,
-					   (unsigned char *)pidir,
-					   AEON_INODE_SIZE));
+	aeon_update_inode_csum(pidir);
+
 	aeon_sb->s_num_inodes++;
-	aeon_sb->s_csum = cpu_to_le32(crc32_le(aeon_sb->s_csum,
-					       (unsigned char *)aeon_sb,
-					       AEON_INODE_SIZE));
+	aeon_update_super_block_csum(aeon_sb);
 
 	return 0;
 
@@ -265,9 +254,7 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	d_instantiate(dentry, inode);
 
 	aeon_sb->s_num_inodes++;
-	aeon_sb->s_csum = cpu_to_le32(crc32_le(aeon_sb->s_csum,
-					       (unsigned char *)aeon_sb,
-					       AEON_INODE_SIZE));
+	aeon_update_super_block_csum(aeon_sb);
 
 	return 0;
 
@@ -321,13 +308,10 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 		drop_nlink(dir);
 
 	pidir->i_links_count--;
-	pidir->csum = cpu_to_le32(crc32_le(pidir->csum,
-					   (unsigned char *)pidir,
-					   AEON_INODE_SIZE));
+	aeon_update_inode_csum(pidir);
+
 	aeon_sb->s_num_inodes--;
-	aeon_sb->s_csum = cpu_to_le32(crc32_le(aeon_sb->s_csum,
-					       (unsigned char *)aeon_sb,
-					       AEON_INODE_SIZE));
+	aeon_update_super_block_csum(aeon_sb);
 
 	return 0;
 
