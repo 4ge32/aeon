@@ -86,7 +86,6 @@ static void aeon_evict_inode(struct inode *inode)
 	int destroy = 0;
 	int ret;
 
-
 	if (!sih) {
 		aeon_err(sb, "%s: ino %lu sih is NULL!\n",
 			 __func__, inode->i_ino);

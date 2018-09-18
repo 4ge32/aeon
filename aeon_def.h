@@ -78,7 +78,7 @@ struct aeon_extent {
  */
 struct aeon_inode {
 	/* first 40 bytes */
-	u8	i_rsvd;		 /* reserved. used to be checksum */
+	u8	persisted;	 /* Is this inode persistent? */
 	u8	valid;		 /* Is this inode valid? */
 	u8	deleted;	 /* Is this inode deleted? */
 	u8	i_new;           /* Is this inode new? */
@@ -86,10 +86,10 @@ struct aeon_inode {
 	__le32	i_flags;	 /* Inode flags */
 	__le64	i_size;		 /* Size of data in bytes */
 	__le32	i_ctime;	 /* Inode modification time */
-	__le32	i_mtime;	 /* Inode b-tree Modification time */
+	__le32	i_mtime;	 /* Inode tree Modification time */
 	__le32	i_atime;	 /* Access time */
 	__le16	i_mode;		 /* File mode */
-	__le16	i_links_count;	 /* Links count */
+	__le64	i_links_count;	 /* Links count */
 
 	__le64	i_xattr;	 /* Extended attribute block */
 
@@ -99,6 +99,8 @@ struct aeon_inode {
 	__le32	i_generation;	 /* File version (for NFS) */
 	__le32	i_create_time;	 /* Create time */
 	__le32	aeon_ino;	 /* aeon inode number */
+
+	__le64	i_dentry_block;	/* block that holds a related dentry */
 
 	__le64	i_next_inode_block;
 	u8      i_internal_allocated;
@@ -116,7 +118,7 @@ struct aeon_inode {
 	struct aeon_extent_header aeh;
 	struct aeon_extent ae[4];
 
-	char	pad[53];
+	char	pad[39];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 
@@ -167,14 +169,15 @@ struct aeon_dentry {
 	u8	entry_type;
 	u8	name_len;		/* length of the dentry name */
 	u8	valid;			/* Invalid now? */
-	u8      pad0;
+	u8	persisted;		/* fully persisted? */
 	__le16	de_len;			/* length of this dentry */
 	__le16	links_count;
+	/* dynamic variable */
 	__le32	mtime;			/* For both mtime and ctime */
 	__le32  internal_offset;
 	__le32  global_offset;
 	__le32	ino;			/* inode no pointed to by this entry */
-	__le64	i_blocknr;		/* related block that holds inode */
+	__le64	i_blocknr;		/* block that holds a related inode */
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
 	/* 92 bytes + 4 bytes */

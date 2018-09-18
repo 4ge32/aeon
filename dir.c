@@ -253,14 +253,16 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 	direntry->name_len = 2;
 	direntry->ino = ino;
 	direntry->valid = 1;
-	direntry->csum = SEED;
+	direntry->persisted = 1;
+	aeon_update_dentry_csum(direntry);
 
 	direntry = (struct aeon_dentry *)(pi_addr + (1 << AEON_D_SHIFT));
 	strncpy(direntry->name, "..\0", 3);
 	direntry->name_len = 3;
 	direntry->ino = pidir->aeon_ino;
+	direntry->persisted = 1;
 	direntry->valid = 1;
-	direntry->csum = SEED;
+	aeon_update_dentry_csum(direntry);
 
 	de_map->num_internal_dentries = cpu_to_le64(2);
 	de_map->num_dentries = cpu_to_le64(2);
@@ -330,6 +332,7 @@ static void aeon_fill_dentry_data(struct aeon_dentry *de, u32 ino,
 	de->i_blocknr = cpu_to_le64(i_blocknr);
 	strscpy(de->name, name, namelen + 1);
 	de->valid = 1;
+	de->persisted = 1;
 	aeon_update_dentry_csum(de);
 }
 

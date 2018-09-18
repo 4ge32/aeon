@@ -89,6 +89,9 @@ int aeon_get_inode_address(struct super_block *sb,
 	unsigned long internal_ino;
 	int cpu_id;
 
+	if (i_blocknr == 0)
+		return -ENOENT;
+
 	cpu_id = ino % sbi->cpus;
 	if (cpu_id >= sbi->cpus)
 		cpu_id -= sbi->cpus;
@@ -162,9 +165,10 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->aeh.eh_curr_block = 0;
 	pi->aeh.eh_iblock = 0;
 
-	pi->csum = SEED;
-
+	pi->persisted = 0;
 	pi->valid = 1;
+
+	aeon_update_inode_csum(pi);
 }
 
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
@@ -699,12 +703,12 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 
 	aeon_memunlock_inode(sb, pi);
 	pi->deleted = 1;
+	pi->i_mode = 0;
+	pi->dentry_map_block = 0;
 
-	if (pi->valid) {
-		aeon_dbgv("%s: inode %u still valid\n",
-			  __func__, le32_to_cpu(pi->aeon_ino));
+	if (pi->valid)
 		pi->valid = 0;
-	}
+
 	aeon_memunlock_inode(sb, pi);
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
@@ -717,6 +721,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	case S_IFDIR:
 		//aeon_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
 		aeon_delete_dir_tree(sb, sih);
+		pi->dentry_map_block = 0;
 		break;
 	case S_IFLNK:
 		/* Log will be freed later */
@@ -731,6 +736,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		break;
 	}
 
+	pi->i_mode = 0;
 	ret = aeon_free_inode(sb, pi, sih);
 	if (ret)
 		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);

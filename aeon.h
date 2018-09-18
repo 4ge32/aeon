@@ -400,7 +400,7 @@ struct aeon_dentry_map *aeon_get_first_dentry_map(struct super_block *sb,
 
 	de_map = (struct aeon_dentry_map *)(sbi->virt_addr
 					    + (blocknr << AEON_SHIFT));
-	if (le64_to_cpu(de_map->num_dentries) == 2)
+	if (le64_to_cpu(de_map->num_dentries) < 2)
 		return NULL;
 
 	return de_map;
@@ -509,7 +509,7 @@ static inline struct aeon_extent *AEON_EXTENT(struct super_block *sb,
 #define VALID	1
 #define INVALID 0
 
-static inline int aeon_dentry_valid(struct aeon_dentry *de)
+static inline int aeon_dentry_persisted(struct aeon_dentry *de)
 {
 	__le32 temp;
 
@@ -529,7 +529,7 @@ static inline void aeon_update_dentry_csum(struct aeon_dentry *de)
 			       AEON_DENTRY_CSIZE));
 }
 
-static inline int aeon_dentry_map_valid(struct aeon_dentry_map *de_map)
+static inline int aeon_dentry_map_persisted(struct aeon_dentry_map *de_map)
 {
 	__le32 temp;
 
@@ -549,7 +549,7 @@ static inline void aeon_update_dentry_map_csum(struct aeon_dentry_map *de_map)
 			       AEON_DENTRY_MAP_CSIZE));
 }
 
-static inline int aeon_inode_valid(struct aeon_inode *pi)
+static inline int aeon_inode_persisted(struct aeon_inode *pi)
 {
 	__le32 temp;
 
@@ -569,7 +569,7 @@ static inline void aeon_update_inode_csum(struct aeon_inode *pi)
 					AEON_INODE_CSIZE));
 }
 
-static inline int aeon_super_block_valid(struct aeon_super_block *aeon_sb)
+static inline int aeon_super_block_persisted(struct aeon_super_block *aeon_sb)
 {
 	__le32 temp;
 

@@ -47,7 +47,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr +
 					    (blocknr << AEON_SHIFT));
-	if (!aeon_dentry_map_valid(de_map)) {
+	if (!aeon_dentry_map_persisted(de_map)) {
 		/* TODO: Add recovery handle */
 		aeon_err(sb, "INVALID DENTRY MAP\n");
 	}
@@ -84,7 +84,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 					   (d_blocknr << AEON_SHIFT) +
 					   (internal << AEON_D_SHIFT));
 
-		if (!aeon_dentry_valid(d)) {
+		if (!aeon_dentry_persisted(d)) {
 			/* TODO: Add recovery handle */
 			aeon_dbg("%s\n", d->name);
 			aeon_err(sb, "INVALID DENTRY\n");
