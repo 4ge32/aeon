@@ -99,14 +99,15 @@ struct aeon_inode {
 	__le32	i_generation;	 /* File version (for NFS) */
 	__le32	i_create_time;	 /* Create time */
 	__le32	aeon_ino;	 /* aeon inode number */
+	__le32  parent_ino;
 
 	__le64	i_dentry_block;	/* block that holds a related dentry */
+	__le64	dentry_map_block;	/* block that holds a related dentry */
 
 	__le64	i_next_inode_block;
 	u8      i_internal_allocated;
 
 	/* last 40 bytes */
-	__le64	dentry_map_block;
 	__le64  i_block;        /* point extent_header */
 	__le64	i_blocks;       /* point extent log */
 	__le64	sym_block;      /* for symbolic link */
@@ -118,7 +119,7 @@ struct aeon_inode {
 	struct aeon_extent_header aeh;
 	struct aeon_extent ae[4];
 
-	char	pad[39];
+	char	pad[35];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 
@@ -149,20 +150,6 @@ struct aeon_super_block {
 	char		pad[456];
 	__le32		s_csum;              /* checksum of this sb */
 } __attribute((__packed__));
-
-/* TODO
- * scale a number of dentries in the future
- */
-struct aeon_dentry_map {
-	__le64  block_dentry[MAX_ENTRY];
-	/* 40 bytes */
-	__le64  next_map;
-	__le64  num_dentries;
-	__le64  num_latest_dentry;
-	__le64  num_internal_dentries;
-	char	pad[4];
-	__le32  csum;
-}__attribute((__packed__));
 
 struct aeon_dentry {
 	/* 36 bytes */

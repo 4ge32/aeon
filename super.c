@@ -366,6 +366,7 @@ static void aeon_init_root_inode(struct super_block *sb,
 	root_i->i_atime = root_i->i_mtime = root_i->i_ctime =
 		cpu_to_le32(get_seconds());
 	root_i->aeon_ino = cpu_to_le32(AEON_ROOT_INO);
+	root_i->parent_ino = 0;
 	root_i->valid = 1;
 	root_i->deleted = 0;
 	root_i->i_new = 1;

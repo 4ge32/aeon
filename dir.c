@@ -144,7 +144,8 @@ static void aeon_register_dentry_to_map(struct aeon_dentry_map *de_map,
 }
 
 static struct aeon_dentry *aeon_get_internal_dentry(struct super_block *sb,
-						    struct aeon_dentry_map *de_map)
+						    struct aeon_dentry_map *de_map,
+						    u64 *blocknr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned int latest_entry;
@@ -156,6 +157,8 @@ static struct aeon_dentry *aeon_get_internal_dentry(struct super_block *sb,
 	internal_entry = le64_to_cpu(de_map->num_internal_dentries);
 	head_addr = le64_to_cpu(de_map->block_dentry[latest_entry]) << AEON_SHIFT;
 	internal_offset = internal_entry << AEON_D_SHIFT;
+
+	*blocknr = head_addr >> AEON_SHIFT;
 
 	return (struct aeon_dentry *)((u64)sbi->virt_addr +
 				      head_addr + internal_offset);
@@ -172,7 +175,8 @@ static int isInvalidSpace(struct aeon_dentry_info *de_info)
 
 static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 						       struct aeon_dentry_map *de_map,
-						       struct aeon_dentry_info *de_info)
+						       struct aeon_dentry_info *de_info,
+						       u64 *blocknr)
 {
 	struct aeon_dentry *de;
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -188,6 +192,8 @@ static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 				    head_addr + internal_offset);
 	de->internal_offset = cpu_to_le32(adi->internal);
 	de->global_offset = adi->global;
+
+	*blocknr = head_addr >> AEON_SHIFT;
 
 	list_del(&adi->invalid_list);
 	kfree(adi);
@@ -218,13 +224,11 @@ static int aeon_init_dentry_map(struct super_block *sb,
 	}
 
 	blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
-	de_map = (struct aeon_dentry_map *)pi_addr;
+	de_map = &de_info->de_map;
 	de_map->num_dentries = 0;
 	de_map->num_latest_dentry = 0;
-	de_map->num_internal_dentries = cpu_to_le64(AEON_INTERNAL_ENTRY);
-	de_map->csum = SEED;
+	de_map->num_internal_dentries = AEON_INTERNAL_ENTRY;
 
-	de_info->de_map = de_map;
 	de_info->di = adi;
 	sih->de_info = de_info;
 
@@ -240,7 +244,7 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 			    struct aeon_dentry_info *de_info, u32 ino)
 {
 	struct aeon_dentry *direntry;
-	struct aeon_dentry_map *de_map = de_info->de_map;
+	struct aeon_dentry_map *de_map = &de_info->de_map;
 	unsigned long blocknr;
 	u64 pi_addr = 0;
 
@@ -274,7 +278,7 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 }
 
 static struct aeon_dentry *aeon_alloc_new_dentry_block(struct super_block *sb,
-						       unsigned long *d_blocknr)
+						       u64 *d_blocknr)
 {
 	struct aeon_dentry *direntry;
 	u64 pi_addr = 0;
@@ -288,13 +292,13 @@ static struct aeon_dentry *aeon_alloc_new_dentry_block(struct super_block *sb,
 	return direntry;
 }
 
-static int aeon_get_dentry_block(struct super_block *sb,
+static u64 aeon_get_dentry_block(struct super_block *sb,
 				 struct aeon_dentry_info *de_info,
 				 struct aeon_dentry **direntry)
 {
-	struct aeon_dentry_map *de_map = de_info->de_map;
+	struct aeon_dentry_map *de_map = &de_info->de_map;
 	unsigned long internal_de;
-	unsigned long blocknr = 0;
+	u64 blocknr = 0;
 
 	if(!isInvalidSpace(de_info)) {
 		internal_de = le64_to_cpu(de_map->num_internal_dentries);
@@ -307,7 +311,7 @@ static int aeon_get_dentry_block(struct super_block *sb,
 			(*direntry)->internal_offset = 0;
 			(*direntry)->global_offset = (de_map->num_latest_dentry - 1);
 		} else {
-			*direntry = aeon_get_internal_dentry(sb, de_map);
+			*direntry = aeon_get_internal_dentry(sb, de_map, &blocknr);
 			(*direntry)->internal_offset = cpu_to_le32(de_map->num_internal_dentries);
 			(*direntry)->global_offset = de_map->num_latest_dentry;
 
@@ -315,13 +319,12 @@ static int aeon_get_dentry_block(struct super_block *sb,
 		}
 
 	} else
-		*direntry = aeon_reuse_space_for_dentry(sb, de_map, de_info);
+		*direntry = aeon_reuse_space_for_dentry(sb, de_map, de_info, &blocknr);
 
 	(*direntry)->valid = 1;
 	de_map->num_dentries++;
-	aeon_update_dentry_map_csum(de_map);
 
-	return 0;
+	return blocknr;
 }
 
 static void aeon_fill_dentry_data(struct aeon_dentry *de, u32 ino,
@@ -342,7 +345,8 @@ static void aeon_release_dentry_block(struct aeon_dentry *de)
 	aeon_update_dentry_csum(de);
 }
 
-int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
+int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr,
+		    u64 *d_blocknr, int inc_link)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -369,8 +373,8 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 			goto out;
 	}
 
-	err = aeon_get_dentry_block(sb, sih->de_info, &new_direntry);
-	if (err) {
+	*d_blocknr = aeon_get_dentry_block(sb, sih->de_info, &new_direntry);
+	if (*d_blocknr <= 0) {
 		mutex_unlock(&sih->de_info->dentry_mutex);
 		goto out;
 	}
@@ -383,6 +387,10 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr, int inc_link)
 		goto out2;
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
+
+	pidir->i_links_count++;
+	aeon_update_inode_csum(pidir);
+
 
 	return 0;
 out2:
@@ -427,6 +435,10 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	aeon_update_dentry_csum(de);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
+
+	pidir->i_links_count--;
+	aeon_update_inode_csum(pidir);
+
 
 	return 0;
 out:

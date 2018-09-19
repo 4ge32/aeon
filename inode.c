@@ -140,7 +140,8 @@ void aeon_init_header(struct super_block *sb,
 
 static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
-				       struct inode *inode)
+				       struct inode *inode,
+				       u32 parent_ino, u64 d_blocknr)
 {
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 
@@ -152,10 +153,12 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_uid = cpu_to_le32(i_uid_read(inode));
 	pi->i_gid = cpu_to_le32(i_gid_read(inode));
 	pi->aeon_ino = cpu_to_le32(inode->i_ino);
+	pi->parent_ino = cpu_to_le32(parent_ino);
 	pi->i_block = 0;
 	pi->i_blocks = 0;
 	pi->i_internal_allocated = 0;
-	pi->dentry_map_block = 0;
+	pi->i_dentry_block = cpu_to_le64(d_blocknr);
+	pi->dentry_map_block = cpu_to_le64(d_blocknr);
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 
@@ -173,7 +176,8 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr,
-				 u32 ino, umode_t mode, size_t size,
+				 u32 ino, umode_t mode, u32 parent_ino,
+				 u64 d_blocknr, size_t size,
 				 dev_t rdev, const struct qstr *qstr)
 {
 	struct super_block *sb = dir->i_sb;
@@ -220,7 +224,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	sih = &si->header;
 	aeon_init_header(sb, sih, pi_addr);
 
-	fill_new_aeon_inode(sb, sih, inode);
+	fill_new_aeon_inode(sb, sih, inode, parent_ino, d_blocknr);
 
 	return inode;
 out:
@@ -377,15 +381,28 @@ u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr)
 static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u32 ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	int num_cpu = sbi->cpus;
-	int cpu_id = (ino - AEON_INODE_START) % num_cpu;
-	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
-	struct i_valid_list *data;
+	struct i_valid_list *meta;
+	struct i_valid_list *mdend;
+	struct i_valid_child_list *data;
+	struct i_valid_child_list *ddend;
 	u64 pi_addr = 0;
 
-	list_for_each_entry(data, &inode_map->ivl->i_valid_list, i_valid_list) {
-		if (ino == data->ino) {
-			goto found;
+	list_for_each_entry_safe(meta, mdend,
+				 &sbi->ivl->i_valid_list, i_valid_list) {
+		list_for_each_entry_safe(data, ddend,
+					 &meta->ivcl->i_valid_child_list,
+					 i_valid_child_list) {
+			if (data->ino == ino) {
+				pi_addr = data->addr;
+				list_del(&data->i_valid_child_list);
+				kfree((void *)data);
+				if (list_empty(&meta->i_valid_list)) {
+					list_del(&meta->i_valid_list);
+					kfree((void *)meta);
+				}
+				goto found;
+			}
+
 		}
 	}
 
@@ -394,9 +411,6 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u32 ino)
 	BUG_ON(1);
 
 found:
-	pi_addr = data->addr;
-	list_del(&data->i_valid_list);
-	kfree((void *)data);
 	return pi_addr;
 }
 
@@ -703,7 +717,6 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 
 	aeon_memunlock_inode(sb, pi);
 	pi->deleted = 1;
-	pi->i_mode = 0;
 	pi->dentry_map_block = 0;
 
 	if (pi->valid)

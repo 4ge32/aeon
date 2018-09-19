@@ -38,13 +38,19 @@ struct imem_cache {
 	struct	list_head imem_list;
 };
 
-/*
- * Use it when moount without init option
- */
 struct i_valid_list {
 	u32	ino;
 	u64	addr;
+	u32	parent_ino;
+	struct i_valid_child_list *ivcl;
 	struct	list_head i_valid_list;
+};
+
+struct i_valid_child_list {
+	u32	ino;
+	u64	addr;
+	u32	parent_ino;
+	struct	list_head i_valid_child_list;
 };
 
 struct inode_map {
@@ -53,7 +59,6 @@ struct inode_map {
 	unsigned long		num_range_node_inode;
 	struct aeon_range_node	*first_inode_range;
 	struct imem_cache	*im;
-	struct i_valid_list	*ivl;
 	u64			curr_i_blocknr;
 	void			*virt_addr;
 	void			*i_table_addr;
@@ -120,9 +125,12 @@ struct aeon_sb_info {
 
 	/* Shared free block list */
 	unsigned long per_list_blocks;
-	//struct free_list shared_free_list;
+
+	struct i_valid_list	*ivl;
 
 	int max_inodes_in_page;
+
+	struct aeon_dentry_info *de_info;
 
 	struct aeon_stat_info *stat_info;
 };
@@ -225,6 +233,14 @@ struct aeon_dentry_entry {
 	struct list_head dmem_cache;
 };
 
+struct aeon_dentry_map {
+	unsigned long  block_dentry[MAX_ENTRY];
+	unsigned long  next_map;
+	unsigned long  num_dentries;
+	unsigned int  num_latest_dentry;
+	unsigned int  num_internal_dentries;
+};
+
 struct aeon_dentry_info {
 	struct mutex dentry_mutex;
 
@@ -232,7 +248,7 @@ struct aeon_dentry_info {
 	unsigned long global;
 	struct aeon_dentry_invalid *di;
 	struct aeon_dentry *de;
-	struct aeon_dentry_map *de_map;
+	struct aeon_dentry_map de_map;
 };
 
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
@@ -529,26 +545,6 @@ static inline void aeon_update_dentry_csum(struct aeon_dentry *de)
 			       AEON_DENTRY_CSIZE));
 }
 
-static inline int aeon_dentry_map_persisted(struct aeon_dentry_map *de_map)
-{
-	__le32 temp;
-
-	temp = cpu_to_le32(crc32_le(SEED,
-				    (unsigned char *)de_map,
-				    AEON_DENTRY_MAP_CSIZE));
-	if (temp != de_map->csum)
-		return INVALID;
-
-	return VALID;
-}
-
-static inline void aeon_update_dentry_map_csum(struct aeon_dentry_map *de_map)
-{
-	de_map->csum = cpu_to_le32(crc32_le(SEED,
-			       (unsigned char *)de_map,
-			       AEON_DENTRY_MAP_CSIZE));
-}
-
 static inline int aeon_inode_persisted(struct aeon_inode *pi)
 {
 	__le32 temp;
@@ -639,7 +635,8 @@ int aeon_get_inode_address(struct super_block *sb,
 u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr, u32 ino,
-				 umode_t mode, size_t size, dev_t rdev,
+				 umode_t mode, u32 parent_ino, u64 d_blocknr,
+				 size_t size, dev_t rdev,
 				 const struct qstr *qstr);
 u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr);
 struct inode *aeon_iget(struct super_block *sb, u32 ino);
@@ -655,7 +652,7 @@ int aeon_insert_dir_tree(struct super_block *sb,
 			 const char *name, int namelen,
 			 struct aeon_dentry *direntry);
 int aeon_add_dentry(struct dentry *dentry, u32 ino,
-		    u64 i_blocknr, int inc_link);
+		    u64 i_blocknr, u64 *d_blocknr, int inc_link);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
