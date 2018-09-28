@@ -40,7 +40,6 @@ static void aeon_i_callback(struct rcu_head *head)
 
 static void aeon_destroy_inode(struct inode *inode)
 {
-	//aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	call_rcu(&inode->i_rcu, aeon_i_callback);
 }
 
@@ -243,9 +242,6 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
 
-	//aeon_dbgv("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
-	//	 __func__, sbi->s_bdev->bd_disk->disk_name,
-	//	 sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
 	return 0;
 }
 
@@ -452,7 +448,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct aeon_super_block) > AEON_SB_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_inode) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_dentry) > AEON_DENTRY_SIZE);
-	BUILD_BUG_ON(sizeof(struct aeon_dentry_map) > AEON_DEF_BLOCK_SIZE_4K);
 	BUILD_BUG_ON(sizeof(struct aeon_region_table) > AEON_INODE_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_extent_header) > AEON_EXTENT_HEADER_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_extent) > AEON_EXTENT_SIZE);
@@ -535,7 +530,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		goto out3;
 	}
 
-	//aeon_dbgv("%s:FINISH\n", __func__);
 	aeon_dbg("Mount filesystem\n");
 
 	return 0;

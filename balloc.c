@@ -646,8 +646,6 @@ void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
 		do_aeon_init_new_inode_block(sbi, i, ino + i);
 }
 
-// Allocate dentry block.  The offset for the allocated block comes back in
-// blocknr.  Return the number of blocks allocated (should be 1).
 unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid)
 {

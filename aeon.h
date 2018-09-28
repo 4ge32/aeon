@@ -42,7 +42,7 @@ struct i_valid_list {
 	u32	ino;
 	u64	addr;
 	u32	parent_ino;
-	struct i_valid_child_list *ivcl;
+	struct	i_valid_child_list *ivcl;
 	struct	list_head i_valid_list;
 };
 
