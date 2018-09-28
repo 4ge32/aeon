@@ -207,7 +207,7 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 	direntry = (struct aeon_dentry *)pi_addr;
 	strncpy(direntry->name, ".\0", 2);
 	direntry->name_len = 2;
-	direntry->ino = ino;
+	direntry->ino = cpu_to_le32(pidir->aeon_ino);
 	direntry->valid = 1;
 	direntry->persisted = 1;
 	aeon_update_dentry_csum(direntry);
@@ -215,7 +215,7 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 	direntry = (struct aeon_dentry *)(pi_addr + (1 << AEON_D_SHIFT));
 	strncpy(direntry->name, "..\0", 3);
 	direntry->name_len = 3;
-	direntry->ino = pidir->aeon_ino;
+	direntry->ino = cpu_to_le32(pidir->parent_ino);
 	direntry->persisted = 1;
 	direntry->valid = 1;
 	aeon_update_dentry_csum(direntry);
