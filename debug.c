@@ -192,13 +192,13 @@ static int stat_den_show(struct seq_file *s, void *v)
 	si = list_first_entry(&aeon_stat_list, struct aeon_stat_info, stat_list);
 	sbi = si->sbi;
 	pi = aeon_get_reserved_inode(sbi->sb, AEON_ROOT_INO);
-	de_map = aeon_get_first_dentry_map(sbi->sb, pi);
+	de_map = aeon_get_dentry_map(sbi->sb, sbi->sih);
 	if (!de_map)
 		return 0;
 
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	global = 0;
-	internal = 2;
+	internal = 0;
 	bound = AEON_D_SHIFT;
 
 	mutex_lock(&aeon_stat_mutex);
@@ -207,7 +207,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 	seq_printf(s, "  %8s : %8s : %8s : %8s : %8s\n",
 		   "internal", "global", "blocknr", "ino", "name");
 
-	while (num_entry > 2) {
+	while (num_entry > 0) {
 		if (internal == AEON_INTERNAL_ENTRY) {
 			global++;
 			internal = 0;

@@ -87,54 +87,6 @@ void aeon_delete_dir_tree(struct super_block *sb,
 	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 }
 
-static struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb,
-						   struct aeon_inode *pi)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
-	struct aeon_dentry_map *de_map;
-	struct aeon_dentry_map *new_de_map;
-	unsigned long la_num_entries;
-	unsigned long num_internal;
-	unsigned long new_de_map_blocknr = 0;
-	u64 pi_addr = 0;
-
-	de_map = (struct aeon_dentry_map *)(sbi->virt_addr +
-					    (blocknr << AEON_SHIFT));
-	la_num_entries = le64_to_cpu(de_map->num_latest_dentry);
-	num_internal = le64_to_cpu(de_map->num_internal_dentries);
-
-	if (la_num_entries == MAX_ENTRY - 1 &&
-	    num_internal == AEON_INTERNAL_ENTRY) {
-		/* create new map */
-		new_de_map_blocknr = aeon_get_new_dentry_map_block(sb,
-								   &pi_addr,
-								   ANY_CPU);
-		new_de_map = (struct aeon_dentry_map *)pi_addr;
-		new_de_map->num_dentries = 0;
-		new_de_map->num_latest_dentry = 0;
-		new_de_map->num_internal_dentries = cpu_to_le64(AEON_INTERNAL_ENTRY);
-
-		de_map->next_map = new_de_map_blocknr;
-		de_map->num_latest_dentry++;
-		de_map->num_dentries++;
-
-		new_de_map->num_dentries = (--de_map->num_dentries);
-		de_map = new_de_map;
-	} else if (la_num_entries == MAX_ENTRY) {
-		/* return next map */
-		blocknr = de_map->next_map;
-		de_map = (struct aeon_dentry_map *)(sbi->virt_addr +
-						    (blocknr << AEON_SHIFT));
-		/* dead code so far ? */
-		if (de_map->num_dentries == MAX_DENTRY)
-			return ERR_PTR(-EMLINK);
-	}
-
-	return de_map;
-
-}
-
 static void aeon_register_dentry_to_map(struct aeon_dentry_map *de_map,
 					unsigned long d_blocknr)
 {
@@ -380,6 +332,7 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr,
 	}
 
 	aeon_fill_dentry_data(new_direntry, ino, i_blocknr, name, namelen);
+	/* TODO? */
 	dentry->d_fsdata = (void *)new_direntry;
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);
@@ -411,7 +364,7 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	struct aeon_dentry_info *de_info = sih->de_info;
 	struct aeon_inode *pidir = aeon_get_inode(sb, sih);
 	struct aeon_dentry_invalid *adi;
-	struct aeon_dentry_map *de_map = aeon_get_dentry_map(sb, pidir);
+	struct aeon_dentry_map *de_map = aeon_get_dentry_map(sb, sih);
 	int ret;
 
 	if (!dentry->d_name.len)
@@ -476,10 +429,9 @@ int aeon_empty_dir(struct inode *inode)
 	struct super_block *sb = inode->i_sb;
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
-	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_dentry_map *de_map;
 
-	de_map = aeon_get_first_dentry_map(sb, pi);
+	de_map = aeon_get_dentry_map(sb, sih);
 	if (de_map)
 		return 0;
 

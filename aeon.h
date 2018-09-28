@@ -42,7 +42,7 @@ struct i_valid_list {
 	u32	ino;
 	u64	addr;
 	u32	parent_ino;
-	struct i_valid_child_list *ivcl;
+	struct	i_valid_child_list *ivcl;
 	struct	list_head i_valid_list;
 };
 
@@ -109,7 +109,6 @@ struct aeon_sb_info {
 
 	int cpus;
 	int trees;
-	//struct proc_dir_entry *s_proc;
 
 	/* ZEROED page for cache page initialized */
 	//void *zeroed_page;
@@ -126,12 +125,9 @@ struct aeon_sb_info {
 	/* Shared free block list */
 	unsigned long per_list_blocks;
 
-	struct i_valid_list	*ivl;
+	struct i_valid_list *ivl; /* Used in mount time */
 
-	int max_inodes_in_page;
-
-	struct aeon_dentry_info *de_info;
-
+	struct aeon_inode_info_header *sih; /* root inode info */
 	struct aeon_stat_info *stat_info;
 };
 
@@ -404,22 +400,13 @@ struct aeon_inode *aeon_get_inode(struct super_block *sb,
 }
 
 static inline
-struct aeon_dentry_map *aeon_get_first_dentry_map(struct super_block *sb,
-						  struct aeon_inode *pi)
+struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb,
+					    struct aeon_inode_info_header *sih)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long blocknr = le64_to_cpu(pi->dentry_map_block);
-	struct aeon_dentry_map *de_map;
-
-	if (blocknr == 0)
+	if (!sih->de_info)
 		return NULL;
 
-	de_map = (struct aeon_dentry_map *)(sbi->virt_addr
-					    + (blocknr << AEON_SHIFT));
-	if (le64_to_cpu(de_map->num_dentries) < 2)
-		return NULL;
-
-	return de_map;
+	return &sih->de_info->de_map;
 
 }
 

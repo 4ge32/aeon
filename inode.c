@@ -436,6 +436,9 @@ static int aeon_rebuild_inode(struct super_block *sb,
 
 	sih->pi_addr = pi_addr;
 
+	if (ino == AEON_ROOT_INO)
+		AEON_SB(sb)->sih = sih;
+
 	if (pi->i_new)
 		goto end;
 
@@ -631,7 +634,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	int cpuid = ino % sbi->cpus;
 	unsigned long internal_ino = ino / sbi->cpus;
 	int found;
-	int ret;
+	int ret = 0;
 
 	//aeon_dbgv("Free inuse ino: %lu\n", ino);
 	inode_map = &sbi->inode_maps[cpuid];
@@ -713,7 +716,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih)
 {
 	unsigned long last_blocknr;
-	int ret = 0;
+	int ret;
 
 	aeon_memunlock_inode(sb, pi);
 	pi->deleted = 1;
@@ -750,6 +753,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	}
 
 	pi->i_mode = 0;
+
 	ret = aeon_free_inode(sb, pi, sih);
 	if (ret)
 		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
