@@ -355,7 +355,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	if (S_ISDIR(old_inode->i_mode)) {
 		err = -EIO;
-		dir_de = aeon_dotdot(sb, o_sih);
+		dir_de = aeon_dotdot(sb, old_dentry);
 		if (!dir_de)
 			goto out_dir;
 	}
