@@ -103,7 +103,7 @@ int aeon_get_inode_address(struct super_block *sb,
 					(internal_ino << AEON_I_SHIFT);
 
 	pi = (struct aeon_inode *)(*pi_addr);
-	if (!(ino == le32_to_cpu(pi->aeon_ino))) {
+	if (ino != le32_to_cpu(pi->aeon_ino)) {
 		aeon_err(sb, "%s:ino %u, pi_ino %u iblock %lu\n", __func__, ino,
 						    le32_to_cpu(pi->aeon_ino),
 						    i_blocknr);
@@ -158,7 +158,6 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_blocks = 0;
 	pi->i_internal_allocated = 0;
 	pi->i_dentry_block = cpu_to_le64(d_blocknr);
-	pi->dentry_map_block = cpu_to_le64(d_blocknr);
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 
@@ -720,7 +719,6 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 
 	aeon_memunlock_inode(sb, pi);
 	pi->deleted = 1;
-	pi->dentry_map_block = 0;
 
 	if (pi->valid)
 		pi->valid = 0;
@@ -737,7 +735,6 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	case S_IFDIR:
 		//aeon_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
 		aeon_delete_dir_tree(sb, sih);
-		pi->dentry_map_block = 0;
 		break;
 	case S_IFLNK:
 		/* Log will be freed later */

@@ -649,7 +649,7 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 void aeon_delete_dir_tree(struct super_block *sb,
 			  struct aeon_inode_info_header *sih);
 struct aeon_dentry *aeon_dotdot(struct super_block *sb,
-				struct aeon_inode_info_header *sih);
+				struct dentry *dentry);
 void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 		   struct inode *inode, int update_times);
 int aeon_empty_dir(struct inode *inode);

@@ -182,10 +182,11 @@ static int stat_den_show(struct seq_file *s, void *v)
 	struct aeon_dentry_map *de_map;
 	struct aeon_dentry *de;
 	unsigned long blocknr;
+	u64 pi_addr = 0;
 	int num_entry = 0;
 	int global;
 	int internal;
-	int bound;
+	int err;
 
 	seq_printf(s, "========== dentry map ==========\n");
 
@@ -199,11 +200,10 @@ static int stat_den_show(struct seq_file *s, void *v)
 	num_entry = le64_to_cpu(de_map->num_dentries);
 	global = 0;
 	internal = 0;
-	bound = AEON_D_SHIFT;
 
 	mutex_lock(&aeon_stat_mutex);
 
-	seq_printf(s, "dentries %u\n\n", num_entry - 1);
+	seq_printf(s, "dentries %u\n\n", num_entry);
 	seq_printf(s, "  %8s : %8s : %8s : %8s : %8s\n",
 		   "internal", "global", "blocknr", "ino", "name");
 
@@ -218,14 +218,47 @@ static int stat_den_show(struct seq_file *s, void *v)
 					   (blocknr << AEON_SHIFT) +
 					   (internal << AEON_D_SHIFT));
 		if (!de->valid) {
-			seq_printf(s, "X %8u : %8u : %8lu : %8u : %8s\n",
-				   internal, global, blocknr, le32_to_cpu(de->ino), de->name);
+			seq_printf(s, "X %8u : %8u : %8lu : %8u : %8s : ?\n",
+				   internal, global, blocknr,
+				   le32_to_cpu(de->ino), de->name);
 			internal++;
 			continue;
 		}
 
-		seq_printf(s, "O %8u : %8u : %8lu : %8u : %8s\n",
-			   internal, global, blocknr, le32_to_cpu(de->ino), de->name);
+		seq_printf(s, "O %8u : %8u : %8lu : %8u : %8s : ",
+			   internal, global, blocknr,
+			   le32_to_cpu(de->ino), de->name);
+		if (le32_to_cpu(de->ino) == AEON_ROOT_INO) {
+			seq_printf(s, "%8s\n", "DIRECTORY");
+			goto next;
+		} else if (le32_to_cpu(de->ino) == 0) {
+			seq_printf(s, "%8s\n", "DIRECTORY");
+			goto next;
+		}
+
+		err = aeon_get_inode_address(sbi->sb, le32_to_cpu(de->ino),
+					     &pi_addr, de);
+		if (err) {
+			internal++;
+			continue;
+		}
+		pi = (struct aeon_inode *)pi_addr;
+		switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
+		case S_IFREG:
+			seq_printf(s, "%8s\n", "REGULAR");
+			break;
+		case S_IFDIR:
+			seq_printf(s, "%8s\n", "DIRECTORY");
+			break;
+		case S_IFLNK:
+			seq_printf(s, "%8s\n", "SYMLINK");
+			break;
+		default:
+			seq_printf(s, "%8s\n", "SPECIAL");
+			break;
+		}
+
+next:
 
 		num_entry--;
 		internal++;
