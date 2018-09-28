@@ -58,26 +58,23 @@ static int aeon_remove_dir_tree(struct super_block *sb,
 }
 
 struct aeon_dentry *aeon_dotdot(struct super_block *sb,
-				struct aeon_inode_info_header *sih)
+				struct dentry *dentry)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_inode *pi;
+	struct dentry *parent = dentry->d_parent;
+	struct inode *inode = d_inode(parent);
 	struct aeon_dentry_map *de_map;
 	struct aeon_dentry *de;
-	unsigned long de_map_block;
 	unsigned long dotdot_block;
 
-	pi = aeon_get_inode(sb, sih);
-
-	de_map_block = le64_to_cpu(pi->dentry_map_block);
-	de_map = (struct aeon_dentry_map *)((u64)sbi->virt_addr +
-					    (de_map_block << AEON_SHIFT));
+	de_map = aeon_get_dentry_map(sb, &AEON_I(inode)->header);
+	if (!de_map)
+		return NULL;
 
 	dotdot_block = le64_to_cpu(de_map->block_dentry[0]);
 	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
 				    (dotdot_block << AEON_SHIFT) +
 				    (1 << AEON_D_SHIFT));
-
 	return de;
 }
 
@@ -186,7 +183,6 @@ static int aeon_init_dentry_map(struct super_block *sb,
 
 	INIT_LIST_HEAD(&de_info->di->invalid_list);
 
-	pidir->dentry_map_block = cpu_to_le64(blocknr);
 	pidir->i_new = 0;
 
 	return 0;
@@ -332,7 +328,6 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr,
 	}
 
 	aeon_fill_dentry_data(new_direntry, ino, i_blocknr, name, namelen);
-	/* TODO? */
 	dentry->d_fsdata = (void *)new_direntry;
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);

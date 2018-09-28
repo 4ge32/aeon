@@ -14,9 +14,9 @@
 #define SEED			131
 
 /* auto */
-#define CHECKSUM_SIZE		32
+#define CHECKSUM_SIZE		4
 #define AEON_INODE_SIZE         (1 << AEON_I_SHIFT)
-#define AEON_INODE_CSIZE        ((1 << AEON_I_SHIFT) - CHECKSUM_SIZE)
+#define AEON_INODE_CSIZE        (AEON_INODE_SIZE - CHECKSUM_SIZE)
 #define AEON_SB_SIZE            512
 #define AEON_SB_CSIZE           (512 - CHECKSUM_SIZE)
 #define AEON_SHIFT              12
@@ -99,15 +99,14 @@ struct aeon_inode {
 	__le32	i_generation;	 /* File version (for NFS) */
 	__le32	i_create_time;	 /* Create time */
 	__le32	aeon_ino;	 /* aeon inode number */
-	__le32  parent_ino;
+	__le32	parent_ino;	 /* parent inode number */
 
 	__le64	i_dentry_block;	/* block that holds a related dentry */
-	__le64	dentry_map_block;	/* block that holds a related dentry */
+	__le32	i_d_internal;
 
 	__le64	i_next_inode_block;
 	u8      i_internal_allocated;
 
-	/* last 40 bytes */
 	__le64  i_block;        /* point extent_header */
 	__le64	i_blocks;       /* point extent log */
 	__le64	sym_block;      /* for symbolic link */
@@ -117,9 +116,9 @@ struct aeon_inode {
 	} dev;			 /* device inode */
 
 	struct aeon_extent_header aeh;
-	struct aeon_extent ae[4];
+	struct aeon_extent ae[6];
 
-	char	pad[35];
+	char	pad[3];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 
