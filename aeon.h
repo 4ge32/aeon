@@ -162,19 +162,6 @@ struct free_list {
 
 	int		index; // Which CPU do I belong to?
 
-	/* Where are the data checksum blocks */
-	unsigned long	csum_start;
-	unsigned long	replica_csum_start;
-	unsigned long	num_csum_blocks;
-
-	/* Where are the data parity blocks */
-	unsigned long	parity_start;
-	unsigned long	replica_parity_start;
-	unsigned long	num_parity_blocks;
-
-	/* Start and end of allocatable range, inclusive. Excludes csum and
-	 * parity blocks.
-	 */
 	unsigned long	block_start;
 	unsigned long	block_end;
 
@@ -184,14 +171,6 @@ struct free_list {
 	unsigned long	num_blocknode;
 
 	u32		csum;		/* Protect integrity */
-
-	/* Statistics */
-	unsigned long	alloc_data_count;
-	unsigned long	free_data_count;
-	unsigned long	alloc_data_pages;
-	unsigned long	freed_data_pages;
-
-	u64		padding[8];	/* Cache line break */
 };
 
 enum aeon_new_inode_type {

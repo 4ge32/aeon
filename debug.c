@@ -14,9 +14,15 @@ struct aeon_stat_info {
 	struct list_head stat_list;
 
 	/* free list */
+	int index;
 	unsigned long block_start;
 	unsigned long block_end;
 	unsigned long num_free_blocks;
+	unsigned long alloc_data_count;
+	unsigned long freed_data_count;
+	unsigned long alloc_data_pages;
+	unsigned long freed_data_pages;
+	unsigned long num_blocknode;
 
 	/* curr free block range */
 	unsigned long range_low;
@@ -42,10 +48,19 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	struct aeon_region_table *art;
 
 	free_list = &sbi->free_lists[cpu];
+	inode_map = &sbi->inode_maps[cpu];
+	art = AEON_R_TABLE(inode_map);
 
+	/* Store data related to pmem region */
+	si->index = free_list->index;
 	si->block_start = free_list->block_start;
 	si->block_end = free_list->block_end;
-	si->num_free_blocks = free_list->num_free_blocks;
+	si->num_free_blocks = le64_to_cpu(art->num_free_blocks);
+	si->alloc_data_count = le64_to_cpu(art->alloc_data_count);
+	si->freed_data_count = le64_to_cpu(art->freed_data_count);
+	si->alloc_data_pages = le64_to_cpu(art->alloc_data_pages);
+	si->freed_data_pages = le64_to_cpu(art->freed_data_pages);
+	si->num_blocknode = free_list->num_blocknode;
 
 	tree = &(free_list->block_free_tree);
 	temp = &(free_list->first_node->node);
@@ -53,9 +68,6 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 
 	si->range_low = curr->range_low;
 	si->range_high = curr->range_high;
-
-	inode_map = &sbi->inode_maps[cpu];
-	art = AEON_R_TABLE(inode_map);
 
 	si->allocated = le64_to_cpu(art->allocated);
 	si->freed = le64_to_cpu(art->freed);
@@ -84,10 +96,20 @@ static int stat_show(struct seq_file *s, void *v)
 		aeon_update_stats(si->sbi, si, i);
 
 		seq_printf(s, "========== cpu core:  %d ==========\n", i++);
-		seq_printf(s, "block_start: %lu, block_end: %lu\n", si->block_start, si->block_end);
+		seq_printf(s, "===Free list===\n");
+		seq_printf(s, "index %d\n", si->index);
+		seq_printf(s, "block_start: %lu, block_end: %lu\n",
+			   si->block_start, si->block_end);
 		seq_printf(s, "Free blocks: %lu\n", si->num_free_blocks);
-		seq_printf(s, "Used blocks: %lu\n", (si->block_end - si->block_start + 1) - si->num_free_blocks);
-		seq_printf(s, "Current free range: %lu - %lu\n", si->range_low, si->range_high);
+		seq_printf(s, "Used blocks: %lu\n",
+			   (si->block_end - si->block_start + 1) - si->num_free_blocks);
+		seq_printf(s, "Alloc data count %lu\n", si->alloc_data_count);
+		seq_printf(s, "Alloc data pages %lu\n", si->alloc_data_pages);
+		seq_printf(s, "Freed data count %lu\n", si->freed_data_pages);
+		seq_printf(s, "Freed data pages %lu\n", si->freed_data_pages);
+		seq_printf(s, "num_blocknode    %lu\n", si->num_blocknode);
+		seq_printf(s, "Current free range: %lu - %lu\n",
+			   si->range_low, si->range_high);
 
 		seq_printf(s, "Allocated inodes: %d\n", si->allocated);
 		seq_printf(s, "Freed inodes: %d\n", si->freed);

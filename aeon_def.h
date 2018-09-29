@@ -130,7 +130,13 @@ struct aeon_region_table {
 	__le32 b_range_low;
 	__le16 i_allocated;
 	__le32 i_head_ino;
-};
+
+	__le64 num_free_blocks;
+	__le64 alloc_data_count;
+	__le64 alloc_data_pages;
+	__le64 freed_data_count;
+	__le64 freed_data_pages;
+} __attribute((__packed__));
 
 struct aeon_super_block {
 	__le16          s_map_id;

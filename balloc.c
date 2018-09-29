@@ -295,12 +295,11 @@ next:
 
 	if (free_list->num_free_blocks < num_blocks) {
 		aeon_dbg("%s: free list %d has %lu free blocks, but allocated %lu blocks?\n",
-				__func__, free_list->index,
-				free_list->num_free_blocks, num_blocks);
+			 __func__, free_list->index, free_list->num_free_blocks, num_blocks);
 		return -ENOSPC;
 	}
 
-	if (found == 1)
+	if (found)
 		free_list->num_free_blocks -= num_blocks;
 	else {
 		aeon_dbg("%s: Can't alloc.  found = %d", __func__, found);
@@ -340,6 +339,7 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	struct aeon_region_table *art;
 	unsigned long num_blocks = 0;
 	unsigned long new_blocknr = 0;
+	unsigned long free_blocks;
 	long ret_blocks = 0;
 	int retried = 0;
 
@@ -367,12 +367,18 @@ retry:
 	}
 
 alloc:
+	inode_map = &sbi->inode_maps[cpuid];
+	art = AEON_R_TABLE(inode_map);
+	free_blocks = le64_to_cpu(art->num_free_blocks);
+
 	ret_blocks = aeon_alloc_blocks_in_free_list(sb, free_list, btype,
 						    num_blocks, &new_blocknr);
 
 	if (ret_blocks > 0) {
-		free_list->alloc_data_count++;
-		free_list->alloc_data_pages += ret_blocks;
+		art->alloc_data_count++;
+		art->alloc_data_pages += cpu_to_le64(ret_blocks);
+		art->num_free_blocks = cpu_to_le64(free_list->num_free_blocks);
+		art->b_range_low += cpu_to_le32(ret_blocks);
 	}
 
 	spin_unlock(&free_list->s_lock);
@@ -384,9 +390,6 @@ alloc:
 	}
 
 	*blocknr = new_blocknr;
-	inode_map = &sbi->inode_maps[cpuid];
-	art = AEON_R_TABLE(inode_map);
-	art->b_range_low += cpu_to_le32(ret_blocks);
 
 	return ret_blocks / aeon_get_numblocks(btype);
 }
@@ -595,7 +598,6 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	struct rb_root *tree;
 	struct rb_node *temp;
 	struct aeon_range_node *node;
-	struct aeon_region_table_blocknrartb;
 
 	unsigned long blocknr = 0;
 	u64 addr = (u64)sbi->virt_addr + AEON_SB_SIZE + AEON_INODE_SIZE;
@@ -619,9 +621,7 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	blocknr = node->range_low;
 	node->range_low += AEON_PAGES_FOR_INODE;
 
-	free_list->num_free_blocks -= AEON_PAGES_FOR_INODE;
-	free_list->alloc_data_count -= AEON_PAGES_FOR_INODE;
-	free_list->alloc_data_pages += AEON_PAGES_FOR_INODE;
+	free_list->num_free_blocks += AEON_PAGES_FOR_INODE;
 
 	table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 	*table_blocknr = cpu_to_le64(blocknr);
