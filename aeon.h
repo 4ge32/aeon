@@ -589,8 +589,6 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 start_ino);
 void aeon_init_new_inode_block(struct super_block *sb, u32 ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
-unsigned long aeon_get_new_dentry_map_block(struct super_block *sb,
-					    u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
 

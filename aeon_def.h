@@ -10,7 +10,7 @@
 #define AEON_I_SHIFT            8
 #define AEON_D_SHIFT            8
 #define AEON_PAGES_FOR_INODE    5
-#define AEON_PAGES_FOR_DENTRY   5
+#define AEON_PAGES_FOR_DENTRY   1
 #define SEED			131
 
 /* auto */

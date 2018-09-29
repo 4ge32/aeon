@@ -339,7 +339,6 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	struct aeon_region_table *art;
 	unsigned long num_blocks = 0;
 	unsigned long new_blocknr = 0;
-	unsigned long free_blocks;
 	long ret_blocks = 0;
 	int retried = 0;
 
@@ -369,7 +368,6 @@ retry:
 alloc:
 	inode_map = &sbi->inode_maps[cpuid];
 	art = AEON_R_TABLE(inode_map);
-	free_blocks = le64_to_cpu(art->num_free_blocks);
 
 	ret_blocks = aeon_alloc_blocks_in_free_list(sb, free_list, btype,
 						    num_blocks, &new_blocknr);
@@ -604,11 +602,16 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	__le64 *table_blocknr;
 
 	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
+		struct aeon_region_table *art;
+
 		table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 		blocknr = le64_to_cpu(*table_blocknr);
 		inode_map->virt_addr = (void *)((blocknr << AEON_SHIFT) +
 						(u64)sbi->virt_addr);
 		inode_map->i_table_addr = inode_map->virt_addr;
+
+		art = AEON_R_TABLE(inode_map);
+		free_list->num_free_blocks = le64_to_cpu(art->num_free_blocks);
 		return;
 	}
 
@@ -621,7 +624,7 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	blocknr = node->range_low;
 	node->range_low += AEON_PAGES_FOR_INODE;
 
-	free_list->num_free_blocks += AEON_PAGES_FOR_INODE;
+	free_list->num_free_blocks -= AEON_PAGES_FOR_INODE;
 
 	table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 	*table_blocknr = cpu_to_le64(blocknr);
@@ -655,20 +658,6 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 	int num_blocks = AEON_PAGES_FOR_DENTRY;
 
 	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
-
-	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
-
-	return blocknr;
-}
-
-unsigned long aeon_get_new_dentry_map_block(struct super_block *sb,
-					    u64 *pi_addr, int cpuid)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long allocated;
-	unsigned long blocknr = 0;
-
-	allocated = aeon_new_blocks(sb, &blocknr, 1, 0, cpuid);
 
 	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 

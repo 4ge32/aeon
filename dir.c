@@ -158,8 +158,6 @@ static int aeon_init_dentry_map(struct super_block *sb,
 	struct aeon_dentry_info *de_info;
 	struct aeon_dentry_map *de_map;
 	struct aeon_dentry_invalid *adi;
-	unsigned long blocknr;
-	u64 pi_addr = 0;
 
 	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
 	if (!de_info)
@@ -172,7 +170,6 @@ static int aeon_init_dentry_map(struct super_block *sb,
 		return -ENOMEM;
 	}
 
-	blocknr = aeon_get_new_dentry_map_block(sb, &pi_addr, ANY_CPU);
 	de_map = &de_info->de_map;
 	de_map->num_dentries = 0;
 	de_map->num_latest_dentry = 0;
