@@ -90,7 +90,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	parent_ino = le32_to_cpu(pi->aeon_ino);
 
 	if (list_empty(&sbi->ivl->i_valid_list))
-		return -ENOENT;
+		return 0;
 
 	mutex_lock(&de_info->dentry_mutex);
 
