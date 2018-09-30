@@ -9,7 +9,7 @@
 /* manual */
 #define AEON_I_SHIFT            8
 #define AEON_D_SHIFT            8
-#define AEON_PAGES_FOR_INODE    5
+#define AEON_PAGES_FOR_INODE    1
 #define AEON_PAGES_FOR_DENTRY   1
 #define SEED			131
 
@@ -123,13 +123,15 @@ struct aeon_inode {
 } __attribute((__packed__));
 
 struct aeon_region_table {
-	__le64 allocated;
 	__le64 freed;
 	__le32 i_num_allocated_pages;
 	__le32 i_range_high;
 	__le32 b_range_low;
-	__le16 i_allocated;
+	__le64 allocated;	/* allocated entire inodes */
+	__le16 i_allocated;	/* allocated inodes in current pages */
 	__le32 i_head_ino;
+	__le64 i_blocknr;	/* it can be deleted */
+	__le64 this_block;	/* this table blocknr */
 
 	__le64 num_free_blocks;
 	__le64 alloc_data_count;

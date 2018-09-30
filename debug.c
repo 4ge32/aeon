@@ -145,20 +145,25 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		unsigned long blocknr;
 		unsigned long internal_ino;
 		u64 addr;
+		u32 head_ino;
 		u32 ino;
 		int i;
 		int space = 0;
 
-		if (cpu_id == 0)
+		if (cpu_id == 0) {
 			seq_printf(s, "=========== imem cache Info ==========\n");
+			seq_printf(s, "head address 0x%llx\n",
+				   (u64)si->sbi->virt_addr);
+		}
 		aeon_update_stats(si->sbi, si, cpu_id);
 		seq_printf(s, "cpu-id: %d\n", cpu_id);
 		inode_map = &si->sbi->inode_maps[cpu_id];
 		art = AEON_R_TABLE(inode_map);
-		if (inode_map->head_ino < si->sbi->cpus * 2)
+		head_ino = le32_to_cpu(art->i_head_ino);
+		if (head_ino < si->sbi->cpus * 2)
 			space = 1;
-		ino = inode_map->head_ino + (le16_to_cpu(art->i_allocated) -
-					     space) * si->sbi->cpus + cpu_id;
+		ino = head_ino + (le16_to_cpu(art->i_allocated) -
+						space) * si->sbi->cpus;
 		if (inode_map->im) {
 			struct imem_cache *im;
 			int count = 0;
@@ -175,7 +180,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		}
 		for (i = le16_to_cpu(art->i_allocated);
 		     i < AEON_I_NUM_PER_PAGE; i++) {
-			blocknr = inode_map->curr_i_blocknr;
+			blocknr = le64_to_cpu(art->i_blocknr);
 			internal_ino = ((ino - cpu_id) / si->sbi->cpus) %
 						AEON_I_NUM_PER_PAGE;
 			addr = (u64)si->sbi->virt_addr + (blocknr << AEON_SHIFT)

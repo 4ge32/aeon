@@ -59,11 +59,7 @@ struct inode_map {
 	unsigned long		num_range_node_inode;
 	struct aeon_range_node	*first_inode_range;
 	struct imem_cache	*im;
-	u64			curr_i_blocknr;
-	void			*virt_addr;
 	void			*i_table_addr;
-	void			*i_block_addr;
-	u32			head_ino;
 };
 
 /*
@@ -649,3 +645,4 @@ int __init aeon_create_root_stats(void);
 void aeon_destroy_root_stats(void);
 
 #endif
+

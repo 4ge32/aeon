@@ -242,13 +242,10 @@ static u64 aeon_get_dentry_block(struct super_block *sb,
 				 struct aeon_dentry **direntry)
 {
 	struct aeon_dentry_map *de_map = &de_info->de_map;
-	unsigned long internal_de;
 	u64 blocknr = 0;
 
 	if(!isInvalidSpace(de_info)) {
-		internal_de = le64_to_cpu(de_map->num_internal_dentries);
-
-		if (internal_de == AEON_INTERNAL_ENTRY) {
+		if (de_map->num_internal_dentries == AEON_INTERNAL_ENTRY) {
 			*direntry = aeon_alloc_new_dentry_block(sb, &blocknr);
 			if (IS_ERR(*direntry))
 				return -ENOSPC;

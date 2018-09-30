@@ -387,6 +387,7 @@ static void aeon_fill_region_table(struct super_block *sb)
 		if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
 			unsigned long range_high;
 			unsigned long inode_start;
+			unsigned long blocknr;
 
 			inode_start = sbi->cpus + cpu_id;
 			range_high = 0;
@@ -398,6 +399,10 @@ static void aeon_fill_region_table(struct super_block *sb)
 			art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
 			art->i_allocated = le32_to_cpu(1);
 			art->i_head_ino = cpu_to_le32(inode_start);
+			blocknr = (((u64)inode_map->i_table_addr -
+				   (u64)sbi->virt_addr) >> AEON_SHIFT);
+			art->i_blocknr = cpu_to_le64(blocknr);
+			art->this_block = cpu_to_le64(blocknr);
 
 			art->num_free_blocks = cpu_to_le64(free_list->num_free_blocks);
 			art->alloc_data_count = cpu_to_le64(1);
@@ -461,6 +466,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	aeon_dbg("free list    %lu\n", sizeof(struct free_list));
 	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
+	aeon_dbg("inode map    %lu\n", sizeof(struct inode_map));
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
@@ -490,9 +496,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
-		inode_map->virt_addr = 0;
 		inode_map->i_table_addr = 0;
-		inode_map->i_block_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
 	}
