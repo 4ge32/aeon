@@ -431,8 +431,9 @@ static int aeon_rebuild_inode(struct super_block *sb,
 {
 	struct aeon_inode_info_header *sih  = &si->header;
 	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
-	aeon_init_header(sb, sih, 0755);
+	int err;
 
+	aeon_init_header(sb, sih, 0755);
 	sih->pi_addr = pi_addr;
 
 	if (ino == AEON_ROOT_INO)
@@ -443,7 +444,11 @@ static int aeon_rebuild_inode(struct super_block *sb,
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFDIR:
-		aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
+		err = aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
+		if (err) {
+			aeon_err(sb, "Can't rebuld dir tree\n");
+			return err;
+		}
 		break;
 	default:
 		break;
