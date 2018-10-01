@@ -203,7 +203,7 @@ static unsigned int imem_cache_rebuild(struct aeon_sb_info *sbi,
 		if (i == 1)
 			*next_blocknr = le64_to_cpu(pi->i_next_inode_block);
 
-		if (pi->valid && count < allocated) {
+		if (pi->valid && (count < allocated)) {
 			/* Recovering created object */
 			if (ino != le32_to_cpu(pi->aeon_ino))
 				goto next;
@@ -231,7 +231,7 @@ static unsigned int imem_cache_rebuild(struct aeon_sb_info *sbi,
 			list_add_tail(&ivl->i_valid_list,
 				      &sbi->ivl->i_valid_list);
 		} else {
-			/* Recovering space that had benn used */
+			/* Recovering space that had been used */
 			u32 i = le32_to_cpu(art->i_range_high);
 			if (ino > (i * sbi->cpus + cpu_id))
 				goto next;
@@ -285,8 +285,7 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 	for (i = 1; i < le32_to_cpu(art->i_num_allocated_pages) /
 					AEON_PAGES_FOR_INODE; i++) {
 		ret = imem_cache_rebuild(sbi, inode_map, offset, ino,
-					 le64_to_cpu(art->allocated),
-					 &blocknr, 0, cpu_id);
+					 allocated, &blocknr, 0, cpu_id);
 		allocated -= ret;
 		offset = blocknr;
 		ino = ino + (AEON_I_NUM_PER_PAGE) * sbi->cpus;
