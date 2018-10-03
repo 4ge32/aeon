@@ -468,6 +468,8 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("free list    %lu\n", sizeof(struct free_list));
 	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
 	aeon_dbg("inode map    %lu\n", sizeof(struct inode_map));
+	aeon_dbg("sb info      %lu\n", sizeof(struct aeon_sb_info));
+	aeon_dbg("super block  %lu\n", sizeof(struct aeon_super_block));
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)

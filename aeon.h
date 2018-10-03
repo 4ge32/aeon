@@ -80,50 +80,40 @@ struct aeon_sb_info {
 
 	unsigned long	num_blocks;
 
-	/*
-	 * Backing store option:
-	 * 1 = no load, 2 = no store,
-	 * else do both
-	 */
-	unsigned int	aeon_backing_option;
-
 	/* Mount options */
-	unsigned long	bpi;
-	unsigned long	num_inodes;
 	unsigned long	blocksize;
 	unsigned long	initsize;
 	unsigned long	s_mount_opt;
-	kuid_t		uid;    /* Mount uid for root directory */
-	kgid_t		gid;    /* Mount gid for root directory */
-	umode_t		mode;   /* Mount mode for root directory */
+	kuid_t		uid;		/* Mount uid for root directory */
+	kgid_t		gid;		/* Mount gid for root directory */
+	umode_t		mode;		/* Mount mode for root directory */
 	atomic_t	next_generation;
-	/* inode tracking */
-	unsigned long	s_inodes_used_count;
-	unsigned long	reserved_blocks;
 
-	struct mutex	s_lock;	/* protects the SB's buffer-head */
+	/* protects the SB's buffer-head */
+	struct mutex s_lock;
 
+	/* the number of cpu cores */
 	int cpus;
-	int trees;
 
-	/* ZEROED page for cache page initialized */
-	//void *zeroed_page;
+	/* per-CPU inode map */
+	struct inode_map *inode_maps;
 
-	/* Per-CPU inode map */
-	struct inode_map	*inode_maps;
-
-	/* Decide new inode map id */
+	/* decide new inode map id*/
 	unsigned long map_id;
 
-	/* Per-CPU free block list */
+	/* per CPU free block list */
 	struct free_list *free_lists;
 
-	/* Shared free block list */
+	/* shared free block list */
 	unsigned long per_list_blocks;
 
-	struct i_valid_list *ivl; /* Used in mount time */
+	/* used in mount time */
+	struct i_valid_list *ivl;
 
-	struct aeon_inode_info_header *sih; /* root inode info */
+	/* store root inode info */
+	struct aeon_inode_info *si;
+
+	/* used show debug info */
 	struct aeon_stat_info *stat_info;
 };
 

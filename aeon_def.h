@@ -150,8 +150,8 @@ struct aeon_super_block {
 
 	__le32		s_mtime;            /* mount time */
 	__le32		s_wtime;            /* write time */
+
 	__le64          s_num_inodes;
-	/* fields for fast mount support. Always keep them together */
 	__le64		s_num_free_blocks;
 
 	char		pad[456];

@@ -282,7 +282,6 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid,
 	*ino =  new_ino  * sbi->cpus + cpuid;
 	//aeon_dbg("%s: %u - %d - %d - %u\n", __func__, new_ino, sbi->cpus,
 	//						cpuid, *ino);
-	sbi->s_inodes_used_count++;
 	art->i_range_high = le32_to_cpu(i->range_high);
 	art->allocated++;
 	art->i_allocated++;
@@ -443,7 +442,7 @@ static int aeon_rebuild_inode(struct super_block *sb,
 	sih->pi_addr = pi_addr;
 
 	if (ino == AEON_ROOT_INO)
-		AEON_SB(sb)->sih = sih;
+		AEON_SB(sb)->si = si;
 
 	if (pi->i_new)
 		goto end;
@@ -691,7 +690,6 @@ err:
 	aeon_err(sb, "Unable to free inode %lu\n", ino);
 	return ret;
 block_found:
-	sbi->s_inodes_used_count--;
 	art->freed++;
 	art->i_allocated--;
 	art->allocated--;

@@ -220,7 +220,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 	si = list_first_entry(&aeon_stat_list, struct aeon_stat_info, stat_list);
 	sbi = si->sbi;
 	pi = aeon_get_reserved_inode(sbi->sb, AEON_ROOT_INO);
-	de_map = aeon_get_dentry_map(sbi->sb, sbi->sih);
+	de_map = aeon_get_dentry_map(sbi->sb, &sbi->si->header);
 	if (!de_map)
 		return 0;
 

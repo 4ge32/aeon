@@ -8,11 +8,9 @@
 static int aeon_create(struct inode *dir, struct dentry *dentry,
 		       umode_t mode, bool excl)
 {
-	struct aeon_inode *pidir;
 	struct super_block *sb = dir->i_sb;
+	struct aeon_inode *pidir;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
-	struct aeon_inode_info *si = AEON_I(dir);
-	struct aeon_inode_info_header *sih = &si->header;
 	struct inode *inode = NULL;
 	u64 pi_addr = 0;
 	u64 i_blocknr = 0;
@@ -20,7 +18,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	u32 ino;
 	int err = PTR_ERR(inode);
 
-	pidir = aeon_get_inode(sb, sih);
+	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
 	if (!pidir)
 		goto out;
 
@@ -424,15 +422,15 @@ out_dir:
 static int aeon_mknod(struct inode *dir, struct dentry *dentry,
 		      umode_t mode, dev_t rdev)
 {
-	struct inode *inode = NULL;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_inode *pidir;
 	struct aeon_super_block *aeon_sb = aeon_get_super(dir->i_sb);
-	int err = PTR_ERR(inode);
+	struct inode *inode = NULL;
 	u64 pi_addr = 0;
 	u64 i_blocknr = 0;
 	u64 d_blocknr = 0;
 	u32 ino;
+	int err = PTR_ERR(inode);
 
 	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
 	if (!pidir)
