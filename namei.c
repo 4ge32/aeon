@@ -421,11 +421,46 @@ out_dir:
 	return err;
 }
 
-static int aeon_mknod (struct inode * dir, struct dentry *dentry,
-		       umode_t mode, dev_t rdev)
+static int aeon_mknod(struct inode *dir, struct dentry *dentry,
+		      umode_t mode, dev_t rdev)
 {
-	aeon_dbg("%s\n", __func__);
+	struct inode *inode = NULL;
+	struct super_block *sb = dir->i_sb;
+	struct aeon_inode *pidir;
+	struct aeon_super_block *aeon_sb = aeon_get_super(dir->i_sb);
+	int err = PTR_ERR(inode);
+	u64 pi_addr = 0;
+	u64 i_blocknr = 0;
+	u64 d_blocknr = 0;
+	u32 ino;
+
+	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
+	if (!pidir)
+		goto out;
+
+	ino = aeon_new_aeon_inode(sb, &pi_addr, &i_blocknr);
+	if (ino == 0)
+		goto out;
+
+	err = aeon_add_dentry(dentry, ino, i_blocknr, &d_blocknr, 0);
+	if (err)
+		goto out;
+
+	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, ino, mode,
+				   le32_to_cpu(pidir->aeon_ino),
+				   d_blocknr, 0, rdev, &dentry->d_name);
+	if (IS_ERR(inode))
+		goto out;
+
+	d_instantiate(dentry, inode);
+
+	aeon_sb->s_num_inodes++;
+	aeon_update_super_block_csum(aeon_sb);
+
 	return 0;
+
+out:
+	return err;
 }
 
 const struct inode_operations aeon_dir_inode_operations = {
@@ -439,4 +474,10 @@ const struct inode_operations aeon_dir_inode_operations = {
 	.rename  = aeon_rename,
 	.mknod   = aeon_mknod,
 	.setattr = aeon_setattr,
+	.get_acl = NULL,
+};
+
+const struct inode_operations aeon_special_inode_operations = {
+	.setattr = aeon_setattr,
+	.get_acl = NULL,
 };

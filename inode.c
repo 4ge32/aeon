@@ -141,7 +141,7 @@ void aeon_init_header(struct super_block *sb,
 static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
 				       struct inode *inode,
-				       u32 parent_ino, u64 d_blocknr)
+				       u32 parent_ino, u64 d_blocknr, dev_t rdev)
 {
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 
@@ -160,6 +160,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_dentry_block = cpu_to_le64(d_blocknr);
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
+	pi->dev.rdev =  cpu_to_le32(rdev);
 
 	pi->aeh.eh_entries = 0;
 	pi->aeh.eh_max = 4;
@@ -214,6 +215,10 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	case TYPE_SYMLINK:
 		inode->i_op = &aeon_symlink_inode_operations;
 		break;
+	case TYPE_MKNOD:
+		init_special_inode(inode, mode, rdev);
+		inode->i_op = &aeon_special_inode_operations;
+		break;
 	default:
 		aeon_dbg("Unknown new inode type %d\n", type);
 		break;
@@ -223,7 +228,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	sih = &si->header;
 	aeon_init_header(sb, sih, pi_addr);
 
-	fill_new_aeon_inode(sb, sih, inode, parent_ino, d_blocknr);
+	fill_new_aeon_inode(sb, sih, inode, parent_ino, d_blocknr, rdev);
 
 	return inode;
 out:
@@ -506,9 +511,9 @@ static int aeon_read_inode(struct super_block *sb,
 		inode->i_op = &aeon_symlink_inode_operations;
 		break;
 	default:
-		//	inode->i_op = &aeon_special_inode_operations;
-		//	init_special_inode(inode, inode->i_mode,
-		//			   le32_to_cpu(pi->dev.rdev));
+		init_special_inode(inode, inode->i_mode,
+					   le32_to_cpu(pi->dev.rdev));
+		inode->i_op = &aeon_special_inode_operations;
 		break;
 	}
 
