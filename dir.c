@@ -217,8 +217,6 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 	de_map->num_dentries = cpu_to_le64(2);
 	de_map->block_dentry[0] = blocknr;
 
-	de_info->de = direntry;
-
 	return 0;
 }
 

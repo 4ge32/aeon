@@ -78,10 +78,10 @@ static int aeon_link(struct dentry *dest_dentry,
 {
 	struct inode *dest_inode = d_inode(dest_dentry);
 	struct inode *inode = d_inode(dentry);
-	struct aeon_inode_info *si = AEON_I(inode);
+	struct aeon_inode_info *si = AEON_I(dest_inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
-	struct aeon_inode *pi = aeon_get_inode(inode->i_sb, sih);
+	struct aeon_inode *pi;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct qstr *name = &dentry->d_name;
@@ -89,15 +89,20 @@ static int aeon_link(struct dentry *dest_dentry,
 	u64 d_blocknr = 0;
 	int err = 0;
 
-	pidir = aeon_get_inode(sb, sih);
+	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
 	if (!pidir)
 		goto out;
 
-	de = aeon_find_dentry(inode->i_sb, pi, dir,
+	pi = aeon_get_inode(sb, sih);
+	if (!pi)
+		goto out;
+
+	de = aeon_find_dentry(inode->i_sb, pidir, dir,
 			      name->name, name->len);
 
 	dest_inode->i_ctime = current_time(dest_inode);
-	inode_inc_link_count(dest_inode);
+	inc_nlink(dest_inode);
+	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
 
 	d_blocknr = de->i_blocknr;
@@ -113,7 +118,8 @@ static int aeon_link(struct dentry *dest_dentry,
 
 		return 0;
 	}
-	inode_dec_link_count(dest_inode);
+	drop_nlink(dest_inode);
+	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	iput(dest_inode);
 
 out:
@@ -128,12 +134,17 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct aeon_inode *pidir;
+	struct aeon_inode *pi;
 	struct aeon_inode update_dir;
 	struct aeon_dentry *remove_entry;
 	int ret = -ENOMEM;
 
 	pidir = aeon_get_inode(sb, sih);
 	if (!pidir)
+		goto out;
+
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
+	if (!pi)
 		goto out;
 
 	if (dentry->d_fsdata) {
@@ -151,8 +162,10 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 
 	inode->i_ctime = dir->i_ctime;
 
-	if (inode->i_nlink)
+	if (inode->i_nlink) {
 		drop_nlink(inode);
+		pi->i_links_count = cpu_to_le64(inode->i_nlink);
+	}
 
 	aeon_sb->s_num_inodes--;
 	aeon_update_super_block_csum(aeon_sb);
@@ -211,9 +224,6 @@ static int aeon_symlink(struct inode *dir,
 		goto err;
 
 	d_instantiate(dentry, inode);
-
-	pidir->i_links_count++;
-	aeon_update_inode_csum(pidir);
 
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
@@ -311,8 +321,10 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	clear_nlink(inode);
 	inode->i_ctime = dir->i_ctime;
 
-	if (dir->i_nlink)
+	if (dir->i_nlink) {
 		drop_nlink(dir);
+		pi->i_links_count = cpu_to_le64(dir->i_nlink);
+	}
 
 	aeon_sb->s_num_inodes--;
 	aeon_update_super_block_csum(aeon_sb);
@@ -337,6 +349,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct aeon_dentry *dir_de = NULL;
 	struct aeon_dentry *new_de;
 	struct aeon_inode *pi = aeon_get_inode(sb, o_sih);
+	struct aeon_inode *update;
 	struct qstr *old_name = &old_dentry->d_name;
 	struct qstr *new_name = &new_dentry->d_name;
 	u64 d_blocknr = 0;
@@ -374,27 +387,31 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		new_inode->i_ctime = current_time(new_inode);
 		if (dir_de)
 			drop_nlink(new_inode);
-		inode_dec_link_count(new_inode);
+		drop_nlink(new_inode);
+		update = aeon_get_inode(new_inode->i_sb,
+					&AEON_I(new_inode)->header);
+		update->i_links_count = cpu_to_le64(new_inode->i_nlink);
 	} else {
 		err = aeon_add_dentry(new_dentry, le32_to_cpu(old_inode->i_ino),
 				      le64_to_cpu(old_de->i_blocknr),
 				      &d_blocknr, 0);
-		pi->i_dentry_block = d_blocknr;
+		pi->i_dentry_block = cpu_to_le64(d_blocknr);
 		if (err)
 			goto out_dir;
 		if (dir_de)
-			inode_inc_link_count(new_dir);
+			inc_nlink(new_dir);
 	}
 
 	old_inode->i_ctime = current_time(old_inode);
-	mark_inode_dirty(old_inode);
-
 	aeon_remove_dentry(old_dentry, 0, pi, old_de);
 
 	if (dir_de) {
 		if (old_dir != new_dir)
 			aeon_set_link(old_inode, dir_de, new_dir, 0);
-		inode_dec_link_count(old_dir);
+		drop_nlink(old_dir);
+		update = aeon_get_inode(old_dir->i_sb,
+					&AEON_I(old_dir)->header);
+		update->i_links_count = cpu_to_le64(old_dir->i_nlink);
 	}
 
 	return 0;

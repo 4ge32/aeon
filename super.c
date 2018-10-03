@@ -73,6 +73,7 @@ static void aeon_put_super(struct super_block *sb)
 
 static int aeon_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
+	//BUG();
 	return 0;
 }
 

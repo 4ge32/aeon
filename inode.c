@@ -4,6 +4,7 @@
 #include <linux/posix_acl.h>
 #include <linux/mm.h>
 #include <linux/buffer_head.h>
+#include <linux/dax.h>
 
 #include "aeon.h"
 
@@ -202,12 +203,12 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	case TYPE_CREATE:
 		inode->i_op = &aeon_file_inode_operations;
 		inode->i_fop = &aeon_dax_file_operations;
-		//inode->i_mapping->a_ops = &aeon_aops_dax;
+		inode->i_mapping->a_ops = &aeon_dax_aops;
 		break;
 	case TYPE_MKDIR:
 		inode->i_op = &aeon_dir_inode_operations;
 		inode->i_fop = &aeon_dir_operations;
-		//inode->i_mapping->a_ops = &aeon_aops_dax;
+		inode->i_mapping->a_ops = &aeon_dax_aops;
 		set_nlink(inode, 2);
 		break;
 	case TYPE_SYMLINK:
@@ -407,7 +408,7 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u32 ino)
 
 	aeon_err(sb, "not found corresponding inode\n");
 	aeon_dbg("%s: %u\n", __func__, ino);
-	BUG_ON(1);
+	BUG();
 
 found:
 	return pi_addr;
@@ -490,7 +491,7 @@ static int aeon_read_inode(struct super_block *sb,
 	}
 
 	inode->i_blocks = le64_to_cpu(pi->i_blocks);
-	//inode->i_mapping->a_ops = &aeon_aops_dax;
+	inode->i_mapping->a_ops = &aeon_dax_aops;
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
@@ -765,6 +766,32 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	return ret;
 }
 
+int aeon_update_time(struct inode *inode,
+		     struct timespec *time, int flags)
+{
+	struct aeon_inode *pi;
+
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
+
+	if (flags & S_ATIME) {
+		inode->i_atime = *time;
+		pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+		flags &= ~S_ATIME;
+	}
+	if (flags & S_CTIME) {
+		inode->i_ctime = *time;
+		pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+		flags &= ~S_CTIME;
+	}
+	if (flags & S_MTIME) {
+		inode->i_mtime = *time;
+		pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+		flags &= ~S_MTIME;
+	}
+
+	return 0;
+}
+
 static void aeon_setattr_to_pmem(const struct inode *inode,
 				 struct aeon_inode *pi,
 				 const struct iattr *attr)
@@ -824,3 +851,17 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 out:
 	return 0;
 }
+
+static int aeon_writepages(struct address_space *mapping,
+			   struct writeback_control *wbc)
+{
+	return dax_writeback_mapping_range(mapping,
+					   mapping->host->i_sb->s_bdev, wbc);
+}
+
+const struct address_space_operations aeon_dax_aops = {
+	.writepages	= aeon_writepages,
+	.direct_IO	= noop_direct_IO,
+	.set_page_dirty	= noop_set_page_dirty,
+	.invalidatepage	= noop_invalidatepage,
+};

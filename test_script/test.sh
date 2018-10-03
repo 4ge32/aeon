@@ -47,7 +47,7 @@ remove ()
 
 create ()
 {
-  N=5
+  N=4
   for num in `seq 1 $N`
   do
     res=1

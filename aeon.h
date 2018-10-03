@@ -194,14 +194,8 @@ struct aeon_inode_info {
 
 struct aeon_dentry_invalid {
 	struct list_head invalid_list;
-	unsigned int	internal;
+	unsigned int internal;
 	unsigned long global;
-};
-
-struct aeon_dentry_entry {
-	u64 addr;
-	ino_t ino;
-	struct list_head dmem_cache;
 };
 
 struct aeon_dentry_map {
@@ -214,11 +208,7 @@ struct aeon_dentry_map {
 
 struct aeon_dentry_info {
 	struct mutex dentry_mutex;
-
-	unsigned int internal;
-	unsigned long global;
 	struct aeon_dentry_invalid *di;
-	struct aeon_dentry *de;
 	struct aeon_dentry_map de_map;
 };
 
@@ -555,7 +545,7 @@ extern const struct inode_operations aeon_symlink_inode_operations;
 extern const struct file_operations aeon_dax_file_operations;
 extern const struct file_operations aeon_dir_operations;
 extern const struct iomap_ops aeon_iomap_ops;
-extern const struct address_space_operations aeon_aops_dax;
+extern const struct address_space_operations aeon_dax_aops;
 
 /* super.c */
 struct aeon_range_node *aeon_alloc_inode_node(struct super_block *);
@@ -604,6 +594,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih);
 int aeon_free_dram_resource(struct super_block *sb,
 			    struct aeon_inode_info_header *sih);
+int aeon_update_time(struct inode *inode, struct timespec *time, int flags);
 int aeon_setattr(struct dentry *dentry, struct iattr *iattr);
 
 /* dir.c */
