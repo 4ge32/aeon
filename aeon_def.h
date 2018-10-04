@@ -141,41 +141,36 @@ struct aeon_region_table {
 } __attribute((__packed__));
 
 struct aeon_super_block {
-	__le16          s_map_id;
-	__le16          s_cpus;
-	__le32		s_magic;            /* magic signature */
-	__le32		s_blocksize;        /* blocksize in bytes */
-	__le64		s_size;             /* total size of fs in bytes */
-	__le64		s_start_dynamic;
+	__le16 s_map_id;	   /* for allocating inodes in round-robin order */
+	__le16 s_cpus;		   /* number of cpus */
+	__le32 s_magic;            /* magic signature */
+	__le32 s_blocksize;        /* blocksize in bytes */
+	__le64 s_size;             /* total size of fs in bytes */
+	__le64 s_start_dynamic;
 
-	__le32		s_mtime;            /* mount time */
-	__le32		s_wtime;            /* write time */
+	__le32 s_mtime;            /* mount time */
+	__le32 s_wtime;            /* write time */
 
-	__le64          s_num_inodes;
-	__le64		s_num_free_blocks;
+	__le64 s_num_inodes;
+	__le64 s_num_free_blocks;
 
-	char		pad[456];
-	__le32		s_csum;              /* checksum of this sb */
+	char   pad[456];
+	__le32 s_csum;              /* checksum of this sb */
 } __attribute((__packed__));
 
 struct aeon_dentry {
-	/* 36 bytes */
-	u8	entry_type;
 	u8	name_len;		/* length of the dentry name */
 	u8	valid;			/* Invalid now? */
 	u8	persisted;		/* fully persisted? */
-	__le16	de_len;			/* length of this dentry */
-	__le16	links_count;
 	/* dynamic variable */
-	__le32	mtime;			/* For both mtime and ctime */
 	__le32  internal_offset;
 	__le32  global_offset;
 	__le32	ino;			/* inode no pointed to by this entry */
 	__le64	i_blocknr;		/* block that holds a related inode */
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN];	/* File name */
-	/* 92 bytes + 4 bytes */
-	char	pad[92];
+	/* padding */
+	char	pad[101];
 	__le32	csum;			/* entry checksum */
 } __attribute((__packed__));
 

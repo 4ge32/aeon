@@ -17,12 +17,6 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define aeon_err(sb, s, args ...)       aeon_err_msg(sb, s, ## args)
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
 #define aeon_info(s, args ...)          pr_info(s, ## args)
-extern unsigned int aeon_dbgmask;
-#define AEON_DBGMASK_VERBOSE	(0x00000010)
-#define aeon_dbg_verbose(s, args ...)		 \
-	((aeon_dbgmask & AEON_DBGMASK_VERBOSE) ? aeon_dbg(s, ##args) : 0)
-#define aeon_dbgv(s, args ...) aeon_dbg_verbose(s, ##args)
-
 #define set_opt(o, opt)		(o |= AEON_MOUNT_ ## opt)
 
 #define	READDIR_END		(ULONG_MAX)
@@ -97,9 +91,6 @@ struct aeon_sb_info {
 
 	/* per-CPU inode map */
 	struct inode_map *inode_maps;
-
-	/* decide new inode map id*/
-	unsigned long map_id;
 
 	/* per CPU free block list */
 	struct free_list *free_lists;

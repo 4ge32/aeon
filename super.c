@@ -258,15 +258,29 @@ static int aeon_root_check(struct super_block *sb, struct aeon_inode *root_pi)
 		goto err;
 	}
 
-	if (le32_to_cpu(AEON_SB(sb)->aeon_sb->s_magic) != AEON_MAGIC) {
+	return 0;
+err:
+	aeon_err(sb, "%s: 0x%px", __func__, root_pi);
+	return 1;
+}
+
+static int aeon_super_block_check(struct super_block *sb)
+{
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+
+	if (le32_to_cpu(aeon_sb->s_magic) != AEON_MAGIC) {
 		aeon_err(sb, " has invalid magic number");
 		goto err;
 	}
 
+	if (le32_to_cpu(aeon_sb->s_cpus) != AEON_SB(sb)->cpus) {
+		aeon_err(sb, "not matching the number of cpu cores");
+		goto err;
+	}
 
 	return 0;
 err:
-	aeon_err(sb, "%s: 0x%px", __func__, root_pi);
+	aeon_err(sb, "%s: 0x%px", __func__, aeon_sb);
 	return 1;
 }
 
@@ -430,8 +444,10 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 		aeon_init_super_block(sb, size);
 		aeon_init_root_inode(sb, root_i);
 	} else {
-		aeon_init_root_inode(sb, root_i);
-		root_i->i_new = 0;
+		if (unlikely(root_i->i_new == 1))
+			root_i->i_new = 0;
+		if (aeon_super_block_check(sb))
+			return NULL;
 	}
 
 	aeon_init_blockmap(sb);
@@ -470,6 +486,8 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("inode map    %lu\n", sizeof(struct inode_map));
 	aeon_dbg("sb info      %lu\n", sizeof(struct aeon_sb_info));
 	aeon_dbg("super block  %lu\n", sizeof(struct aeon_super_block));
+	aeon_dbg("inode        %lu\n", sizeof(struct aeon_inode));
+	aeon_dbg("dentry       %lu\n", sizeof(struct aeon_dentry));
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
@@ -485,7 +503,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->uid  = current_fsuid();
 	sbi->gid  = current_fsgid();
 	sbi->cpus = num_online_cpus();
-	sbi->map_id = 0;
 	sbi->num_blocks = (unsigned long)(sbi->initsize) >> PAGE_SHIFT;
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);
@@ -529,9 +546,8 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_set_blocksize(sb, blocksize);
 
 	ret = aeon_build_stats(sbi);
-	if (ret) {
+	if (ret)
 		goto out2;
-	}
 
 	root_i = aeon_iget(sb, AEON_ROOT_INO);
 	if (IS_ERR(root_i)) {
