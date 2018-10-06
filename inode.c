@@ -107,6 +107,7 @@ int aeon_get_inode_address(struct super_block *sb,
 		aeon_err(sb, "%s:ino %u, pi_ino %u iblock %lu\n", __func__, ino,
 						    le32_to_cpu(pi->aeon_ino),
 						    i_blocknr);
+		aeon_dbg("0x%llx\n", *pi_addr);
 		return -EINVAL;
 	}
 
@@ -302,8 +303,12 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 	if (inode_map->im) {
 		struct imem_cache *im;
 		list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
-			if (ino == im->ino)
-				return im->addr;
+			if (ino == im->ino) {
+				addr = im->addr;
+				list_del(&im->imem_list);
+				kfree(im);
+				goto found;
+			}
 		}
 	}
 
@@ -312,12 +317,14 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 		cpu_id -= sbi->cpus;
 
 	internal_ino = (((ino - cpu_id) / sbi->cpus) %
-					AEON_I_NUM_PER_PAGE);
+			AEON_I_NUM_PER_PAGE);
 
 	blocknr = le64_to_cpu(art->i_blocknr);
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(internal_ino << AEON_I_SHIFT);
 
+found:
+	//aeon_dbg("%s ino %u addr 0x%llx\n", __func__, ino, addr);
 	return addr;
 }
 
@@ -335,12 +342,10 @@ static int aeon_get_new_inode_address(struct super_block *sb, u32 free_ino,
 	if (*pi_addr == 0)
 		goto err;
 
-	//aeon_dbg("%s: cpu-id %d --- %llx\n", __func__, cpuid, *pi_addr);
-
 	return 1;
 
 err:
-	aeon_err(sb, "can't alloc inode address\n");
+	aeon_err(sb, "can't alloc ino %u's inode address\n", free_ino);
 	return 0;
 }
 
@@ -367,8 +372,6 @@ u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr)
 		return 0;
 	}
 
-	mutex_unlock(&inode_map->inode_table_mutex);
-
 	ret = aeon_get_new_inode_address(sb, free_ino, pi_addr,
 					 i_blocknr, map_id, inode_map);
 	if (!ret) {
@@ -376,6 +379,8 @@ u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr)
 		mutex_unlock(&inode_map->inode_table_mutex);
 		return 0;
 	}
+
+	mutex_unlock(&inode_map->inode_table_mutex);
 
 	ino = free_ino;
 
@@ -728,13 +733,9 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	unsigned long last_blocknr;
 	int ret;
 
-	aeon_memunlock_inode(sb, pi);
 	pi->deleted = 1;
-
 	if (pi->valid)
 		pi->valid = 0;
-
-	aeon_memunlock_inode(sb, pi);
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:

@@ -11,6 +11,30 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 	return generic_file_llseek(file, offset, origin);
 }
 
+/* TODO:
+ * after surpassing max entrirs.
+ */
+//static struct aeon_extent *aeon_search_extent(struct aeon_inode *pi,
+//					      unsigned long offset)
+//{
+//	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+//	struct aeon_extent *ae;
+//	int entries;
+//	int i;
+//
+//
+//	entries = le16_to_cpu(aeh->eh_entries);
+//	for (i = 0; i < entries; i++) {
+//		ae = &pi->ae[i];
+//			aeon_dbg("%d\n", le16_to_cpu(ae->ex_offset));
+//		if (le16_to_cpu(ae->ex_offset) >= offset) {
+//			return ae;
+//		}
+//	}
+//
+//	return NULL;
+//}
+//
 //static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 //				   size_t len, loff_t *ppos)
 //{
@@ -48,14 +72,14 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //		goto out;
 //
 //	end_index = (isize - 1) >> PAGE_SHIFT;
+//
 //	do {
-//		unsigned long nr;
+//		unsigned long nr = 0;
 //		unsigned long left;
 //		unsigned long nvmm;
 //		void *dax_mem = NULL;
 //		int pages;
-//		ssize_t count;
-//		/* use iomap implementation */
+//		ssize_t copying;
 //
 //		if (index >= end_index) {
 //			if (index > end_index)
@@ -66,22 +90,41 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //
 //		}
 //
-//		ae = &pi->ae[index];
+//		aeon_dbg("ST---------------------\n");
+//		aeon_dbg("isize     %lld\n", isize);
+//		aeon_dbg("len       %ld\n", len);
+//		aeon_dbg("nr        %lu\n", nr);
+//		aeon_dbg("offset    %lu\n", offset);
+//		aeon_dbg("index     %lu\n", index);
+//		aeon_dbg("end index %lu\n", end_index);
+//
+//		ae = aeon_search_extent(pi, offset >> PAGE_SHIFT);
+//		if (!ae) {
+//			aeon_err(sb, "can't find target data\n");
+//			return 0;
+//		}
+//		aeon_dbg("extent of %d\n", le16_to_cpu(ae->ex_offset));
 //
 //		nvmm = le64_to_cpu(ae->ex_block) << AEON_SHIFT;
 //		dax_mem = aeon_get_block(sb, nvmm);
 //		pages = le16_to_cpu(ae->ex_length);
+//		aeon_dbg("block	    %llu\n", le64_to_cpu(ae->ex_block));
+//		aeon_dbg("nvmm	    %lu\n", nvmm);
+//		aeon_dbg("pages	    %d\n", pages);
 //
-//		nr = len - offset;
-//		if (nr > len - copied)
-//			nr = len - copied;
+//		copying = le16_to_cpu(ae->ex_length) << AEON_SHIFT;
+//		if (len < copying)
+//			nr = len;
+//		else
+//			nr = copying;
 //
-//		aeon_dbg("READ\n");
+//		aeon_dbg("READ----------------------------\n");
 //		aeon_dbg("len %lu\n", len);
 //		aeon_dbg("copied %lu\n", copied);
 //		aeon_dbg("dax_mem 0x%lx\n", (unsigned long)dax_mem);
 //		aeon_dbg("offset %ld\n", offset);
 //		aeon_dbg("nr %ld\n", nr);
+//		aeon_dbg("copying %ld\n", copying);
 //
 //		left = copy_to_user(buf + copied, dax_mem + offset, nr);
 //		copied += (nr - left);
@@ -91,12 +134,12 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //			offset += (nr - left);
 //		index += offset >> PAGE_SHIFT;
 //		offset &= ~PAGE_MASK;
+//		aeon_dbg("complete------------------\n");
 //		aeon_dbg("left %lu\n", left);
 //		aeon_dbg("copied %lu\n", copied);
 //		aeon_dbg("dax_mem 0x%lx\n", (unsigned long)dax_mem);
 //		aeon_dbg("offset %ld\n", offset);
 //		aeon_dbg("nr %ld\n", nr);
-//
 //	} while (copied < len);
 //
 //out:
@@ -120,7 +163,7 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //
 //	return ret;
 //}
-//
+
 //static ssize_t aeon_write(struct file *filp, const char __user *buf,
 //			  size_t len, loff_t *ppos)
 //{
@@ -322,7 +365,7 @@ static inline void wrap_i_size_write(struct inode *inode, struct kiocb *iocb)
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 
 	i_size_write(inode, iocb->ki_pos);
-	pi->i_size = inode->i_size;
+	pi->i_size = cpu_to_le64(inode->i_size);
 }
 
 static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
@@ -447,7 +490,6 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 				  &bno, &new, &boundary, flags & IOMAP_WRITE);
 	if (ret < 0)
 		return ret;
-
 
 	iomap->flags = 0;
 	iomap->bdev = inode->i_sb->s_bdev;

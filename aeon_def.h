@@ -32,6 +32,10 @@
 		   ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
 #define AEON_DENTRY_MAP_SIZE	AEON_DEF_BLOCK_SIZE_4K
 #define AEON_DENTRY_MAP_CSIZE	(AEON_DENTRY_MAP_SIZE - CHECKSUM_SIZE)
+#define AEON_E_SHIFT		5
+#define AEON_EXTENT_SIZE	(1 << AEON_E_SHIFT)
+#define AEON_EXTENT_HEADER_SIZE (1 << AEON_E_SHIFT)
+#define AEON_EXTENT_PER_PAGE	(AEON_DEF_BLOCK_SIZE_4K / AEON_EXTENT_SIZE)
 
 #define AEON_ROOT_INO		(1)
 #define AEON_INODE_START        (4)
@@ -56,7 +60,6 @@
 /*
  * extent tree's header referred from inode
  */
-#define AEON_EXTENT_HEADER_SIZE 32
 struct aeon_extent_header {
 	__le16  eh_entries;
 	__le16  eh_max;
@@ -66,11 +69,10 @@ struct aeon_extent_header {
 	__le32  eh_blocks;
 } __attribute((__packed__));
 
-#define AEON_EXTENT_SIZE 32
 struct aeon_extent {
 	__le64  ex_block;
 	__le16  ex_length;
-	__le64  next_block;
+	__le16  ex_offset;
 } __attribute((__packed__));
 
 /*
@@ -107,7 +109,7 @@ struct aeon_inode {
 	__le64	i_next_inode_block;
 	u8      i_internal_allocated;
 
-	__le64  i_block;        /* point extent_header */
+	__le64  i_block;        /* exist extent or point extent block */
 	__le64	i_blocks;       /* point extent log */
 	__le64	sym_block;      /* for symbolic link */
 

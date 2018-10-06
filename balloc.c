@@ -415,30 +415,60 @@ int aeon_new_data_blocks(struct super_block *sb,
 	return allocated;
 }
 
+static inline struct aeon_extent *pull_extent(struct aeon_sb_info *sbi,
+					      struct aeon_inode *pi,
+					      int index, int entries, int max)
+{
+	unsigned long blocknr;
+	u64 addr;
+
+	if (index <= max)
+		return &pi->ae[index];
+
+	blocknr = le64_to_cpu(pi->i_block);
+	entries -= max;
+
+	if (entries > AEON_EXTENT_PER_PAGE)
+		return NULL;
+
+	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
+					(entries << AEON_E_SHIFT);
+	return (struct aeon_extent *)addr;
+}
+
 static inline struct aeon_extent *search_extent(struct super_block *sb,
 						struct aeon_inode *pi,
 						unsigned long iblock,
 						int *num_blocks)
 {
-	struct aeon_extent *ae = &pi->ae[0];
-	struct aeon_extent_header *aeh = &pi->aeh;
-	int entries = aeh->eh_entries;
+	struct aeon_extent *ae;
+	struct aeon_extent_header *aeh;
+	int entries;
+	int max;
 	int index = 0;
 
 	if (!pi->i_block)
 		return NULL;
 
+	aeh = aeon_get_extent_header(pi);
+
 	if (!aeh->eh_entries)
 		return NULL;
 
-	while (entries >= 0) {
+	entries = le16_to_cpu(aeh->eh_entries);
+	max = le16_to_cpu(aeh->eh_max);
+
+	while (entries > 0) {
+		ae = pull_extent(AEON_SB(sb), pi, index, entries, max);
+		if (!ae)
+			return NULL;
+
 		*num_blocks += le16_to_cpu(ae->ex_length);
 
 		if (*num_blocks > iblock)
 			return &pi->ae[index];
 		index++;
 		entries--;
-		iblock -= le16_to_cpu(ae->ex_length);
 	}
 
 	return NULL;
@@ -448,11 +478,47 @@ static inline struct aeon_extent *search_extent(struct super_block *sb,
 static void aeon_init_extent_header(struct aeon_extent_header *aeh)
 {
 	aeh->eh_entries = 0;
-	aeh->eh_max = 4;
+	aeh->eh_max = cpu_to_le16(5);
 	aeh->eh_depth = 0;
 	aeh->eh_curr_block = 0;
 	aeh->eh_iblock = 0;
 	aeh->eh_blocks = 0;
+}
+
+static struct aeon_extent *aeon_get_extent(struct super_block *sb,
+					   struct aeon_inode *pi)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	int entries = le16_to_cpu(aeh->eh_entries);
+	int max = le16_to_cpu(aeh->eh_max);
+	int allocated;
+	unsigned long blocknr = 0;
+	u64 addr;
+
+	if (entries < max)
+	    return &pi->ae[entries];
+
+	if (entries == max) {
+		unsigned long new_blocknr = 0;
+
+		allocated = aeon_new_blocks(sb, &new_blocknr, 1, 0, ANY_CPU);
+		if (!allocated) {
+			aeon_err(sb, "no space on pmem\n");
+			return NULL;
+		}
+		pi->i_block = cpu_to_le64(new_blocknr);
+	}
+
+	blocknr = le64_to_cpu(pi->i_block);
+	entries -= max;
+	if (entries > AEON_EXTENT_PER_PAGE)
+		return NULL;
+
+	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
+						(entries << AEON_E_SHIFT);
+
+	return (struct aeon_extent *)addr;
 }
 
 /**
@@ -475,41 +541,42 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	int num_blocks = 0;
 	int allocated;
 	int length = 0;
-	int index;
 
 	if (!pi)
 		return -ENOENT;
 
 	ae = search_extent(sb, pi, iblock, &num_blocks);
 	if (ae != NULL) {
-		aeh = &pi->aeh;
 		*bno = le64_to_cpu(ae->ex_block);
-		length = num_blocks - iblock;
-		if (iblock != 0)
-			*bno = *bno + iblock;
+		length = le16_to_cpu(ae->ex_length);
+		if (length > 1) {
+			*bno += iblock;
+			length = 1;
+		}
 		return length;
+
 	}
 
 	if (!create)
 		return length;
 
-	aeh = &pi->aeh;
+	aeh = aeon_get_extent_header(pi);
 	if (!pi->i_block) {
-		pi->i_block = 1;
+		pi->i_block = cpu_to_le64(1);
 		aeon_init_extent_header(&pi->aeh);
 	}
-	index = le16_to_cpu(aeh->eh_entries);
 
-	if (le32_to_cpu(aeh->eh_iblock) == iblock && iblock != 0)
-		return num_blocks;
-
-	index = le16_to_cpu(aeh->eh_entries);
-	ae = &pi->ae[index];
+	ae = aeon_get_extent(sb, pi);
+	if (!ae) {
+		aeon_err(sb, "can't expand file more\n");
+		return 0;
+	}
 
 	allocated = aeon_new_data_blocks(sb, sih, &new_d_blocknr,
 					 iblock, max_blocks, ANY_CPU);
 	ae->ex_length = cpu_to_le16(allocated);
 	ae->ex_block = cpu_to_le64(new_d_blocknr);
+	ae->ex_offset = aeh->eh_blocks;
 	aeh->eh_curr_block = new_d_blocknr;
 	aeh->eh_iblock = cpu_to_le32(iblock);
 	aeh->eh_blocks += cpu_to_le16(allocated);
@@ -565,9 +632,9 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 			goto out;
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
-		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 		art->i_allocated = 1;
 		art->i_head_ino = cpu_to_le32(ino);
+		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 	} else
 		blocknr = le64_to_cpu(art->i_blocknr);
 

@@ -24,6 +24,8 @@ struct aeon_stat_info {
 	unsigned long freed_data_pages;
 	unsigned long num_blocknode;
 
+	unsigned long i_blocknr;
+
 	/* curr free block range */
 	unsigned long range_low;
 	unsigned long range_high;
@@ -61,6 +63,9 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	si->alloc_data_pages = le64_to_cpu(art->alloc_data_pages);
 	si->freed_data_pages = le64_to_cpu(art->freed_data_pages);
 	si->num_blocknode = free_list->num_blocknode;
+
+	/* inode page's allocation state */
+	si->i_blocknr = le64_to_cpu(art->i_blocknr);
 
 	tree = &(free_list->block_free_tree);
 	temp = &(free_list->first_node->node);
@@ -110,6 +115,7 @@ static int stat_show(struct seq_file *s, void *v)
 		seq_printf(s, "num_blocknode    %lu\n", si->num_blocknode);
 		seq_printf(s, "Current free range: %lu - %lu\n",
 			   si->range_low, si->range_high);
+		seq_printf(s, "Addr of latest head: %lu\n", si->i_blocknr);
 
 		seq_printf(s, "Allocated inodes: %d\n", si->allocated);
 		seq_printf(s, "Freed inodes: %d\n", si->freed);
@@ -164,6 +170,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 			space = 1;
 		ino = head_ino + (le16_to_cpu(art->i_allocated) -
 						space) * si->sbi->cpus;
+		aeon_dbg("%u\n", ino);
 		if (inode_map->im) {
 			struct imem_cache *im;
 			int count = 0;
@@ -231,8 +238,8 @@ static int stat_den_show(struct seq_file *s, void *v)
 	mutex_lock(&aeon_stat_mutex);
 
 	seq_printf(s, "dentries %u\n\n", num_entry);
-	seq_printf(s, "  %8s : %8s : %8s : %8s : %8s\n",
-		   "internal", "global", "blocknr", "ino", "name");
+	seq_printf(s, "  %8s : %8s : %8s : %8s : %8s : %8s\n",
+		   "internal", "global", "blocknr", "ino", "name", "type");
 
 	while (num_entry > 0) {
 		if (internal == AEON_INTERNAL_ENTRY) {
