@@ -75,7 +75,6 @@ static int aeon_link(struct dentry *dest_dentry,
 		     struct inode *dir, struct dentry *dentry)
 {
 	struct inode *dest_inode = d_inode(dest_dentry);
-	struct inode *inode = d_inode(dentry);
 	struct aeon_inode_info *si = AEON_I(dest_inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
@@ -95,15 +94,13 @@ static int aeon_link(struct dentry *dest_dentry,
 	if (!pi)
 		goto out;
 
-	de = aeon_find_dentry(inode->i_sb, pidir, dir,
+	de = aeon_find_dentry(dest_inode->i_sb, pidir, dir,
 			      name->name, name->len);
 
 	dest_inode->i_ctime = current_time(dest_inode);
 	inc_nlink(dest_inode);
 	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
-
-	d_blocknr = de->i_blocknr;
 
 	err = aeon_add_dentry(dentry, dest_inode->i_ino,
 			      le64_to_cpu(de->i_blocknr),

@@ -426,13 +426,11 @@ static inline struct aeon_extent *pull_extent(struct aeon_sb_info *sbi,
 		return &pi->ae[index];
 
 	blocknr = le64_to_cpu(pi->i_block);
-	entries -= max;
-
-	if (entries > AEON_EXTENT_PER_PAGE)
-		return NULL;
+	entries -= max - 1;
+	index -= max - 1;
 
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
-					(entries << AEON_E_SHIFT);
+					(index << AEON_E_SHIFT);
 	return (struct aeon_extent *)addr;
 }
 
@@ -459,21 +457,24 @@ static inline struct aeon_extent *search_extent(struct super_block *sb,
 	max = le16_to_cpu(aeh->eh_max);
 
 	while (entries > 0) {
+		//aeon_dbg("---entry %d\n", entries);
+		//aeon_dbg("   index %d\n", index);
 		ae = pull_extent(AEON_SB(sb), pi, index, entries, max);
 		if (!ae)
 			return NULL;
 
 		*num_blocks += le16_to_cpu(ae->ex_length);
+		//aeon_dbg("   numbl %d\n", *num_blocks);
+		//aeon_dbg("   ibloc %ld---\n", iblock);
 
 		if (*num_blocks > iblock)
-			return &pi->ae[index];
+			return ae;
 		index++;
 		entries--;
 	}
 
 	return NULL;
 }
-
 
 static void aeon_init_extent_header(struct aeon_extent_header *aeh)
 {
@@ -496,10 +497,10 @@ static struct aeon_extent *aeon_get_extent(struct super_block *sb,
 	unsigned long blocknr = 0;
 	u64 addr;
 
-	if (entries < max)
-	    return &pi->ae[entries];
+	if (entries <= max)
+		return &pi->ae[entries];
 
-	if (entries == max) {
+	if (entries == max + 1) {
 		unsigned long new_blocknr = 0;
 
 		allocated = aeon_new_blocks(sb, &new_blocknr, 1, 0, ANY_CPU);
@@ -511,13 +512,14 @@ static struct aeon_extent *aeon_get_extent(struct super_block *sb,
 	}
 
 	blocknr = le64_to_cpu(pi->i_block);
-	entries -= max;
+	entries -= max - 1;
 	if (entries > AEON_EXTENT_PER_PAGE)
 		return NULL;
 
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 						(entries << AEON_E_SHIFT);
 
+	//aeon_dbg("GET! 0x%llx\n", addr);
 	return (struct aeon_extent *)addr;
 }
 
@@ -580,10 +582,10 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	aeh->eh_curr_block = new_d_blocknr;
 	aeh->eh_iblock = cpu_to_le32(iblock);
 	aeh->eh_blocks += cpu_to_le16(allocated);
+	aeh->eh_entries++;
 
 	*new = true;
 	*bno = new_d_blocknr;
-	aeh->eh_entries++;
 
 	return allocated;
 }

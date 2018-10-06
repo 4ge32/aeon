@@ -163,12 +163,6 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(rdev);
 
-	pi->aeh.eh_entries = 0;
-	pi->aeh.eh_max = 4;
-	pi->aeh.eh_depth = 0;
-	pi->aeh.eh_curr_block = 0;
-	pi->aeh.eh_iblock = 0;
-
 	pi->persisted = 0;
 	pi->valid = 1;
 

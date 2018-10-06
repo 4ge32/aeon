@@ -216,7 +216,6 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 		aeon_dbg("device does not support DAX\n");
 		return -EINVAL;
 	}
-
 	sbi->s_bdev = sb->s_bdev;
 
 	dax_dev = fs_dax_get_by_host(sb->s_bdev->bd_disk->disk_name);

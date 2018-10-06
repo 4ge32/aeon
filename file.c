@@ -374,6 +374,7 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct inode *inode = file->f_mapping->host;
 	ssize_t ret;
 
+	//aeon_dbg("---Now start writing : ret %ld---\n", ret);
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
 	if (ret <= 0)
@@ -393,6 +394,11 @@ out_unlock:
 	inode_unlock(inode);
 	if (ret > 0)
 		ret = generic_write_sync(iocb, ret);
+	//if (ret == -EIO)
+	//	aeon_dbg("IO ERROR\n");
+	//else
+	//	aeon_dbg("Maybe success");
+	//aeon_dbg("--------finish---------\n");
 	return ret;
 }
 
@@ -408,8 +414,7 @@ static int aeon_dax_huge_fault(struct vm_fault *vmf,
 	int res = 0;
 	int err = 0;
 
-	write = (vmf->flags & FAULT_FLAG_WRITE) &&
-		(vmf->vma->vm_flags & VM_SHARED);
+	write = (vmf->flags & FAULT_FLAG_WRITE);
 
 	if (write) {
 		sb_start_pagefault(sb);
@@ -418,13 +423,11 @@ static int aeon_dax_huge_fault(struct vm_fault *vmf,
 	down_read(&sih->i_mmap_sem);
 
 	res = dax_iomap_fault(vmf, pe_size, &pfn, &err, &aeon_iomap_ops);
-	if (write) {
-		if (res & VM_FAULT_NEEDDSYNC)
-			res = dax_finish_sync_fault(vmf, pe_size, pfn);
-		up_read(&sih->i_mmap_sem);
+
+	up_read(&sih->i_mmap_sem);
+
+	if (write)
 		sb_end_pagefault(sb);
-	} else
-		up_read(&sih->i_mmap_sem);
 
 	return res;
 }
@@ -436,7 +439,7 @@ static int aeon_dax_fault(struct vm_fault *vmf)
 
 static const struct vm_operations_struct aeon_dax_vm_ops = {
 	.fault		= aeon_dax_fault,
-	.huge_fault	= aeon_dax_huge_fault,
+	//.huge_fault	= aeon_dax_huge_fault,
 	.page_mkwrite	= aeon_dax_fault,
 	.pfn_mkwrite	= aeon_dax_fault,
 };
