@@ -286,7 +286,6 @@ static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
 		/* Allocate partial blocknode */
 		*new_blocknr = curr->range_low;
 		curr->range_low += num_blocks;
-
 		found = 1;
 		break;
 next:
@@ -415,9 +414,9 @@ int aeon_new_data_blocks(struct super_block *sb,
 	return allocated;
 }
 
-static inline struct aeon_extent *pull_extent(struct aeon_sb_info *sbi,
-					      struct aeon_inode *pi,
-					      int index, int entries, int max)
+struct aeon_extent *pull_extent(struct aeon_sb_info *sbi,
+				struct aeon_inode *pi,
+				int index, int entries, int max)
 {
 	unsigned long blocknr;
 	u64 addr;
@@ -434,10 +433,10 @@ static inline struct aeon_extent *pull_extent(struct aeon_sb_info *sbi,
 	return (struct aeon_extent *)addr;
 }
 
-static inline struct aeon_extent *search_extent(struct super_block *sb,
-						struct aeon_inode *pi,
-						unsigned long iblock,
-						int *num_blocks)
+struct aeon_extent *aeon_search_extent(struct super_block *sb,
+				       struct aeon_inode *pi,
+				       unsigned long iblock,
+				       int *num_blocks)
 {
 	struct aeon_extent *ae;
 	struct aeon_extent_header *aeh;
@@ -486,8 +485,8 @@ static void aeon_init_extent_header(struct aeon_extent_header *aeh)
 	aeh->eh_blocks = 0;
 }
 
-static struct aeon_extent *aeon_get_extent(struct super_block *sb,
-					   struct aeon_inode *pi)
+struct aeon_extent *aeon_get_extent(struct super_block *sb,
+				    struct aeon_inode *pi)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
@@ -547,7 +546,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	if (!pi)
 		return -ENOENT;
 
-	ae = search_extent(sb, pi, iblock, &num_blocks);
+	ae = aeon_search_extent(sb, pi, iblock, &num_blocks);
 	if (ae != NULL) {
 		*bno = le64_to_cpu(ae->ex_block);
 		length = le16_to_cpu(ae->ex_length);

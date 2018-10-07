@@ -163,6 +163,12 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(rdev);
 
+	pi->aeh.eh_entries = 0;
+	pi->aeh.eh_max = cpu_to_le16(5);
+	pi->aeh.eh_depth = 0;
+	pi->aeh.eh_iblock = 0;
+	pi->aeh.eh_blocks = 0;
+
 	pi->persisted = 0;
 	pi->valid = 1;
 
@@ -810,6 +816,112 @@ static void aeon_setattr_to_pmem(const struct inode *inode,
 		pi->i_mode = cpu_to_le16(inode->i_mode);
 }
 
+static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
+{
+	struct aeon_inode *pi;
+	struct aeon_extent *ae;
+	struct aeon_extent_header *aeh;
+	unsigned int blkbits = inode->i_blkbits;
+	unsigned long iblock = offset >> blkbits;
+	unsigned long num_blocks = 0;
+	unsigned long new_num_blocks = iblock;
+	unsigned long new_blocknr = 0;
+	loff_t old_size = inode->i_size;
+	int allocated;
+	int entries;
+	int max;
+	int index = 0;
+
+	//aeon_dbg("offset %llu\n", offset);
+
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
+	aeh = aeon_get_extent_header(pi);
+
+	entries = le16_to_cpu(aeh->eh_entries);
+	max = le16_to_cpu(aeh->eh_max);
+	while(entries > 0) {
+		ae = pull_extent(AEON_SB(inode->i_sb), pi, index, entries, max);
+
+		num_blocks += le16_to_cpu(ae->ex_length);
+		//aeon_dbg("num_blocks %lu, iblock %lu\n", num_blocks, iblock);
+		if (num_blocks >= iblock) {
+			// release or expand ? blocks
+			if (old_size < offset) {
+				void *dax_mem;
+				unsigned long nvmm;
+				unsigned long nr;
+				unsigned long count;
+				aeh->eh_entries = cpu_to_le16(++index);
+
+				nr = offset - old_size;
+
+				count = (1 << AEON_SHIFT) - nr;
+				nvmm = le64_to_cpu(ae->ex_length) << AEON_SHIFT;
+				dax_mem = aeon_get_block(inode->i_sb, nvmm);
+				memzero_explicit(dax_mem + nr, count);
+				//aeon_dbg("shrink or expand file size\n");
+				//aeon_dbg("nr %lu cound %lu\n", nr, count);
+			}
+			return;
+		}
+		index++;
+		entries--;
+		new_num_blocks -= num_blocks;
+
+	}
+
+	ae = aeon_get_extent(inode->i_sb, pi);
+	if (!ae) {
+		aeon_err(inode->i_sb, "can't expand file more\n");
+		return;
+	}
+	//aeon_dbg("lets get  num %lu\n", new_num_blocks);
+	allocated = aeon_new_data_blocks(inode->i_sb, &AEON_I(inode)->header,
+					 &new_blocknr, 0, new_num_blocks, ANY_CPU);
+	//aeon_dbg("get %d\n", allocated);
+	ae->ex_length = cpu_to_le16(allocated);
+	ae->ex_block = cpu_to_le64(new_blocknr);
+	ae->ex_offset = aeh->eh_blocks;
+	aeh->eh_curr_block = new_blocknr;
+	aeh->eh_iblock = cpu_to_le32(iblock);
+	aeh->eh_blocks += cpu_to_le16(allocated);
+	aeh->eh_entries++;
+}
+
+static int aeon_setsize(struct inode *inode, loff_t newsize)
+{
+	struct aeon_inode *pi;
+	int err;
+
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
+
+	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
+	      S_ISLNK(inode->i_mode)))
+		return -EINVAL;
+	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+		return -EPERM;
+
+	/* dio_wait ? */
+	inode_dio_wait(inode);
+
+	truncate_pagecache(inode, newsize);
+	dax_sem_down_write(&AEON_I(inode)->header);
+	aeon_truncate_blocks(inode, newsize);
+	dax_sem_up_write(&AEON_I(inode)->header);
+
+	err = iomap_zero_range(inode, newsize, PAGE_ALIGN(newsize) - newsize,
+			       NULL, &aeon_iomap_ops);
+	if (err)
+		return err;
+
+	inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode->i_size = newsize;
+	pi->i_mtime = pi->i_ctime = cpu_to_le64(inode->i_mtime.tv_sec);
+	pi->i_size = cpu_to_le64(newsize);
+
+	return 0;
+}
+
 int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 {
 	struct inode *inode = d_inode(dentry);
@@ -841,8 +953,11 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 	if (ia_valid == 0)
 		return 0;
 
-	if (iattr->ia_valid & ATTR_SIZE && iattr->ia_size != inode->i_size)
-		return -EPERM;
+	if (iattr->ia_valid & ATTR_SIZE && iattr->ia_size != inode->i_size) {
+		err = aeon_setsize(inode, iattr->ia_size);
+		if (err)
+			return err;
+	}
 
 	return 0;
 

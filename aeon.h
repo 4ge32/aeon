@@ -22,6 +22,9 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define	READDIR_END		(ULONG_MAX)
 #define	ANY_CPU			(65536)
 
+#define dax_sem_down_write(aeon_inode)	down_write(&(aeon_inode)->dax_sem)
+#define dax_sem_up_write(aeon_inode)	up_write(&(aeon_inode)->dax_sem)
+
 extern int wprotect;
 
 struct imem_cache {
@@ -162,6 +165,7 @@ struct aeon_inode_info_header {
 	struct aeon_dentry_info *de_info;
 	struct rb_root rb_tree;		/* RB tree for directory */
 	struct rw_semaphore i_mmap_sem;
+	struct rw_semaphore dax_sem;
 	int num_vmas;
 	u64 pi_addr;
 	u64 last_setattr;		/* Last setattr entry */
@@ -544,6 +548,13 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
+struct aeon_extent *aeon_search_extent(struct super_block *sb,
+				       struct aeon_inode *pi,
+				       unsigned long iblock, int *num_blocks);
+struct aeon_extent *pull_extent(struct aeon_sb_info *sbi, struct aeon_inode *pi,
+				int index, int entries, int max);
+struct aeon_extent *aeon_get_extent(struct super_block *sb,
+				    struct aeon_inode *pi);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);
