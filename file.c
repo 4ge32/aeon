@@ -5,146 +5,34 @@
 
 #include "aeon.h"
 
-static int aeon_lookup_hole_in_range(struct super_block *sb,
-				     struct aeon_inode *pi,
-				     unsigned long first_blocknr,
-				     unsigned long last_blocknr,
-				     bool *data_found, bool *hole_found,
-				     int hole)
-{
-	struct aeon_extent *ae;
-	unsigned long blocks = 0;
-	unsigned long pgoff;
-	unsigned long old_pgoff;
-	int next = 1;
-
-	pgoff = first_blocknr;
-	while (pgoff <= last_blocknr) {
-		old_pgoff = pgoff;
-		ae = aeon_search_extent(sb, pi, pgoff, &next);
-		if (ae) {
-			*data_found = true;
-			if (!hole)
-				goto done;
-			pgoff++;
-		} else {
-			*hole_found = true;
-			ae = aeon_search_extent(sb, pi, pgoff, &next);
-			pgoff++;
-			if (ae && pgoff > last_blocknr)
-				pgoff = last_blocknr;
-		}
-		next++;
-
-		if (!*hole_found || !hole)
-			blocks += pgoff - old_pgoff;
-	}
-
-done:
-	return blocks;
-}
-
-static unsigned long aeon_find_region(struct inode *inode,
-				      loff_t *offset, int hole)
-{
-	struct aeon_inode *pi;
-	unsigned int blkbits = inode->i_blkbits;
-	unsigned long first_blocknr;
-	unsigned long last_blocknr;
-	unsigned long blocks = 0;
-	unsigned long offset_in_block;
-	bool data_found = false;
-	bool hole_found = false;
-
-	aeon_dbg("Let's seek on pmem\n");
-
-	if (*offset >= inode->i_size)
-		return -ENXIO;
-
-	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
-	if (!pi)
-		return -ENXIO;
-
-	if (!inode->i_blocks || le64_to_cpu(pi->i_size)) {
-		if (hole)
-			return inode->i_size;
-		else
-			return -ENXIO;
-	}
-
-	offset_in_block = *offset & ((1UL << blkbits) - 1);
-
-	first_blocknr = *offset >> blkbits;
-	last_blocknr = inode->i_size >> blkbits;
-	aeon_dbg("find_region offset %llx, first_blocknr %lx, last_blocknr %lx hole %d\n",
-		 *offset, first_blocknr, last_blocknr, hole);
-
-	blocks = aeon_lookup_hole_in_range(inode->i_sb, pi, first_blocknr,
-					   last_blocknr, &data_found,
-					   &hole_found, hole);
-
-	if (!hole && !data_found && hole_found)
-		return -ENXIO;
-
-	if (data_found && !hole_found) {
-		if (hole)
-			*offset = inode->i_size;
-		return 0;
-	}
-
-	if (offset_in_block) {
-		blocks--;
-		*offset += (blocks << blkbits) +
-			   ((1 << blkbits) - offset_in_block);
-	} else {
-		*offset += blocks << blkbits;
-	}
-
-	return 0;
-}
-
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
-	int ret;
+	loff_t maxbytes = inode->i_sb->s_maxbytes;
 
 	if (origin != SEEK_DATA && origin != SEEK_HOLE)
 		return generic_file_llseek(file, offset, origin);
 
-	inode_lock(inode);
 
 	switch (origin) {
 	case SEEK_DATA:
-		ret = aeon_find_region(inode, &offset, 0);
-		if (ret) {
-			inode_unlock(inode);
-			return ret;
-		}
+		aeon_dbg("DATA\n");
+		inode_lock_shared(inode);
+		offset = iomap_seek_data(inode, offset, &aeon_iomap_ops);
+		inode_unlock_shared(inode);
 		break;
 	case SEEK_HOLE:
-		ret = aeon_find_region(inode, &offset, 1);
-		if (ret) {
-			inode_unlock(inode);
-			return ret;
-		}
-		break;
+		aeon_dbg("SEEK\n");
+		inode_lock_shared(inode);
+		offset = iomap_seek_hole(inode, offset, &aeon_iomap_ops);
+		inode_unlock_shared(inode);
 		break;
 	}
 
-	if ((offset < 0 && !(file->f_mode & FMODE_UNSIGNED_OFFSET)) ||
-	    offset > inode->i_sb->s_maxbytes) {
-		inode_unlock(inode);
-		return -ENXIO;
-	}
+	if (offset < 0)
+		return offset;
 
-	if (offset != file->f_pos) {
-		file->f_pos = offset;
-		file->f_version = 0;
-	}
-
-	inode_unlock(inode);
-
-	return offset;
+	return vfs_setpos(file, offset, maxbytes);
 }
 
 /* TODO:
