@@ -408,7 +408,28 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 		   struct inode *inode, int update_times)
 {
-	de->ino = cpu_to_le32(inode->i_ino);
+	struct aeon_sb_info *sbi = AEON_SB(dir->i_sb);
+	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	struct aeon_inode *pi = aeon_get_inode(dir->i_sb, sih);
+	unsigned long internal_ino;
+	unsigned long new_i_blocknr;
+	u32 ino;
+	int cpu_id;
+
+	pi = aeon_get_inode(dir->i_sb, sih);
+
+	de->ino = pi->aeon_ino;
+	ino = le32_to_cpu(pi->aeon_ino);
+
+	cpu_id = ino % sbi->cpus;
+	internal_ino = ino % sbi->cpus;
+	if (cpu_id >= sbi->cpus)
+		cpu_id -= sbi->cpus;
+
+	new_i_blocknr = ((sih->pi_addr - (u64)sbi->virt_addr) >> AEON_SHIFT) -
+						(internal_ino >> AEON_I_SHIFT);
+	de->i_blocknr = cpu_to_le64(new_i_blocknr);
+	aeon_dbg("new block inode %lu\n", new_i_blocknr);
 }
 
 int aeon_empty_dir(struct inode *inode)
@@ -481,6 +502,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		if (err) {
 		      aeon_dbg("%s: get child inode %u address failed %d\n",
 		                      __func__, ino, err);
+		      aeon_dbg("can't get %s\n", entry->name);
 		      ctx->pos = READDIR_END;
 		      return err;
 		}

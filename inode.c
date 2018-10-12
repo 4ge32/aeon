@@ -832,7 +832,7 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	int max;
 	int index = 0;
 
-	//aeon_dbg("offset %llu\n", offset);
+	aeon_dbg("offset %llu\n", offset);
 
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 	aeh = aeon_get_extent_header(pi);
@@ -858,7 +858,6 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 				count = (1 << AEON_SHIFT) - nr;
 				nvmm = le64_to_cpu(ae->ex_length) << AEON_SHIFT;
 				dax_mem = aeon_get_block(inode->i_sb, nvmm);
-				memzero_explicit(dax_mem + nr, count);
 				//aeon_dbg("shrink or expand file size\n");
 				//aeon_dbg("nr %lu cound %lu\n", nr, count);
 			}

@@ -81,10 +81,10 @@ static int aeon_link(struct dentry *dest_dentry,
 	struct aeon_inode *pi;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
-	struct qstr *name = &dentry->d_name;
+	struct qstr *name = &dest_dentry->d_name;
 	struct aeon_dentry *de;
 	u64 d_blocknr = 0;
-	int err = 0;
+	int err = -ENOENT;
 
 	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
 	if (!pidir)
