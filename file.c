@@ -495,6 +495,10 @@ const struct file_operations aeon_dax_file_operations = {
 	.mmap           = aeon_mmap,
 	.fsync		= aeon_fsync,
 	.open		= aeon_open,
+	.unlocked_ioctl = aeon_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= aeon_compat_ioctl,
+#endif
 };
 
 const struct inode_operations aeon_file_inode_operations = {

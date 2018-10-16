@@ -468,11 +468,18 @@ end:
 	return 0;
 }
 
-static void aeon_set_inode_flags(struct inode *inode,
-				 struct aeon_inode *pi,
-				 unsigned int flags)
+void aeon_set_inode_flags(struct inode *inode,
+			  struct aeon_inode *pi,
+			  unsigned int flags)
 {
 	inode->i_flags |= S_DAX;
+	inode->i_flags |= S_SYNC;
+	if (flags & AEON_APPEND_FL)
+		inode->i_flags |= S_APPEND;
+	if (flags & AEON_IMMUTABLE_FL)
+		inode->i_flags |= S_IMMUTABLE;
+	if (flags & AEON_NOATIME_FL)
+		inode->i_flags |= S_NOATIME;
 }
 
 /* copy persistent state to struct inode */

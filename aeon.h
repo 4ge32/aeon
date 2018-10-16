@@ -25,6 +25,38 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define dax_sem_down_write(aeon_inode)	down_write(&(aeon_inode)->dax_sem)
 #define dax_sem_up_write(aeon_inode)	up_write(&(aeon_inode)->dax_sem)
 
+/*
+ * ioctl commands
+ */
+#define	AEON_IOC_GETFLAGS		FS_IOC_GETFLAGS
+#define	AEON_IOC_SETFLAGS		FS_IOC_SETFLAGS
+#define	AEON_IOC_GETVERSION		FS_IOC_GETVERSION
+#define	AEON_IOC_SETVERSION		FS_IOC_SETVERSION
+
+/*
+ * ioctl commands in 32 bit emulation
+ */
+#define AEON_IOC32_GETFLAGS		FS_IOC32_GETFLAGS
+#define AEON_IOC32_SETFLAGS		FS_IOC32_SETFLAGS
+#define AEON_IOC32_GETVERSION		FS_IOC32_GETVERSION
+#define AEON_IOC32_SETVERSION		FS_IOC32_SETVERSION
+
+/*
+ * ioctl flags
+ */
+#define AEON_IMMUTABLE_FL		FS_IMMUTABLE_FL	/* Immutable file */
+#define AEON_APPEND_FL			FS_APPEND_FL	/* writes to file may only append */
+#define AEON_FL_USER_VISIBLE		FS_FL_USER_VISIBLE
+#define AEON_FL_USER_MODIFIABLE		FS_FL_USER_MODIFIABLE
+#define AEON_TOPDIR_FL			FS_TOPDIR_FL	/* Top of directory hierarchies*/
+#define AEON_NODUMP_FL			FS_NODUMP_FL	/* do not dump file */
+#define AEON_NOATIME_FL			FS_NOATIME_FL	/* do not update atime */
+
+/* Flags that are appropriate for regular files (all but dir-specific ones). */
+#define AEON_REG_FLMASK	~AEON_TOPDIR_FL
+/* Flags that are appropriate for non-directories/regular files. */
+#define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
+
 extern int wprotect;
 
 struct imem_cache {
@@ -567,6 +599,8 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 size_t size, dev_t rdev,
 				 const struct qstr *qstr);
 u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr);
+void aeon_set_inode_flags(struct inode *inode, struct aeon_inode *pi,
+			  unsigned int flags);
 struct inode *aeon_iget(struct super_block *sb, u32 ino);
 int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih);
@@ -606,6 +640,12 @@ void aeon_rebuild_inode_cache(struct super_block *sb);
 /* symlink.c */
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 		       const char *symname, int len);
+
+/* ioctl.c */
+long aeon_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+long aeon_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+#endif
 
 /* debug.c */
 int aeon_build_stats(struct aeon_sb_info *sbi);

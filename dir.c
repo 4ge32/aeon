@@ -528,5 +528,10 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 const struct file_operations aeon_dir_operations = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
-	.iterate	= aeon_readdir,
+	.iterate_shared	= aeon_readdir,
+	.fsync		= generic_file_fsync,
+	.unlocked_ioctl = aeon_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= aeon_compat_ioctl,
+#endif
 };
