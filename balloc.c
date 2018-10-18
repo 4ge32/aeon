@@ -1,5 +1,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
+#include <linux/buffer_head.h>
+#include <linux/blkdev.h>
 
 #include "aeon.h"
 
@@ -425,12 +427,31 @@ struct aeon_extent *pull_extent(struct aeon_sb_info *sbi,
 		return &pi->ae[index];
 
 	blocknr = le64_to_cpu(pi->i_block);
-	entries -= max - 1;
-	index -= max - 1;
+	index = index - (max + 1);
 
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(index << AEON_E_SHIFT);
 	return (struct aeon_extent *)addr;
+}
+
+static u64 pull_extent_addr(struct aeon_sb_info *sbi,
+			    struct aeon_inode *pi,
+			    int index, int entries, int max)
+{
+	unsigned long blocknr;
+	u64 addr;
+
+	if (index <= max) {
+		addr = (u64)&pi->ae[index];
+		return addr;
+	}
+
+	blocknr = le64_to_cpu(pi->i_block);
+	index = index - (max + 1);
+
+	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
+					(index << AEON_E_SHIFT);
+	return addr;
 }
 
 struct aeon_extent *aeon_search_extent(struct super_block *sb,
@@ -443,6 +464,9 @@ struct aeon_extent *aeon_search_extent(struct super_block *sb,
 	int entries;
 	int max;
 	int index = 0;
+	unsigned int offset;
+	int length;
+	u64 addr;
 
 	if (!pi->i_block)
 		return NULL;
@@ -458,16 +482,27 @@ struct aeon_extent *aeon_search_extent(struct super_block *sb,
 	while (entries > 0) {
 		//aeon_dbg("---entry %d\n", entries);
 		//aeon_dbg("   index %d\n", index);
-		ae = pull_extent(AEON_SB(sb), pi, index, entries, max);
-		if (!ae)
-			return NULL;
+		addr = pull_extent_addr(AEON_SB(sb), pi, index, entries, max);
+		ae = (struct aeon_extent *)addr;
 
 		*num_blocks += le16_to_cpu(ae->ex_length);
+		length = le16_to_cpu(ae->ex_length);
+		offset = le16_to_cpu(ae->ex_offset);
 		//aeon_dbg("   numbl %d\n", *num_blocks);
 		//aeon_dbg("   ibloc %ld---\n", iblock);
+		//aeon_dbg("bno %u off %u len %d numb %d\n",
+		//	 le32_to_cpu(ae->ex_block), offset, length, *num_blocks);
+		//TODO: manage extent by tree
+		if (offset <= iblock && iblock < offset + length) {
+			//TODO near future work
+			//aeon_dbg("OK, iblock is %lu\n", iblock);
+			return (struct aeon_extent *)addr;
+		}
 
-		if (*num_blocks > iblock)
-			return ae;
+		//if (*num_blocks > iblock) {
+		//	aeon_dbg("NEVER IN THIS CLAUDE\n");
+		//	return ae;
+		//}
 		index++;
 		entries--;
 	}
@@ -502,7 +537,7 @@ struct aeon_extent *aeon_get_extent(struct super_block *sb,
 	if (entries == max + 1) {
 		unsigned long new_blocknr = 0;
 
-		allocated = aeon_new_blocks(sb, &new_blocknr, 1, 0, ANY_CPU);
+		allocated = aeon_new_blocks(sb, &new_blocknr, 20, 0, ANY_CPU);
 		if (!allocated) {
 			aeon_err(sb, "no space on pmem\n");
 			return NULL;
@@ -511,12 +546,14 @@ struct aeon_extent *aeon_get_extent(struct super_block *sb,
 	}
 
 	blocknr = le64_to_cpu(pi->i_block);
-	entries -= max - 1;
-	if (entries > AEON_EXTENT_PER_PAGE)
+	entries = entries - (max + 1);
+	if (entries > AEON_EXTENT_PER_PAGE * 20) {
+		BUG();
 		return NULL;
+	}
 
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
-						(entries << AEON_E_SHIFT);
+					(entries << AEON_E_SHIFT);
 
 	//aeon_dbg("GET! 0x%llx\n", addr);
 	return (struct aeon_extent *)addr;
@@ -542,29 +579,34 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	int num_blocks = 0;
 	int allocated;
 	int length = 0;
+	int err;
 
 	if (!pi)
 		return -ENOENT;
 
 	ae = aeon_search_extent(sb, pi, iblock, &num_blocks);
-	if (ae != NULL) {
+	if (ae) {
+		unsigned long offset;
+
+		offset = le16_to_cpu(ae->ex_offset);
 		*bno = le64_to_cpu(ae->ex_block);
 		length = le16_to_cpu(ae->ex_length);
-		if (length > 1) {
-			*bno += iblock;
-			length = 1;
-		}
-		return length;
+		*bno += (iblock - offset);
 
+		if (length > max_blocks)
+			length = max_blocks;
+		return length;
 	}
 
-	if (!create)
+	if (!create) {
+		length = 0;
 		return length;
+	}
 
 	aeh = aeon_get_extent_header(pi);
 	if (!pi->i_block) {
 		pi->i_block = cpu_to_le64(1);
-		aeon_init_extent_header(&pi->aeh);
+		aeon_init_extent_header(aeh);
 	}
 
 	ae = aeon_get_extent(sb, pi);
@@ -577,14 +619,22 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 					 iblock, max_blocks, ANY_CPU);
 	ae->ex_length = cpu_to_le16(allocated);
 	ae->ex_block = cpu_to_le64(new_d_blocknr);
-	ae->ex_offset = aeh->eh_blocks;
+	ae->ex_offset = cpu_to_le32(iblock);
 	aeh->eh_curr_block = new_d_blocknr;
 	aeh->eh_iblock = cpu_to_le32(iblock);
 	aeh->eh_blocks += cpu_to_le16(allocated);
 	aeh->eh_entries++;
 
-	*new = true;
 	*bno = new_d_blocknr;
+
+	clean_bdev_aliases(sb->s_bdev, *bno, allocated);
+	err = sb_issue_zeroout(sb, *bno, allocated, GFP_NOFS);
+	if (err) {
+		aeon_err(sb, "%s: ERROR\n", __func__);
+		return err;
+	}
+
+	*new = true;
 
 	return allocated;
 }

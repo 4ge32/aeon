@@ -823,7 +823,7 @@ static void aeon_setattr_to_pmem(const struct inode *inode,
 		pi->i_mode = cpu_to_le16(inode->i_mode);
 }
 
-static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
+void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 {
 	struct aeon_inode *pi;
 	struct aeon_extent *ae;
@@ -839,8 +839,6 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	int max;
 	int index = 0;
 
-	aeon_dbg("offset %llu\n", offset);
-
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 	aeh = aeon_get_extent_header(pi);
 
@@ -850,7 +848,6 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 		ae = pull_extent(AEON_SB(inode->i_sb), pi, index, entries, max);
 
 		num_blocks += le16_to_cpu(ae->ex_length);
-		//aeon_dbg("num_blocks %lu, iblock %lu\n", num_blocks, iblock);
 		if (num_blocks >= iblock) {
 			// release or expand ? blocks
 			if (old_size < offset) {
@@ -858,6 +855,8 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 				unsigned long nvmm;
 				unsigned long nr;
 				unsigned long count;
+
+
 				aeh->eh_entries = cpu_to_le16(++index);
 
 				nr = offset - old_size;
@@ -865,9 +864,8 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 				count = (1 << AEON_SHIFT) - nr;
 				nvmm = le64_to_cpu(ae->ex_length) << AEON_SHIFT;
 				dax_mem = aeon_get_block(inode->i_sb, nvmm);
-				//aeon_dbg("shrink or expand file size\n");
-				//aeon_dbg("nr %lu cound %lu\n", nr, count);
 			}
+			aeh->eh_entries = cpu_to_le16(++index);
 			return;
 		}
 		index++;
@@ -881,12 +879,10 @@ static void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 		aeon_err(inode->i_sb, "can't expand file more\n");
 		return;
 	}
-	//aeon_dbg("lets get  num %lu\n", new_num_blocks);
+	aeon_dbg("lets get  num %lu\n", new_num_blocks);
 	allocated = aeon_new_data_blocks(inode->i_sb, &AEON_I(inode)->header,
 					 &new_blocknr, 0, new_num_blocks, ANY_CPU);
-	//aeon_dbg("get %d\n", allocated);
 	ae->ex_length = cpu_to_le16(allocated);
-	ae->ex_block = cpu_to_le64(new_blocknr);
 	ae->ex_offset = aeh->eh_blocks;
 	aeh->eh_curr_block = new_blocknr;
 	aeh->eh_iblock = cpu_to_le32(iblock);
@@ -910,15 +906,14 @@ static int aeon_setsize(struct inode *inode, loff_t newsize)
 	/* dio_wait ? */
 	inode_dio_wait(inode);
 
-	truncate_pagecache(inode, newsize);
-	dax_sem_down_write(&AEON_I(inode)->header);
-	aeon_truncate_blocks(inode, newsize);
-	dax_sem_up_write(&AEON_I(inode)->header);
-
 	err = iomap_zero_range(inode, newsize, PAGE_ALIGN(newsize) - newsize,
 			       NULL, &aeon_iomap_ops);
 	if (err)
 		return err;
+	truncate_pagecache(inode, newsize);
+	dax_sem_down_write(&AEON_I(inode)->header);
+	aeon_truncate_blocks(inode, newsize);
+	dax_sem_up_write(&AEON_I(inode)->header);
 
 	inode->i_mtime = inode->i_ctime = current_time(inode);
 	inode->i_size = newsize;
@@ -935,15 +930,12 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-	//loff_t oldsize = inode->i_size;
 	unsigned int ia_valid = iattr->ia_valid;
 	unsigned int attr_mask = attr_mask;
-	int err = 0;
+	int err = -EACCES;
 
-	if (!pi) {
-		err = -EACCES;
-		goto out;
-	}
+	if (!pi)
+		return err;
 
 	err = setattr_prepare(dentry, iattr);
 	if (err)
@@ -965,9 +957,6 @@ int aeon_setattr(struct dentry *dentry, struct iattr *iattr)
 			return err;
 	}
 
-	return 0;
-
-out:
 	return 0;
 }
 

@@ -72,7 +72,7 @@ struct aeon_extent_header {
 struct aeon_extent {
 	__le64  ex_block;
 	__le16  ex_length;
-	__le16  ex_offset;
+	__le32  ex_offset;
 } __attribute((__packed__));
 
 /*

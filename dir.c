@@ -434,7 +434,6 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	new_i_blocknr = ((sih->pi_addr - (u64)sbi->virt_addr) >> AEON_SHIFT) -
 						(internal_ino >> AEON_I_SHIFT);
 	de->i_blocknr = cpu_to_le64(new_i_blocknr);
-	aeon_dbg("new block inode %lu\n", new_i_blocknr);
 }
 
 int aeon_empty_dir(struct inode *inode)

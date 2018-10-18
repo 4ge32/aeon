@@ -434,9 +434,7 @@ static int aeon_dax_huge_fault(struct vm_fault *vmf,
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	bool write;
-	pfn_t pfn;
 	int res = 0;
-	int err = 0;
 
 	write = (vmf->flags & FAULT_FLAG_WRITE);
 
@@ -446,7 +444,7 @@ static int aeon_dax_huge_fault(struct vm_fault *vmf,
 	}
 	down_read(&sih->i_mmap_sem);
 
-	res = dax_iomap_fault(vmf, pe_size, &pfn, &err, &aeon_iomap_ops);
+	res = dax_iomap_fault(vmf, pe_size, NULL, NULL, &aeon_iomap_ops);
 
 	up_read(&sih->i_mmap_sem);
 
@@ -489,7 +487,7 @@ static int aeon_open(struct inode *inode, struct file *file)
 const struct file_operations aeon_dax_file_operations = {
 	.llseek		= aeon_llseek,
 	//.read		= aeon_read,
-	//.write		= aeon_write,
+	//.write	= aeon_write,
 	.read_iter	= aeon_file_read_iter,
 	.write_iter	= aeon_file_write_iter,
 	.mmap           = aeon_mmap,
@@ -544,12 +542,23 @@ static int aeon_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	return 0;
 }
 
+static void aeon_write_failed(struct address_space *mapping, loff_t to)
+{
+	struct inode *inode = mapping->host;
+
+	if (to > inode->i_size) {
+		truncate_pagecache(inode, inode->i_size);
+		aeon_truncate_blocks(inode, inode->i_size);
+	}
+}
+
 static int aeon_iomap_end(struct inode *inode, loff_t offset, loff_t length,
 			  ssize_t written, unsigned flags, struct iomap *iomap)
 {
 	if (iomap->type == IOMAP_MAPPED &&
-	    written < length && (flags & IOMAP_WRITE))
-		truncate_pagecache(inode, inode->i_size);
+	    written < length && (flags & IOMAP_WRITE)) {
+		aeon_write_failed(inode->i_mapping, offset + length);
+	}
 	return 0;
 }
 
