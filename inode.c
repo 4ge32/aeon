@@ -164,9 +164,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->dev.rdev =  cpu_to_le32(rdev);
 
 	pi->aeh.eh_entries = 0;
-	pi->aeh.eh_max = cpu_to_le16(5);
 	pi->aeh.eh_depth = 0;
-	pi->aeh.eh_iblock = 0;
 	pi->aeh.eh_blocks = 0;
 
 	pi->persisted = 0;
@@ -843,7 +841,7 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	aeh = aeon_get_extent_header(pi);
 
 	entries = le16_to_cpu(aeh->eh_entries);
-	max = le16_to_cpu(aeh->eh_max);
+	max = PI_MAX_INTERNAL_EXTENT;
 	while(entries > 0) {
 		ae = pull_extent(AEON_SB(inode->i_sb), pi, index, entries, max);
 
@@ -884,8 +882,6 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 					 &new_blocknr, 0, new_num_blocks, ANY_CPU);
 	ae->ex_length = cpu_to_le16(allocated);
 	ae->ex_offset = aeh->eh_blocks;
-	aeh->eh_curr_block = new_blocknr;
-	aeh->eh_iblock = cpu_to_le32(iblock);
 	aeh->eh_blocks += cpu_to_le16(allocated);
 	aeh->eh_entries++;
 }

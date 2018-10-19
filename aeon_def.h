@@ -60,12 +60,12 @@
 /*
  * extent tree's header referred from inode
  */
+#define PI_MAX_INTERNAL_EXTENT 5
+#define PI_MAX_EXTERNAL_EXTENT 3
 struct aeon_extent_header {
 	__le16  eh_entries;
-	__le16  eh_max;
 	__le16  eh_depth;
-	__le64  eh_curr_block;
-	__le32  eh_iblock;
+	__le64  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
 	__le32  eh_blocks;
 } __attribute((__packed__));
 
