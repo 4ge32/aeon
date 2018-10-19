@@ -110,7 +110,7 @@ struct aeon_inode {
 	u8      i_internal_allocated;
 
 	__le64  i_block;        /* exist extent or point extent block */
-	__le64	i_blocks;       /* point extent log */
+	__le64	i_blocks;       /* block counts */
 	__le64	sym_block;      /* for symbolic link */
 
 	struct {

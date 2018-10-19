@@ -170,7 +170,6 @@ static int stat_imem_show(struct seq_file *s, void *v)
 			space = 1;
 		ino = head_ino + (le16_to_cpu(art->i_allocated) -
 						space) * si->sbi->cpus;
-		aeon_dbg("%u\n", ino);
 		if (inode_map->im) {
 			struct imem_cache *im;
 			int count = 0;

@@ -594,6 +594,9 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	aeh->eh_blocks += cpu_to_le16(allocated);
 	aeh->eh_entries++;
 
+	pi->i_blocks = aeh->eh_blocks * 8;
+	inode->i_blocks = le32_to_cpu(pi->i_blocks);
+
 	*bno = new_d_blocknr;
 
 	clean_bdev_aliases(sb->s_bdev, *bno, allocated);
