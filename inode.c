@@ -162,10 +162,9 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(rdev);
+	pi->i_exblocks = 0;
 
-	pi->aeh.eh_entries = 0;
-	pi->aeh.eh_depth = 0;
-	pi->aeh.eh_blocks = 0;
+	aeon_init_extent_header(&pi->aeh);
 
 	pi->persisted = 0;
 	pi->valid = 1;
@@ -834,16 +833,16 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	loff_t old_size = inode->i_size;
 	int allocated;
 	int entries;
-	int max;
 	int index = 0;
+	u64 addr;
 
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 	aeh = aeon_get_extent_header(pi);
 
 	entries = le16_to_cpu(aeh->eh_entries);
-	max = PI_MAX_INTERNAL_EXTENT;
 	while(entries > 0) {
-		ae = pull_extent(AEON_SB(inode->i_sb), pi, index, entries, max);
+		addr = aeon_pull_extent_addr(inode->i_sb, pi, index, entries);
+		ae = (struct aeon_extent *)addr;
 
 		num_blocks += le16_to_cpu(ae->ex_length);
 		if (num_blocks >= iblock) {
@@ -877,7 +876,6 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 		aeon_err(inode->i_sb, "can't expand file more\n");
 		return;
 	}
-	aeon_dbg("lets get  num %lu\n", new_num_blocks);
 	allocated = aeon_new_data_blocks(inode->i_sb, &AEON_I(inode)->header,
 					 &new_blocknr, 0, new_num_blocks, ANY_CPU);
 	ae->ex_length = cpu_to_le16(allocated);

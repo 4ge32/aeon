@@ -119,8 +119,9 @@ struct aeon_inode {
 
 	struct aeon_extent_header aeh;
 	struct aeon_extent ae[6];
+	__le16 i_exblocks;
 
-	char	pad[3];
+	char	pad[15];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 

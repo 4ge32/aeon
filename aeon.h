@@ -475,6 +475,14 @@ struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
 	return &pi->aeh;
 }
 
+static inline void aeon_init_extent_header(struct aeon_extent_header *aeh)
+{
+	aeh->eh_entries = 0;
+	aeh->eh_depth = 0;
+	aeh->eh_blocks = 0;
+}
+
+
 /* checksum */
 #define VALID	1
 #define INVALID 0
@@ -583,8 +591,8 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 struct aeon_extent *aeon_search_extent(struct super_block *sb,
 				       struct aeon_inode *pi,
 				       unsigned long iblock, int *num_blocks);
-struct aeon_extent *pull_extent(struct aeon_sb_info *sbi, struct aeon_inode *pi,
-				int index, int entries, int max);
+u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
+				 int index, int entries);
 struct aeon_extent *aeon_get_extent(struct super_block *sb,
 				    struct aeon_inode *pi);
 
