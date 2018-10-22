@@ -179,6 +179,11 @@ void aeon_free_block_node(struct aeon_range_node *node)
 	aeon_free_range_node(node);
 }
 
+void aeon_free_extent_node(struct aeon_range_node *node)
+{
+	aeon_free_range_node(node);
+}
+
 static struct aeon_range_node *aeon_alloc_range_node(struct super_block *sb)
 {
 	struct aeon_range_node *p;
@@ -200,6 +205,11 @@ struct aeon_range_node *aeon_alloc_dir_node(struct super_block *sb)
 }
 
 struct aeon_range_node *aeon_alloc_block_node(struct super_block *sb)
+{
+	return aeon_alloc_range_node(sb);
+}
+
+struct aeon_range_node *aeon_alloc_extent_node(struct super_block *sb)
 {
 	return aeon_alloc_range_node(sb);
 }

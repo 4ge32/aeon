@@ -154,7 +154,12 @@ struct aeon_range_node {
 		};
 		struct {
 			unsigned long hash;
-			void *direntry;
+			struct aeon_dentry *direntry;
+		};
+		struct {
+			unsigned long offset;
+			int length;
+			struct aeon_extent *extent;
 		};
 	};
 	u32 csum;
@@ -164,6 +169,7 @@ enum node_type {
 	NODE_BLOCK = 1,
 	NODE_INODE,
 	NODE_DIR,
+	NODE_EXTENT,
 };
 
 struct free_list {
@@ -195,8 +201,7 @@ enum aeon_new_inode_type {
 struct aeon_inode_info_header {
 	/* Map from file offsets to write log entries. */
 	struct aeon_dentry_info *de_info;
-	struct rb_root rb_tree;		/* RB tree for directory */
-	struct rw_semaphore i_mmap_sem;
+	struct rb_root rb_tree;		/* RB tree for directory or extent*/
 	struct rw_semaphore dax_sem;
 	int num_vmas;
 	u64 pi_addr;
@@ -565,6 +570,8 @@ struct aeon_range_node *aeon_alloc_dir_node(struct super_block *sb);
 void aeon_free_dir_node(struct aeon_range_node *node);
 struct aeon_range_node *aeon_alloc_block_node(struct super_block *sb);
 void aeon_free_block_node(struct aeon_range_node *node);
+struct aeon_range_node *aeon_alloc_extent_node(struct super_block *sb);
+void aeon_free_extent_node(struct aeon_range_node *node);
 
 /* balloc.h */
 int aeon_alloc_block_free_lists(struct super_block *sb);
@@ -573,8 +580,8 @@ unsigned long aeon_count_free_blocks(struct super_block *sb);
 void aeon_init_blockmap(struct super_block *sb);
 int aeon_insert_range_node(struct rb_root *tree,
 			   struct aeon_range_node *new_node, enum node_type);
-int aeon_find_range_node(struct rb_root *tree, unsigned long key,
-			 enum node_type type, struct aeon_range_node **ret_node);
+bool aeon_find_range_node(struct rb_root *tree, unsigned long key,
+			  enum node_type type, struct aeon_range_node **ret_node);
 void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree);
 int aeon_new_data_blocks(struct super_block *sb,
 	struct aeon_inode_info_header *sih, unsigned long *blocknr,
@@ -589,12 +596,12 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
 struct aeon_extent *aeon_search_extent(struct super_block *sb,
-				       struct aeon_inode *pi,
-				       unsigned long iblock, int *num_blocks);
+				       struct aeon_inode_info_header *sih,
+				       unsigned long iblock);
 u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
 				 int index, int entries);
-struct aeon_extent *aeon_get_extent(struct super_block *sb,
-				    struct aeon_inode *pi);
+struct aeon_extent *aeon_get_new_extent(struct super_block *sb,
+					struct aeon_inode *pi);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);

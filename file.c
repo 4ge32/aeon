@@ -442,11 +442,11 @@ static int aeon_dax_huge_fault(struct vm_fault *vmf,
 		sb_start_pagefault(sb);
 		file_update_time(vmf->vma->vm_file);
 	}
-	down_read(&sih->i_mmap_sem);
+	down_read(&sih->dax_sem);
 
 	res = dax_iomap_fault(vmf, pe_size, NULL, NULL, &aeon_iomap_ops);
 
-	up_read(&sih->i_mmap_sem);
+	up_read(&sih->dax_sem);
 
 	if (write)
 		sb_end_pagefault(sb);

@@ -20,9 +20,9 @@ int aeon_insert_dir_tree(struct super_block *sb,
 	node  = aeon_alloc_dir_node(sb);
 	if (!node)
 		return -ENOMEM;
-
 	node->hash = hash;
 	node->direntry = direntry;
+
 	ret = aeon_insert_range_node(&sih->rb_tree, node, NODE_DIR);
 	if (ret) {
 		aeon_free_dir_node(node);
@@ -39,7 +39,7 @@ static int aeon_remove_dir_tree(struct super_block *sb,
 	struct aeon_dentry *entry;
 	struct aeon_range_node *ret_node = NULL;
 	unsigned long hash;
-	int found;
+	bool found = false;
 
 	hash = BKDRHash(name, namelen);
 	found = aeon_find_range_node(&sih->rb_tree, hash, NODE_DIR, &ret_node);

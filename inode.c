@@ -136,6 +136,7 @@ void aeon_init_header(struct super_block *sb,
 	sih->num_vmas = 0;
 	sih->last_setattr = 0;
 	sih->de_info = NULL;
+	init_rwsem(&sih->dax_sem);
 }
 
 void aeon_set_file_ops(struct inode *inode)
@@ -879,7 +880,7 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 
 	}
 
-	ae = aeon_get_extent(inode->i_sb, pi);
+	ae = aeon_get_new_extent(inode->i_sb, pi);
 	if (!ae) {
 		aeon_err(inode->i_sb, "can't expand file more\n");
 		return;

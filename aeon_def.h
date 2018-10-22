@@ -60,7 +60,7 @@
 /*
  * extent tree's header referred from inode
  */
-#define PI_MAX_INTERNAL_EXTENT 5
+#define PI_MAX_INTERNAL_EXTENT 6
 #define PI_MAX_EXTERNAL_EXTENT 3
 struct aeon_extent_header {
 	__le16  eh_entries;
@@ -118,7 +118,7 @@ struct aeon_inode {
 	} dev;			 /* device inode */
 
 	struct aeon_extent_header aeh;
-	struct aeon_extent ae[6];
+	struct aeon_extent ae[PI_MAX_INTERNAL_EXTENT];
 	__le16 i_exblocks;
 
 	char	pad[15];

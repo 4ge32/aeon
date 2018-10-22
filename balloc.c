@@ -122,6 +122,14 @@ int aeon_rbtree_compare_rangenode(struct aeon_range_node *curr,
 		return 0;
 	}
 
+	if (type == NODE_EXTENT) {
+		if (key < curr->offset)
+			return -1;
+		if (key >= (curr->offset + curr->length))
+			return 1;
+		return 0;
+	}
+
 	/* Block and inode */
 	if (key < curr->range_low)
 		return -1;
@@ -168,13 +176,13 @@ int aeon_insert_range_node(struct rb_root *tree,
 	return 0;
 }
 
-int aeon_find_range_node(struct rb_root *tree, unsigned long key,
+bool aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node)
 {
 	struct aeon_range_node *curr = NULL;
 	struct rb_node *temp;
 	int compVal;
-	int ret = 0;
+	bool found = false;
 
 	temp = tree->rb_node;
 
@@ -187,13 +195,13 @@ int aeon_find_range_node(struct rb_root *tree, unsigned long key,
 		else if (compVal == 1)
 			temp = temp->rb_right;
 		else {
-			ret = 1;
+			found = true;
 			break;
 		}
 	}
 
 	*ret_node = curr;
-	return ret;
+	return found;
 }
 
 void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree)
@@ -423,12 +431,12 @@ u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
 	int num_exblock;
 	int internal_index;
 
-	if (index <= PI_MAX_INTERNAL_EXTENT) {
+	if (index < PI_MAX_INTERNAL_EXTENT) {
 		addr = (u64)&pi->ae[index];
 		return addr;
 	}
 
-	internal_index = index - (PI_MAX_INTERNAL_EXTENT + 1);
+	internal_index = index - PI_MAX_INTERNAL_EXTENT;
 	num_exblock = internal_index / AEON_EXTENT_PER_PAGE;
 	if (num_exblock < 0 || PI_MAX_EXTERNAL_EXTENT <= num_exblock) {
 		aeon_err(sb, "out of bounds in extent header\n");
@@ -442,26 +450,17 @@ u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
 	return addr;
 }
 
-struct aeon_extent *aeon_search_extent(struct super_block *sb,
-				       struct aeon_inode *pi,
-				       unsigned long iblock,
-				       int *num_blocks)
+static struct aeon_extent *_aeon_search_extent(struct super_block *sb,
+					       struct aeon_inode *pi,
+					       struct aeon_extent_header *aeh,
+					       unsigned long iblock)
 {
 	struct aeon_extent *ae;
-	struct aeon_extent_header *aeh;
 	int entries;
 	int index = 0;
 	unsigned int offset;
 	int length;
 	u64 addr;
-
-	if (!pi->i_exblocks)
-		return NULL;
-
-	aeh = aeon_get_extent_header(pi);
-
-	if (!aeh->eh_entries)
-		return NULL;
 
 	entries = le16_to_cpu(aeh->eh_entries);
 
@@ -471,10 +470,8 @@ struct aeon_extent *aeon_search_extent(struct super_block *sb,
 			return NULL;
 		ae = (struct aeon_extent *)addr;
 
-		*num_blocks += le16_to_cpu(ae->ex_length);
 		length = le16_to_cpu(ae->ex_length);
 		offset = le16_to_cpu(ae->ex_offset);
-		//TODO: manage extent by tree
 		if (offset <= iblock && iblock < offset + length)
 			return (struct aeon_extent *)addr;
 
@@ -485,8 +482,8 @@ struct aeon_extent *aeon_search_extent(struct super_block *sb,
 	return NULL;
 }
 
-struct aeon_extent *aeon_get_extent(struct super_block *sb,
-				    struct aeon_inode *pi)
+static struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
+						      struct aeon_inode *pi)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
@@ -497,10 +494,10 @@ struct aeon_extent *aeon_get_extent(struct super_block *sb,
 	int num_exblock;
 	u64 addr;
 
-	if (entries <= PI_MAX_INTERNAL_EXTENT)
+	if (entries < PI_MAX_INTERNAL_EXTENT)
 		return &pi->ae[entries];
 
-	entries = entries - (PI_MAX_INTERNAL_EXTENT + 1);
+	entries = entries - PI_MAX_INTERNAL_EXTENT;
 	num_exblock = le64_to_cpu(pi->i_exblocks) - 2;
 	external_entries = entries % AEON_EXTENT_PER_PAGE;
 
@@ -530,6 +527,155 @@ struct aeon_extent *aeon_get_extent(struct super_block *sb,
 	return (struct aeon_extent *)addr;
 }
 
+static int do_aeon_insert_extenttree(struct rb_root *tree,
+				     struct aeon_range_node *new_node)
+{
+	int ret;
+
+	ret = aeon_insert_range_node(tree, new_node, NODE_EXTENT);
+	if (ret)
+		aeon_dbg("ERROR: %s failed %d\n", __func__, ret);
+
+	return ret;
+}
+
+static int aeon_remove_extenttree(struct super_block *sb,
+				  struct aeon_inode_info_header *sih,
+				  unsigned long offset)
+{
+	struct aeon_extent *ae;
+	struct aeon_range_node *ret_node = NULL;
+	bool found = false;
+
+	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
+	if (!found) {
+		aeon_err(sb, "%s target not found: %lu\n", __func__, offset);
+		return -EINVAL;
+	}
+
+	ae = ret_node->extent;
+	rb_erase(&ret_node->node, &sih->rb_tree);
+	aeon_free_extent_node(ret_node);
+
+	return 0;
+}
+
+static struct aeon_extent *aeon_rb_search_extent(struct super_block *sb,
+						 struct aeon_inode_info_header *sih,
+						 unsigned long offset)
+{
+	struct aeon_range_node *ret_node = NULL;
+	struct aeon_extent *ret = NULL;
+	bool found;
+
+	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
+	if (found)
+		ret = ret_node->extent;
+
+	return ret;
+}
+
+const static bool use_rb = true;
+
+struct aeon_extent *aeon_search_extent(struct super_block *sb,
+				       struct aeon_inode_info_header *sih,
+				       unsigned long iblock)
+{
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_extent_header *aeh;
+	int entries;
+
+	if (!pi->i_exblocks)
+		return NULL;
+
+	aeh = aeon_get_extent_header(pi);
+	entries = le16_to_cpu(aeh->eh_entries);
+	if (!entries)
+		return NULL;
+
+	if (!use_rb)
+		return _aeon_search_extent(sb, pi, aeh, iblock);
+	else {
+		if (entries < PI_MAX_INTERNAL_EXTENT + 1)
+			return _aeon_search_extent(sb, pi, aeh, iblock);
+		return aeon_rb_search_extent(sb, sih, iblock);
+	}
+}
+
+struct aeon_extent *aeon_get_new_extent(struct super_block *sb,
+					struct aeon_inode *pi)
+{
+	return do_aeon_get_extent_on_pmem(sb, pi);
+}
+
+static int aeon_build_new_rb_extent_tree(struct super_block *sb,
+					 struct aeon_inode_info_header *sih)
+{
+	struct aeon_range_node *node = NULL;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	int ret;
+	int i;
+
+	for (i = 0; i < PI_MAX_INTERNAL_EXTENT; i++) {
+		node = aeon_alloc_extent_node(sb);
+		if (!node)
+			return -ENOMEM;
+		node->offset = le32_to_cpu(pi->ae[i].ex_offset);
+		node->length = le16_to_cpu(pi->ae[i].ex_length);
+		node->extent = &pi->ae[i];
+
+		ret = do_aeon_insert_extenttree(&sih->rb_tree, node);
+		if (ret) {
+			aeon_free_extent_node(node);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int aeon_insert_extenttree(struct super_block *sb,
+				  struct aeon_inode_info_header *sih,
+				  struct aeon_extent_header *aeh,
+				  struct aeon_extent *ae)
+{
+	if (!use_rb)
+		return 0;
+	else {
+		struct aeon_range_node *node = NULL;
+		int entries = le16_to_cpu(aeh->eh_entries);
+		int err;
+
+		/* Do not use a tree while there are few extents */
+		if (entries < PI_MAX_INTERNAL_EXTENT + 1)
+			return 0;
+
+		if (entries == PI_MAX_INTERNAL_EXTENT + 1) {
+			err = aeon_build_new_rb_extent_tree(sb, sih);
+			if (err) {
+				aeon_err(sb, "%s: failed to build a tree\n", __func__);
+				return err;
+			}
+		}
+
+		node = aeon_alloc_extent_node(sb);
+		if (!node)
+			return -ENOMEM;
+		node->offset = le32_to_cpu(ae->ex_offset);
+		node->length = le16_to_cpu(ae->ex_length);
+		node->extent = ae;
+
+		err = do_aeon_insert_extenttree(&sih->rb_tree, node);
+		if (err) {
+			aeon_free_extent_node(node);
+			aeon_err(sb, "%s: %d\n", __func__, err);
+			return err;
+		}
+
+		return 0;
+	}
+}
+
 /**
  * aeon_dax_get_blocks - The function tries to lookup the requested blocks.
  * Also it allocates new blcoks if these are needed.
@@ -547,7 +693,6 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	struct aeon_extent_header *aeh;
 	struct aeon_extent *ae;
 	unsigned long new_d_blocknr = 0;
-	int num_blocks = 0;
 	int allocated;
 	int length = 0;
 	int err;
@@ -555,11 +700,11 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	if (!pi)
 		return -ENOENT;
 
-	ae = aeon_search_extent(sb, pi, iblock, &num_blocks);
+	ae = aeon_search_extent(sb, sih, iblock);
 	if (ae) {
 		unsigned long offset;
 
-		offset = le16_to_cpu(ae->ex_offset);
+		offset = le32_to_cpu(ae->ex_offset);
 		*bno = le64_to_cpu(ae->ex_block);
 		length = le16_to_cpu(ae->ex_length);
 		*bno += (iblock - offset);
@@ -580,7 +725,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 		aeon_init_extent_header(aeh);
 	}
 
-	ae = aeon_get_extent(sb, pi);
+	ae = aeon_get_new_extent(sb, pi);
 	if (!ae) {
 		aeon_err(sb, "can't expand file more\n");
 		return 0;
@@ -593,6 +738,10 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	ae->ex_offset = cpu_to_le32(iblock);
 	aeh->eh_blocks += cpu_to_le16(allocated);
 	aeh->eh_entries++;
+
+	err = aeon_insert_extenttree(sb, sih, aeh, ae);
+	if (err)
+		return err;
 
 	pi->i_blocks = aeh->eh_blocks * 8;
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
