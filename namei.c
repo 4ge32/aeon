@@ -458,18 +458,46 @@ out:
 	return err;
 }
 
+static int aeon_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
+{
+	struct inode *inode;
+	struct aeon_inode *pidir;
+	u64 pi_addr;
+	u32 ino;
+
+	pidir = aeon_get_inode(dir->i_sb, &AEON_I(dir)->header);
+	if (!pidir)
+		return -ENOENT;
+
+	ino = aeon_new_aeon_inode(dir->i_sb, &pi_addr, NULL);
+	if (ino == 0)
+		return -ENOSPC;
+
+	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
+				   le32_to_cpu(pidir->aeon_ino),
+				   0, 0, 0, &dentry->d_name);
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+
+	aeon_set_file_ops(inode);
+	d_tmpfile(dentry, inode);
+
+	return 0;
+}
+
 const struct inode_operations aeon_dir_inode_operations = {
-	.create  = aeon_create,
-	.lookup  = aeon_lookup,
-	.link    = aeon_link,
-	.unlink  = aeon_unlink,
-	.symlink = aeon_symlink,
-	.mkdir   = aeon_mkdir,
-	.rmdir   = aeon_rmdir,
-	.rename  = aeon_rename,
-	.mknod   = aeon_mknod,
-	.setattr = aeon_setattr,
-	.get_acl = NULL,
+	.create		= aeon_create,
+	.lookup		= aeon_lookup,
+	.link		= aeon_link,
+	.unlink		= aeon_unlink,
+	.symlink	= aeon_symlink,
+	.mkdir		= aeon_mkdir,
+	.rmdir		= aeon_rmdir,
+	.rename		= aeon_rename,
+	.mknod		= aeon_mknod,
+	.setattr	= aeon_setattr,
+	.get_acl	= NULL,
+	.tmpfile	= aeon_tmpfile,
 };
 
 const struct inode_operations aeon_special_inode_operations = {

@@ -138,6 +138,12 @@ void aeon_init_header(struct super_block *sb,
 	sih->de_info = NULL;
 }
 
+void aeon_set_file_ops(struct inode *inode)
+{
+	inode->i_op = &aeon_file_inode_operations;
+	inode->i_fop = &aeon_dax_file_operations;
+	inode->i_mapping->a_ops = &aeon_dax_aops;
+}
 
 static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
@@ -331,9 +337,11 @@ static int aeon_get_new_inode_address(struct super_block *sb, u32 free_ino,
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
-	*i_blocknr = aeon_get_new_inode_block(sb, cpuid, free_ino);
-	if (*i_blocknr <= 0)
-		goto err;
+	if (i_blocknr) {
+		*i_blocknr = aeon_get_new_inode_block(sb, cpuid, free_ino);
+		if (*i_blocknr <= 0)
+			goto err;
+	}
 
 	*pi_addr = search_imem_addr(sbi, inode_map, free_ino);
 	if (*pi_addr == 0)

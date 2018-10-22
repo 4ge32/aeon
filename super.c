@@ -95,7 +95,6 @@ static void aeon_evict_inode(struct inode *inode)
 	if (sih->de_info != NULL)
 		aeon_free_invalid_dentry_list(sb, sih);
 
-	//aeon_dbgv("%s: %lu\n", __func__, inode->i_ino);
 	if (!inode->i_nlink && !is_bad_inode(inode)) {
 		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
 			goto out;
