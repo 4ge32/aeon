@@ -3,10 +3,11 @@
 FS="aeon"
 DEV=/dev/pmem0
 MOUNT_POINT=/mnt
+OPT=init,dax
 
 run () {
   sudo insmod $FS.ko
-  sudo mount -t $FS -o init,dax $DEV $MOUNT_POINT
+  sudo mount -t $FS -o $OPT $DEV $MOUNT_POINT
 }
 
 remount_run() {

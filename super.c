@@ -11,6 +11,7 @@
 #include <linux/statfs.h>
 
 #include "aeon.h"
+#include "xattr.h"
 
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
@@ -57,6 +58,11 @@ static void aeon_put_super(struct super_block *sb)
 
 	aeon_delete_free_lists(sb);
 	aeon_destroy_stats(sbi);
+
+	if (sbi->s_ea_block_cache) {
+		aeon_xattr_destroy_cache(sbi->s_ea_block_cache);
+		sbi->s_ea_block_cache = NULL;
+	}
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];
@@ -293,13 +299,17 @@ err:
 }
 
 enum {
-	Opt_init, Opt_dax, Opt_dbgmask,
+	Opt_init, Opt_dax, Opt_dbgmask, Opt_user_xattr, Opt_nouser_xattr,
+	Opt_err,
 };
 
 static const match_table_t tokens = {
-	{ Opt_init,	"init"	     },
-	{ Opt_dax,	"dax"	     },
-	{ Opt_dbgmask,	"dbgmask=%u" },
+	{ Opt_init,		"init"	     },
+	{ Opt_dax,		"dax"	     },
+	{ Opt_dbgmask,		"dbgmask=%u" },
+	{ Opt_user_xattr,	"user_xattr"},
+	{ Opt_nouser_xattr,	"nouser_xattr"},
+	{ Opt_err,		"NULL"},
 };
 
 static int aeon_parse_options(char *options, struct aeon_sb_info *sbi,
@@ -331,6 +341,19 @@ static int aeon_parse_options(char *options, struct aeon_sb_info *sbi,
 				goto bad_val;
 			aeon_dbgmask = option;
 			break;
+#ifdef CONFIG_AEON_FS_XATTR
+		case Opt_user_xattr:
+			set_opt(sbi->s_mount_opt, XATTR_USER);
+			break;
+		case Opt_nouser_xattr:
+			clear_opt(sbi->s_mount_opt, XATTR_USER);
+			break;
+#else
+		case Opt_user_xattr:
+		case Opt_nouser_xattr:
+			aeon_info("(no)user_xattr options not supported\n");
+			break;
+#endif
 		default:
 			break;
 		}
@@ -548,8 +571,15 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		goto out2;
 	}
 
+#ifdef CONFIG_AEON_FS_XATTR
+	sbi->s_ea_block_cache = aeon_xattr_create_cache();
+	if (!sbi->s_ea_block_cache)
+		goto out2;
+#endif
+
 	sb->s_magic = le32_to_cpu(sbi->aeon_sb->s_magic);
 	sb->s_op = &aeon_sops;
+	sb->s_xattr = aeon_xattr_handlers;
 	blocksize = le32_to_cpu(sbi->aeon_sb->s_blocksize);
 	aeon_set_blocksize(sb, blocksize);
 

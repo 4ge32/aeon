@@ -134,9 +134,11 @@ void aeon_init_header(struct super_block *sb,
 	sih->pi_addr = pi_addr;
 	sih->rb_tree = RB_ROOT;
 	sih->num_vmas = 0;
-	sih->last_setattr = 0;
 	sih->de_info = NULL;
 	init_rwsem(&sih->dax_sem);
+#ifdef CONFIG_AEON_FS_XATTR
+	init_rwsem(&sih->xattr_sem);
+#endif
 }
 
 void aeon_set_file_ops(struct inode *inode)

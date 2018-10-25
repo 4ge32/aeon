@@ -17,7 +17,6 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define aeon_err(sb, s, args ...)       aeon_err_msg(sb, s, ## args)
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
 #define aeon_info(s, args ...)          pr_info(s, ## args)
-#define set_opt(o, opt)		(o |= AEON_MOUNT_ ## opt)
 
 #define	READDIR_END		(ULONG_MAX)
 #define	ANY_CPU			(65536)
@@ -25,6 +24,18 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define dax_sem_down_write(aeon_inode)	down_write(&(aeon_inode)->dax_sem)
 #define dax_sem_up_write(aeon_inode)	up_write(&(aeon_inode)->dax_sem)
 
+/*
+ * Mount flags
+ */
+#define AEON_MOUNT_PROTECT      0x000001    /* wprotect CR0.WP */
+#define AEON_MOUNT_DAX          0x000008    /* Direct Access */
+#define AEON_MOUNT_FORMAT       0x000200    /* was FS formatted on mount? */
+#define AEON_MOUNT_XATTR_USER	0x004000    /* Extended user attributes */
+
+#define set_opt(o, opt)		(o |= AEON_MOUNT_##opt)
+#define clear_opt(o, opt)	(o &= ~AEON_MOUNT_##opt)
+#define test_opt(sb, opt)	(AEON_SB(sb)->s_mount_opt & \
+				 AEON_MOUNT_##opt)
 /*
  * ioctl commands
  */
@@ -141,6 +152,8 @@ struct aeon_sb_info {
 
 	/* used show debug info */
 	struct aeon_stat_info *stat_info;
+
+	struct mb_cache *s_ea_block_cache;
 };
 
 struct aeon_range_node {
@@ -203,10 +216,10 @@ struct aeon_inode_info_header {
 	struct aeon_dentry_info *de_info;
 	struct rb_root rb_tree;		/* RB tree for directory or extent*/
 	struct rw_semaphore dax_sem;
-	int num_vmas;
-	u64 pi_addr;
-	u64 last_setattr;		/* Last setattr entry */
-	u8  i_blk_type;
+	struct rw_semaphore xattr_sem;
+	int	num_vmas;
+	u64	pi_addr;
+	u8	i_blk_type;
 };
 
 struct aeon_inode_info {

@@ -46,14 +46,6 @@
  */
 #define	RESERVED_BLOCKS	1
 
-/*
- * Mount flags
- */
-#define AEON_MOUNT_PROTECT      0x000001    /* wprotect CR0.WP */
-#define AEON_MOUNT_DAX          0x000008    /* Direct Access */
-#define AEON_MOUNT_FORMAT       0x000200    /* was FS formatted on mount? */
-
-
 /* AEON supported data blocks */
 #define AEON_BLOCK_TYPE_4K     0
 
