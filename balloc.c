@@ -5,6 +5,8 @@
 
 #include "aeon.h"
 
+const static bool use_rb = true;
+
 
 int aeon_alloc_block_free_lists(struct super_block *sb)
 {
@@ -242,8 +244,12 @@ static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
 					   unsigned long *new_blocknr)
 {
 	struct rb_root *tree;
-	struct aeon_range_node *curr, *next = NULL, *prev = NULL;
-	struct rb_node *temp, *next_node, *prev_node;
+	struct aeon_range_node *curr;
+	struct aeon_range_node *next = NULL;
+	struct aeon_range_node *prev = NULL;
+	struct rb_node *temp;
+	struct rb_node *next_node;
+	struct rb_node *prev_node;
 	unsigned long curr_blocks;
 	bool found = 0;
 	unsigned long step = 0;
@@ -422,7 +428,7 @@ int aeon_new_data_blocks(struct super_block *sb,
 }
 
 u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
-		     int index, int entries)
+			  int index)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
@@ -450,22 +456,285 @@ u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
 	return addr;
 }
 
+static int aeon_find_free_slot(struct rb_root *tree, unsigned long range_low,
+			       unsigned long range_high,
+			       struct aeon_range_node **prev,
+			       struct aeon_range_node **next)
+{
+	struct aeon_range_node *ret_node = NULL;
+	struct rb_node *temp;
+	bool ret = false;
+
+	ret = aeon_find_range_node(tree, range_low, NODE_BLOCK, &ret_node);
+	if (ret) {
+		aeon_dbg("%s ERROR: %lu - %lu already in free list\n",
+			 __func__, range_low, range_high);
+		return -EINVAL;
+	}
+
+	if (!ret_node)
+		*prev = *next = NULL;
+	else if (ret_node->range_high < range_low) {
+		*prev = ret_node;
+		temp = rb_next(&ret_node->node);
+		if (temp)
+			*next = container_of(temp, struct aeon_range_node, node);
+		else
+			*next = NULL;
+	} else if (ret_node->range_low > range_high) {
+		*next = ret_node;
+		temp = rb_prev(&ret_node->node);
+		if (temp)
+			*prev = container_of(temp, struct aeon_range_node, node);
+		else
+			*prev = NULL;
+	} else {
+		aeon_dbg("%s ERROR: %lu - %lu overlaps with existing node %lu - %lu\n",
+			 __func__, range_low, range_high, ret_node->range_low,
+			ret_node->range_high);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int aeon_insert_blocks_into_free_list(struct super_block *sb,
+					     unsigned long blocknr,
+					     int num, unsigned short btype)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	struct rb_root *tree;
+	struct aeon_range_node *prev = NULL;
+	struct aeon_range_node *next = NULL;
+	struct aeon_range_node *curr_node;
+	struct aeon_region_table *art;
+	unsigned long block_low;
+	unsigned long block_high;
+	unsigned long num_blocks = 0;
+	int cpu_id;
+	int ret;
+	bool new_node_used = false;
+	static int ii =0;
+
+	aeon_dbg("%d: free blocks %lu to %lu\n",
+			ii++, blocknr, blocknr + num - 1);
+
+	if (num <= 0) {
+		aeon_err(sb, "less zero blocks can't be freed\n");
+		return -EINVAL;
+	}
+
+	curr_node = aeon_alloc_block_node(sb);
+	if (curr_node == NULL)
+		return -ENOMEM;
+
+	cpu_id = blocknr / sbi->per_list_blocks;
+	free_list = aeon_get_free_list(sb, cpu_id);
+	art = AEON_R_TABLE(&sbi->inode_maps[cpu_id]);
+	spin_lock(&free_list->s_lock);
+
+	tree = &(free_list->block_free_tree);
+
+	num_blocks = aeon_get_numblocks(btype) * num;
+	block_low = blocknr;
+	block_high = blocknr + num_blocks - 1;
+
+	if (blocknr < free_list->block_start ||
+	    blocknr + num > free_list->block_end + 1) {
+		aeon_err(sb, "free blocks %lu to %lu, free list %d, start %lu, end %lu\n",
+				blocknr, blocknr + num - 1,
+				free_list->index,
+				free_list->block_start,
+				free_list->block_end);
+		ret = -EIO;
+		goto out;
+	}
+
+	ret = aeon_find_free_slot(tree, block_low, block_high, &prev, &next);
+	if (ret) {
+		aeon_err(sb, "find free slot fail: %d\n", ret);
+		goto out;
+	}
+
+	if (prev && next && (block_low == prev->range_high + 1) &&
+			(block_high + 1 == next->range_low)) {
+		rb_erase(&next->node, tree);
+		free_list->num_blocknode--;
+		prev->range_high = next->range_high;
+		if (free_list->last_node == next)
+			free_list->last_node = prev;
+		aeon_free_block_node(next);
+		goto block_found;
+	}
+	if (prev && (block_low == prev->range_high + 1)) {
+		prev->range_high += num_blocks;
+		goto block_found;
+	}
+	if (next && (block_high + 1 == next->range_low)) {
+		next->range_low -= num_blocks;
+		goto block_found;
+	}
+
+	curr_node->range_low = block_low;
+	curr_node->range_high = block_high;
+	new_node_used = true;
+	ret = aeon_insert_blocktree(tree, curr_node);
+	if (ret) {
+		new_node_used = false;
+		goto out;
+	}
+
+	if (!prev)
+		free_list->first_node = curr_node;
+	if (!next)
+		free_list->last_node = curr_node;
+
+	free_list->num_blocknode++;
+
+block_found:
+	free_list->num_free_blocks += num_blocks;
+	art->num_free_blocks += cpu_to_le64(num_blocks);
+	art->alloc_data_count--;
+	art->alloc_data_pages -= cpu_to_le64(num_blocks);
+	art->freed_data_count++;
+	art->freed_data_pages += cpu_to_le64(num_blocks);
+
+out:
+	spin_unlock(&free_list->s_lock);
+	if (new_node_used == false)
+		aeon_free_block_node(curr_node);
+
+	return ret;
+}
+
+int aeon_remove_extenttree(struct super_block *sb,
+			   struct aeon_inode_info_header *sih,
+			   unsigned long offset)
+{
+	struct aeon_extent *ae;
+	struct aeon_range_node *ret_node = NULL;
+	bool found = false;
+
+	if (!use_rb)
+		return 0;
+
+	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
+	if (!found) {
+		aeon_err(sb, "%s target not found: %lu\n", __func__, offset);
+		return -EINVAL;
+	}
+
+	ae = ret_node->extent;
+	rb_erase(&ret_node->node, &sih->rb_tree);
+	aeon_free_extent_node(ret_node);
+
+	return 0;
+}
+
+int aeon_delete_file_tree(struct super_block *sb,
+			  struct aeon_inode_info_header *sih)
+{
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	struct aeon_extent *ae;
+	unsigned long freed_blocknr;
+	int entries = le16_to_cpu(aeh->eh_entries);
+	int _entries = le16_to_cpu(aeh->eh_entries);
+	int index = 0;
+	int num;
+	int err;
+	u64 addr;
+
+	aeon_dbg("inode 0x%px %d\n", sih, entries);
+	aeon_dbg("entries %d\n", entries);
+
+	while (entries > 0) {
+		addr = aeon_pull_extent_addr(sb, pi, index);
+		if (!addr)
+			return -EINVAL;
+		ae = (struct aeon_extent *)addr;
+
+		freed_blocknr = le64_to_cpu(ae->ex_block);
+		num = le16_to_cpu(ae->ex_length);
+		err = aeon_insert_blocks_into_free_list(sb, freed_blocknr, num, 0);
+		if (err) {
+			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
+			return -EINVAL;
+		}
+		index++;
+		entries--;
+	}
+	aeh->eh_entries = cpu_to_le16(entries);
+
+	if (use_rb) {
+		if (_entries >= 7) {
+			aeon_dbg("destroy rb extent tree\n");
+			aeon_destroy_range_node_tree(sb, &sih->rb_tree);
+		}
+	}
+
+	return 0;
+}
+
+int aeon_cutoff_file_tree(struct super_block *sb,
+			  struct aeon_inode_info_header *sih,
+			  struct aeon_inode *pi,
+			  int remaining, int index)
+{
+	struct aeon_extent *ae;
+	unsigned long blocknr;
+	unsigned long offset;
+	int length;
+	int err;
+	u64 addr;
+
+	while (remaining > 0) {
+		addr = aeon_pull_extent_addr(sb, pi, index);
+		if (!addr) {
+			aeon_err(sb, "failed to get expected extent\n");
+			return -EINVAL;
+		}
+		ae = (struct aeon_extent *)addr;
+		blocknr = le64_to_cpu(ae->ex_block);
+		length = le16_to_cpu(ae->ex_length);
+		offset = le16_to_cpu(ae->ex_offset);
+
+		aeon_dbg("cut off blocknr %lu offset %lu length %d",
+			 blocknr, offset, length);
+
+		err = aeon_insert_blocks_into_free_list(sb, blocknr, length, 0);
+		if (err) {
+			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
+			return -EINVAL;
+		}
+		err = aeon_remove_extenttree(sb, sih, offset);
+		if (err) {
+			aeon_err(sb, "%s: remove blocks from a tree\n", __func__);
+			return -EINVAL;
+		}
+
+		index++;
+		remaining--;
+	}
+
+	return 0;
+}
+
 static struct aeon_extent *_aeon_search_extent(struct super_block *sb,
 					       struct aeon_inode *pi,
 					       struct aeon_extent_header *aeh,
 					       unsigned long iblock)
 {
 	struct aeon_extent *ae;
-	int entries;
-	int index = 0;
 	unsigned int offset;
 	int length;
+	int entries = le16_to_cpu(aeh->eh_entries);
+	int index = 0;
 	u64 addr;
 
-	entries = le16_to_cpu(aeh->eh_entries);
-
 	while (entries > 0) {
-		addr = aeon_pull_extent_addr(sb, pi, index, entries);
+		addr = aeon_pull_extent_addr(sb, pi, index);
 		if (!addr)
 			return NULL;
 		ae = (struct aeon_extent *)addr;
@@ -539,27 +808,6 @@ static int do_aeon_insert_extenttree(struct rb_root *tree,
 	return ret;
 }
 
-static int aeon_remove_extenttree(struct super_block *sb,
-				  struct aeon_inode_info_header *sih,
-				  unsigned long offset)
-{
-	struct aeon_extent *ae;
-	struct aeon_range_node *ret_node = NULL;
-	bool found = false;
-
-	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
-	if (!found) {
-		aeon_err(sb, "%s target not found: %lu\n", __func__, offset);
-		return -EINVAL;
-	}
-
-	ae = ret_node->extent;
-	rb_erase(&ret_node->node, &sih->rb_tree);
-	aeon_free_extent_node(ret_node);
-
-	return 0;
-}
-
 static struct aeon_extent *aeon_rb_search_extent(struct super_block *sb,
 						 struct aeon_inode_info_header *sih,
 						 unsigned long offset)
@@ -574,8 +822,6 @@ static struct aeon_extent *aeon_rb_search_extent(struct super_block *sb,
 
 	return ret;
 }
-
-const static bool use_rb = true;
 
 struct aeon_extent *aeon_search_extent(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
@@ -634,7 +880,7 @@ static int aeon_build_new_rb_extent_tree(struct super_block *sb,
 	return 0;
 }
 
-static int aeon_insert_extenttree(struct super_block *sb,
+int aeon_insert_extenttree(struct super_block *sb,
 				  struct aeon_inode_info_header *sih,
 				  struct aeon_extent_header *aeh,
 				  struct aeon_extent *ae)
@@ -747,6 +993,8 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
 
 	*bno = new_d_blocknr;
+	aeon_dbg(" : get blocks %lu to %lu\n",
+			new_d_blocknr, new_d_blocknr + allocated - 1);
 
 	clean_bdev_aliases(sb->s_bdev, *bno, allocated);
 	err = sb_issue_zeroout(sb, *bno, allocated, GFP_NOFS);

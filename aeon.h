@@ -159,7 +159,6 @@ struct aeon_sb_info {
 struct aeon_range_node {
 	struct rb_node node;
 	struct vm_area_struct *vma;
-	unsigned long mmap_entry;
 	union {
 		struct {
 			unsigned long range_low;
@@ -270,14 +269,10 @@ static inline unsigned long BKDRHash(const char *str, int length)
 	return hash;
 }
 
-static inline unsigned long
+static inline unsigned int
 aeon_get_numblocks(unsigned short btype)
 {
-	unsigned long num_blocks;
-
-	num_blocks = 1;
-
-	return num_blocks;
+	return 1;
 }
 
 static inline struct aeon_sb_info *AEON_SB(struct super_block *sb)
@@ -608,13 +603,25 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
+u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
+			  int index);
 struct aeon_extent *aeon_search_extent(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
 				       unsigned long iblock);
-u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
-				 int index, int entries);
 struct aeon_extent *aeon_get_new_extent(struct super_block *sb,
 					struct aeon_inode *pi);
+int aeon_delete_file_tree(struct super_block *sb,
+			  struct aeon_inode_info_header *sih);
+int aeon_remove_extenttree(struct super_block *sb,
+			   struct aeon_inode_info_header *sih,
+			   unsigned long offset);
+int aeon_cutoff_file_tree(struct super_block *sb,
+			  struct aeon_inode_info_header *sih,
+			  struct aeon_inode *pi, int remaining, int index);
+int aeon_insert_extenttree(struct super_block *sb,
+				  struct aeon_inode_info_header *sih,
+				  struct aeon_extent_header *aeh,
+				  struct aeon_extent *ae);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);
