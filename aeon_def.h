@@ -32,9 +32,9 @@
 		   ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
 #define AEON_DENTRY_MAP_SIZE	AEON_DEF_BLOCK_SIZE_4K
 #define AEON_DENTRY_MAP_CSIZE	(AEON_DENTRY_MAP_SIZE - CHECKSUM_SIZE)
-#define AEON_E_SHIFT		5
-#define AEON_EXTENT_SIZE	(1 << AEON_E_SHIFT)
-#define AEON_EXTENT_HEADER_SIZE (1 << AEON_E_SHIFT)
+#define AEON_E_SHIFT		4
+#define AEON_EXTENT_SIZE	((1 << AEON_E_SHIFT))
+#define AEON_EXTENT_HEADER_SIZE 32
 #define AEON_EXTENT_PER_PAGE	(AEON_DEF_BLOCK_SIZE_4K / AEON_EXTENT_SIZE)
 
 #define AEON_ROOT_INO		(1)
@@ -52,7 +52,7 @@
 /*
  * extent tree's header referred from inode
  */
-#define PI_MAX_INTERNAL_EXTENT 6
+#define PI_MAX_INTERNAL_EXTENT 5
 #define PI_MAX_EXTERNAL_EXTENT 3
 struct aeon_extent_header {
 	__le16  eh_entries;
@@ -62,6 +62,7 @@ struct aeon_extent_header {
 } __attribute((__packed__));
 
 struct aeon_extent {
+	__le16	ex_index;
 	__le64  ex_block;
 	__le16  ex_length;
 	__le32  ex_offset;
@@ -76,6 +77,7 @@ struct aeon_inode {
 	u8	valid;		 /* Is this inode valid? */
 	u8	deleted;	 /* Is this inode deleted? */
 	u8	i_new;           /* Is this inode new? */
+	u8	use_rb;		 /* Is this inode using rb for extent? */
 	/* 4  */
 	__le32	i_flags;	 /* Inode flags */
 	__le64	i_size;		 /* Size of data in bytes */
@@ -115,7 +117,7 @@ struct aeon_inode {
 	struct aeon_extent ae[PI_MAX_INTERNAL_EXTENT];
 	__le16 i_exblocks;
 
-	char	pad[7];
+	char	pad[10];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 

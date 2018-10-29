@@ -850,7 +850,6 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	unsigned int blkbits = inode->i_blkbits;
 	unsigned long iblock = offset >> blkbits;
-	unsigned long num_blocks = 0;
 	unsigned long new_num_blocks ;
 	unsigned long new_blocknr = 0;
 	unsigned long off;
@@ -861,11 +860,37 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	int index = 0;
 	int err;
 	int length;
+
+
+#ifdef USE_RB
+	pi = aeon_get_inode(sb, sih);
+	aeh = aeon_get_extent_header(pi);
+	mutex_lock(&sih->truncate_mutex);
+
+	ae = aeon_search_extent(sb, sih, iblock);
+	if (!ae)
+		goto expand;
+	entries = le16_to_cpu(aeh->eh_entries);
+
+	index = le16_to_cpu(ae->ex_index);
+	off = le32_to_cpu(ae->ex_offset);
+	length = le32_to_cpu(ae->ex_length);
+	if (old_size < offset)
+		ae->ex_length = cpu_to_le16(off + length - iblock);
+
+	aeh->eh_entries = cpu_to_le16(++index);
+	entries = entries - index - 1;
+	err = aeon_cutoff_file_tree(sb, sih, pi, entries, index);
+	if (err)
+		aeon_err(sb, "%s\n", __func__);
+	mutex_unlock(&sih->truncate_mutex);
+	return;
+#else
 	u64 addr;
+	unsigned long num_blocks = 0;
 
 	pi = aeon_get_inode(sb, sih);
 	aeh = aeon_get_extent_header(pi);
-
 	mutex_lock(&sih->truncate_mutex);
 
 	write_lock(&sih->i_meta_lock);
@@ -900,6 +925,8 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 		index++;
 		entries--;
 	}
+#endif
+expand:
 
 	old_num_blocks = old_size >> blkbits;
 	new_num_blocks = iblock - old_num_blocks;

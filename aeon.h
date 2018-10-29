@@ -68,6 +68,9 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 /* Flags that are appropriate for non-directories/regular files. */
 #define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
 
+/* rb tree for extent is experimetal */
+#define USE_RB
+
 extern int wprotect;
 
 struct imem_cache {
@@ -616,6 +619,9 @@ int aeon_cutoff_file_tree(struct super_block *sb,
 			  struct aeon_inode *pi, int remaining, int index);
 int aeon_update_extent(struct super_block *sb, struct inode *inode,
 		       unsigned blocknr, unsigned long offset, int num_blocks);
+struct aeon_extent *aeon_search_extent(struct super_block *sb,
+				       struct aeon_inode_info_header *sih,
+				       unsigned long iblock);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);

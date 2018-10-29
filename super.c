@@ -519,6 +519,8 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("super block  %lu\n", sizeof(struct aeon_super_block));
 	aeon_dbg("inode        %lu\n", sizeof(struct aeon_inode));
 	aeon_dbg("dentry       %lu\n", sizeof(struct aeon_dentry));
+	aeon_dbg("extent       %lu\n", sizeof(struct aeon_extent));
+	aeon_dbg("extentheader %lu\n", sizeof(struct aeon_extent_header));
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
