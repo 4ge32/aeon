@@ -212,13 +212,16 @@ enum aeon_new_inode_type {
 
 struct aeon_inode_info_header {
 	/* Map from file offsets to write log entries. */
-	struct aeon_dentry_info *de_info;
-	struct rb_root rb_tree;		/* RB tree for directory or extent*/
-	struct rw_semaphore dax_sem;
-	struct rw_semaphore xattr_sem;
-	int	num_vmas;
-	u64	pi_addr;
-	u8	i_blk_type;
+	struct     aeon_dentry_info *de_info;
+	struct     rb_root rb_tree;		/* RB tree for directory or extent*/
+	struct     rw_semaphore dax_sem;
+	struct     rw_semaphore xattr_sem;
+	struct     mutex truncate_mutex;
+	int	   num_vmas;
+	u64	   pi_addr;
+	u8	   i_blk_type;
+	spinlock_t i_exlock;
+	rwlock_t   i_meta_lock;
 };
 
 struct aeon_inode_info {
@@ -608,20 +611,13 @@ u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
 struct aeon_extent *aeon_search_extent(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
 				       unsigned long iblock);
-struct aeon_extent *aeon_get_new_extent(struct super_block *sb,
-					struct aeon_inode *pi);
 int aeon_delete_file_tree(struct super_block *sb,
 			  struct aeon_inode_info_header *sih);
-int aeon_remove_extenttree(struct super_block *sb,
-			   struct aeon_inode_info_header *sih,
-			   unsigned long offset);
 int aeon_cutoff_file_tree(struct super_block *sb,
 			  struct aeon_inode_info_header *sih,
 			  struct aeon_inode *pi, int remaining, int index);
-int aeon_insert_extenttree(struct super_block *sb,
-				  struct aeon_inode_info_header *sih,
-				  struct aeon_extent_header *aeh,
-				  struct aeon_extent *ae);
+int aeon_update_extent(struct super_block *sb, struct inode *inode,
+		       unsigned blocknr, unsigned long offset, int num_blocks);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);

@@ -137,6 +137,9 @@ void aeon_init_header(struct super_block *sb,
 	sih->num_vmas = 0;
 	sih->de_info = NULL;
 	init_rwsem(&sih->dax_sem);
+	mutex_init(&sih->truncate_mutex);
+	rwlock_init(&sih->i_meta_lock);
+	spin_lock_init(&sih->i_exlock);
 #ifdef CONFIG_AEON_FS_XATTR
 	init_rwsem(&sih->xattr_sem);
 #endif
@@ -858,8 +861,9 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	pi = aeon_get_inode(sb, sih);
 	aeh = aeon_get_extent_header(pi);
 
+	mutex_lock(&sih->truncate_mutex);
+
 	entries = le16_to_cpu(aeh->eh_entries);
-	aeon_dbg("start %d\n", entries);
 	while(entries > 0) {
 		addr = aeon_pull_extent_addr(sb, pi, index);
 		ae = (struct aeon_extent *)addr;
@@ -868,56 +872,43 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 		off = le32_to_cpu(ae->ex_offset);
 		length = le16_to_cpu(ae->ex_length);
 		if (off <= iblock && iblock < off + length) {
-		//if (num_blocks >= iblock) {
-			aeon_dbg("index %d entr %d\n", index, entries);
-			aeon_dbg("block %llu offset %u length %d\n", le64_to_cpu(ae->ex_block),
-				 le32_to_cpu(ae->ex_offset), le16_to_cpu(ae->ex_length));
-			aeon_dbg("old %lld off %lld\n", old_size, offset);
 			if (old_size < offset)
 				ae->ex_length = cpu_to_le16(off + length - iblock);
 			aeh->eh_entries = cpu_to_le16(++index);
 			addr = aeon_pull_extent_addr(sb, pi, index);
 			ae = (struct aeon_extent *)addr;
-			aeon_dbg("block %llu offset %u length %d\n", le64_to_cpu(ae->ex_block),
-				 le32_to_cpu(ae->ex_offset), le16_to_cpu(ae->ex_length));
-			// release or expand ? blocks
 			err = aeon_cutoff_file_tree(sb, sih, pi, --entries, index);
 			if (err)
 				aeon_err(sb, "%s\n", __func__);
+			mutex_unlock(&sih->truncate_mutex);
 			return;
 		}
 		index++;
 		entries--;
-
 	}
 
 	old_num_blocks = old_size >> blkbits;
 	new_num_blocks = iblock - old_num_blocks;
-	aeon_dbg("old_size %lld blocks %lu\n", old_size, old_num_blocks);
-	aeon_dbg("new_size %lld blocks %lu\n", offset, iblock);
-	aeon_dbg("%s let's get new %lu\n", __func__, new_num_blocks);
 
-	ae = aeon_get_new_extent(sb, pi);
-	if (!ae) {
-		aeon_err(sb, "can't expand file more\n");
+	allocated = aeon_new_data_blocks(sb, sih, &new_blocknr,
+					 iblock, new_num_blocks, ANY_CPU);
+	if (allocated <= 0) {
+		mutex_unlock(&sih->truncate_mutex);
 		return;
 	}
-	allocated = aeon_new_data_blocks(sb, sih,
-					 &new_blocknr, 0, new_num_blocks, ANY_CPU);
-	ae->ex_length = cpu_to_le16(allocated);
-	ae->ex_block = cpu_to_le64(new_blocknr);
-	ae->ex_offset = cpu_to_le32(iblock);
-	aeh->eh_blocks += cpu_to_le16(allocated);
-	aeh->eh_entries++;
-	err = aeon_insert_extenttree(sb, sih, aeh, ae);
-	if (err)
-		aeon_err(sb, "can't insert extent into a tree\n");
-	inode->i_blocks = aeh->eh_blocks * 8;
-	inode->i_blocks = le32_to_cpu(pi->i_blocks);
+
+	err = aeon_update_extent(sb, inode, new_blocknr, iblock, allocated);
+	if (err) {
+		aeon_err(sb, "failed to update extent\n");
+		mutex_unlock(&sih->truncate_mutex);
+		return;
+	}
+
 	clean_bdev_aliases(sb->s_bdev, new_blocknr, allocated);
 	err = sb_issue_zeroout(sb, new_blocknr, allocated, GFP_NOFS);
 	if (err)
 		aeon_err(sb, "%s: ERROR\n", __func__);
+	mutex_unlock(&sih->truncate_mutex);
 
 }
 
@@ -926,7 +917,6 @@ static int aeon_setsize(struct inode *inode, loff_t newsize)
 	struct aeon_inode *pi;
 	//int err;
 
-	aeon_dbg("OR COME HERE %lld %lld\n", inode->i_size, newsize);
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 
 	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
@@ -945,12 +935,11 @@ static int aeon_setsize(struct inode *inode, loff_t newsize)
 	dax_sem_down_write(&AEON_I(inode)->header);
 	aeon_truncate_blocks(inode, newsize);
 	truncate_setsize(inode, newsize);
+	pi->i_size = cpu_to_le64(newsize);
 	dax_sem_up_write(&AEON_I(inode)->header);
 
 	inode->i_mtime = inode->i_ctime = current_time(inode);
 	pi->i_mtime = pi->i_ctime = cpu_to_le64(inode->i_mtime.tv_sec);
-	pi->i_size = cpu_to_le64(newsize);
-
 	return 0;
 }
 
