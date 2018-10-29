@@ -273,6 +273,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 					     &pi_addr, de);
 		if (err) {
 			internal++;
+			seq_printf(s, "%8s\n", "ERROR");
 			continue;
 		}
 		pi = (struct aeon_inode *)pi_addr;

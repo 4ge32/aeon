@@ -154,8 +154,8 @@ void aeon_set_file_ops(struct inode *inode)
 
 static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
-				       struct inode *inode,
-				       u32 parent_ino, u64 d_blocknr, dev_t rdev)
+				       struct inode *inode, u32 parent_ino,
+				       u64 i_blocknr, u64 d_blocknr, dev_t rdev)
 {
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 
@@ -172,6 +172,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_blocks = 0;
 	pi->i_internal_allocated = 0;
 	pi->i_dentry_block = cpu_to_le64(d_blocknr);
+	pi->i_inode_blok = cpu_to_le64(i_blocknr);
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(rdev);
@@ -188,7 +189,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr,
 				 u32 ino, umode_t mode, u32 parent_ino,
-				 u64 d_blocknr, size_t size,
+				 u64 i_blocknr, u64 d_blocknr, size_t size,
 				 dev_t rdev, const struct qstr *qstr)
 {
 	struct super_block *sb = dir->i_sb;
@@ -239,7 +240,8 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	sih = &si->header;
 	aeon_init_header(sb, sih, pi_addr);
 
-	fill_new_aeon_inode(sb, sih, inode, parent_ino, d_blocknr, rdev);
+	fill_new_aeon_inode(sb, sih, inode, parent_ino,
+			    i_blocknr, d_blocknr, rdev);
 
 	return inode;
 out:
@@ -302,7 +304,8 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid,
 }
 
 static u64 search_imem_addr(struct aeon_sb_info *sbi,
-			    struct inode_map *inode_map, u32 ino)
+			    struct inode_map *inode_map,
+			    u32 ino, u64 *i_blocknr)
 {
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	unsigned long blocknr;
@@ -315,6 +318,7 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 		list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
 			if (ino == im->ino) {
 				addr = im->addr;
+				*i_blocknr = im->blocknr;
 				list_del(&im->imem_list);
 				kfree(im);
 				goto found;
@@ -350,7 +354,7 @@ static int aeon_get_new_inode_address(struct super_block *sb, u32 free_ino,
 			goto err;
 	}
 
-	*pi_addr = search_imem_addr(sbi, inode_map, free_ino);
+	*pi_addr = search_imem_addr(sbi, inode_map, free_ino, i_blocknr);
 	if (*pi_addr == 0)
 		goto err;
 
@@ -740,6 +744,7 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	im->addr = sih->pi_addr;
 	im->independent = 1;
 	im->head = im;
+	im->blocknr = le64_to_cpu(pi->i_inode_blok);
 	list_add(&im->imem_list, &inode_map->im->imem_list);
 	mutex_unlock(&inode_map->inode_table_mutex);
 
@@ -863,19 +868,28 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 
 	mutex_lock(&sih->truncate_mutex);
 
+	write_lock(&sih->i_meta_lock);
 	entries = le16_to_cpu(aeh->eh_entries);
+	write_unlock(&sih->i_meta_lock);
 	while(entries > 0) {
-		addr = aeon_pull_extent_addr(sb, pi, index);
+		addr = aeon_pull_extent_addr(sb, sih, index);
 		ae = (struct aeon_extent *)addr;
 
+		write_lock(&sih->i_meta_lock);
 		num_blocks += le16_to_cpu(ae->ex_length);
 		off = le32_to_cpu(ae->ex_offset);
 		length = le16_to_cpu(ae->ex_length);
+		write_unlock(&sih->i_meta_lock);
 		if (off <= iblock && iblock < off + length) {
-			if (old_size < offset)
+			if (old_size < offset) {
+				write_lock(&sih->i_meta_lock);
 				ae->ex_length = cpu_to_le16(off + length - iblock);
+				write_unlock(&sih->i_meta_lock);
+			}
+			write_lock(&sih->i_meta_lock);
 			aeh->eh_entries = cpu_to_le16(++index);
-			addr = aeon_pull_extent_addr(sb, pi, index);
+			write_unlock(&sih->i_meta_lock);
+			addr = aeon_pull_extent_addr(sb, sih, index);
 			ae = (struct aeon_extent *)addr;
 			err = aeon_cutoff_file_tree(sb, sih, pi, --entries, index);
 			if (err)

@@ -98,6 +98,8 @@ struct aeon_inode {
 	__le64	i_dentry_block;	/* block that holds a related dentry */
 	__le32	i_d_internal;
 
+	__le64  i_inode_blok;	/* inode itself belongs  */
+
 	__le64	i_next_inode_block;
 	u8      i_internal_allocated;
 
@@ -113,7 +115,7 @@ struct aeon_inode {
 	struct aeon_extent ae[PI_MAX_INTERNAL_EXTENT];
 	__le16 i_exblocks;
 
-	char	pad[15];
+	char	pad[7];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 

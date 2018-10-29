@@ -376,6 +376,7 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 
 	de_map->num_dentries--;
 	de->valid = 0;
+	de->i_blocknr = 0;
 	memset(de->name, '\0', de->name_len + 1);
 	aeon_update_dentry_csum(de);
 

@@ -73,6 +73,7 @@ extern int wprotect;
 struct imem_cache {
 	u32	ino;
 	u64	addr;
+	u64	blocknr;
 	int	independent;
 	struct	imem_cache *head;
 	struct	list_head imem_list;
@@ -606,11 +607,8 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
-u64 aeon_pull_extent_addr(struct super_block *sb, struct aeon_inode *pi,
-			  int index);
-struct aeon_extent *aeon_search_extent(struct super_block *sb,
-				       struct aeon_inode_info_header *sih,
-				       unsigned long iblock);
+u64 aeon_pull_extent_addr(struct super_block *sb,
+			  struct aeon_inode_info_header *sih, int index);
 int aeon_delete_file_tree(struct super_block *sb,
 			  struct aeon_inode_info_header *sih);
 int aeon_cutoff_file_tree(struct super_block *sb,
@@ -627,7 +625,8 @@ u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 void aeon_set_file_ops(struct inode *inode);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr, u32 ino,
-				 umode_t mode, u32 parent_ino, u64 d_blocknr,
+				 umode_t mode, u32 parent_ino,
+				 u64 i_blocknr, u64 d_blocknr,
 				 size_t size, dev_t rdev,
 				 const struct qstr *qstr);
 u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr);
