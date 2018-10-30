@@ -8,6 +8,7 @@
 #include <linux/dax.h>
 
 #include "aeon.h"
+#include "aeon_extents.h"
 
 #define AEON_BLOCK_TYPE_MAX 1
 unsigned int blk_type_to_shift[AEON_BLOCK_TYPE_MAX] = {12};
@@ -767,7 +768,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		//aeon_dbgv("%s: file ino %lu\n", __func__, sih->ino);
 		//freed = aeon_delete_file_tree(sb, sih, 0,
 		//			last_blocknr, true, true);
-		aeon_delete_file_tree(sb, sih);
+		aeon_delete_extenttree(sb, sih);
 		break;
 	case S_IFDIR:
 		//aeon_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
@@ -880,7 +881,7 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 
 	aeh->eh_entries = cpu_to_le16(++index);
 	entries = entries - index - 1;
-	err = aeon_cutoff_file_tree(sb, sih, pi, entries, index);
+	err = aeon_cutoff_extenttree(sb, sih, pi, entries, index);
 	if (err)
 		aeon_err(sb, "%s\n", __func__);
 	mutex_unlock(&sih->truncate_mutex);
@@ -916,7 +917,7 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 			write_unlock(&sih->i_meta_lock);
 			addr = aeon_pull_extent_addr(sb, sih, index);
 			ae = (struct aeon_extent *)addr;
-			err = aeon_cutoff_file_tree(sb, sih, pi, --entries, index);
+			err = aeon_cutoff_extenttree(sb, sih, pi, --entries, index);
 			if (err)
 				aeon_err(sb, "%s\n", __func__);
 			mutex_unlock(&sih->truncate_mutex);

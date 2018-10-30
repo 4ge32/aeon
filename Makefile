@@ -5,7 +5,7 @@
 obj-m += aeon.o
 
 aeon-y := super.o balloc.o inode.o mprotect.o namei.o dir.o \
-	file.o rebuild.o symlink.o debug.o ioctl.o
+	file.o extents.o rebuild.o symlink.o debug.o ioctl.o
 
 aeon-$(CONFIG_AEON_FS_XATTR)	+= xattr.o xattr_user.o
 

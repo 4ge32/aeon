@@ -489,20 +489,6 @@ static inline void aeon_memunlock_super(struct super_block *sb)
 		__aeon_memunlock_range(ps, AEON_SB_SIZE);
 }
 
-static inline
-struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
-{
-	return &pi->aeh;
-}
-
-static inline void aeon_init_extent_header(struct aeon_extent_header *aeh)
-{
-	aeh->eh_entries = 0;
-	aeh->eh_depth = 0;
-	aeh->eh_blocks = 0;
-}
-
-
 /* checksum */
 #define VALID	1
 #define INVALID 0
@@ -601,6 +587,9 @@ void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree);
 int aeon_new_data_blocks(struct super_block *sb,
 	struct aeon_inode_info_header *sih, unsigned long *blocknr,
 	unsigned long start_blk, unsigned int num, int cpu);
+int aeon_insert_blocks_into_free_list(struct super_block *sb,
+				      unsigned long blocknr,
+				      int num, unsigned short btype);
 int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 			unsigned long max_blocks, u32 *bno, bool *new,
 			bool *boundary, int create);
@@ -610,18 +599,7 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb,
 					u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
-u64 aeon_pull_extent_addr(struct super_block *sb,
-			  struct aeon_inode_info_header *sih, int index);
-int aeon_delete_file_tree(struct super_block *sb,
-			  struct aeon_inode_info_header *sih);
-int aeon_cutoff_file_tree(struct super_block *sb,
-			  struct aeon_inode_info_header *sih,
-			  struct aeon_inode *pi, int remaining, int index);
-int aeon_update_extent(struct super_block *sb, struct inode *inode,
-		       unsigned blocknr, unsigned long offset, int num_blocks);
-struct aeon_extent *aeon_search_extent(struct super_block *sb,
-				       struct aeon_inode_info_header *sih,
-				       unsigned long iblock);
+unsigned long aeon_get_new_extents_block(struct super_block *sb);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);
@@ -692,4 +670,3 @@ int __init aeon_create_root_stats(void);
 void aeon_destroy_root_stats(void);
 
 #endif
-
