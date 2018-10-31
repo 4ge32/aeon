@@ -32,7 +32,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 
 	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
 				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, 0, 0, &dentry->d_name);
+				   d_blocknr, 0, 0, dentry);
 	if (IS_ERR(inode))
 		goto out;
 
@@ -209,7 +209,7 @@ static int aeon_symlink(struct inode *dir,
 
 	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino, S_IFLNK|0777,
 				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, l, 0, &dentry->d_name);
+				   d_blocknr, l, 0, dentry);
 
 	si = AEON_I(inode);
 	sih = &si->header;
@@ -256,7 +256,7 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino, S_IFDIR | mode,
 				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, sb->s_blocksize, 0, &dentry->d_name);
+				   d_blocknr, sb->s_blocksize, 0, dentry);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out;
@@ -443,7 +443,7 @@ static int aeon_mknod(struct inode *dir, struct dentry *dentry,
 
 	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, ino, mode,
 				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, 0, rdev, &dentry->d_name);
+				   d_blocknr, 0, rdev, dentry);
 	if (IS_ERR(inode))
 		goto out;
 
@@ -475,7 +475,7 @@ static int aeon_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
 				   le32_to_cpu(pidir->aeon_ino), 0,
-				   0, 0, 0, &dentry->d_name);
+				   0, 0, 0, dentry);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 

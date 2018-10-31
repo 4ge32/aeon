@@ -156,9 +156,11 @@ void aeon_set_file_ops(struct inode *inode)
 static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
 				       struct inode *inode, u32 parent_ino,
-				       u64 i_blocknr, u64 d_blocknr, dev_t rdev)
+				       u64 i_blocknr, u64 d_blocknr,
+				       struct dentry *dentry, dev_t rdev)
 {
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_dentry *de = (struct aeon_dentry *)dentry->d_fsdata;
 
 	pi->deleted = 0;
 	pi->i_new = 1;
@@ -173,7 +175,9 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_blocks = 0;
 	pi->i_internal_allocated = 0;
 	pi->i_dentry_block = cpu_to_le64(d_blocknr);
-	pi->i_inode_blok = cpu_to_le64(i_blocknr);
+	pi->i_d_internal_off = de->internal_offset;
+	pi->i_d_global_off = de->global_offset;
+	pi->i_inode_block = cpu_to_le64(i_blocknr);
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(rdev);
@@ -181,7 +185,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 
 	aeon_init_extent_header(&pi->aeh);
 
-	pi->persisted = 0;
+	pi->persisted = 1;
 	pi->valid = 1;
 
 	aeon_update_inode_csum(pi);
@@ -191,7 +195,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr,
 				 u32 ino, umode_t mode, u32 parent_ino,
 				 u64 i_blocknr, u64 d_blocknr, size_t size,
-				 dev_t rdev, const struct qstr *qstr)
+				 dev_t rdev, struct dentry *dentry)
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
@@ -242,7 +246,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	aeon_init_header(sb, sih, pi_addr);
 
 	fill_new_aeon_inode(sb, sih, inode, parent_ino,
-			    i_blocknr, d_blocknr, rdev);
+			    i_blocknr, d_blocknr, dentry, rdev);
 
 	return inode;
 out:
@@ -745,7 +749,7 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	im->addr = sih->pi_addr;
 	im->independent = 1;
 	im->head = im;
-	im->blocknr = le64_to_cpu(pi->i_inode_blok);
+	im->blocknr = le64_to_cpu(pi->i_inode_block);
 	list_add(&im->imem_list, &inode_map->im->imem_list);
 	mutex_unlock(&inode_map->inode_table_mutex);
 

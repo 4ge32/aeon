@@ -413,6 +413,7 @@ static void aeon_init_root_inode(struct super_block *sb,
 	root_i->deleted = 0;
 	root_i->i_new = 1;
 
+	aeon_update_inode_csum(root_i);
 	aeon_memlock_inode(sb, root_i);
 }
 

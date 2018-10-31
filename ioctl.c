@@ -17,6 +17,7 @@ static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
 long aeon_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct inode *inode = file_inode(filp);
+	struct super_block *sb = inode->i_sb;
 	struct aeon_inode *pi;
 	unsigned int flags;
 	int ret;
@@ -92,6 +93,23 @@ setflags_out:
 setversion_out:
 		mnt_drop_write_file(filp);
 		return ret;
+	}
+	case AEON_IOC_INODE_ATTACK: {
+		return 0;
+	}
+	case AEON_IOC_DENTRY_ATTACK: {
+		struct aeon_inode *pi;
+		struct aeon_dentry *de;
+		u64 de_addr = 0;
+
+		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
+		aeon_get_dentry_address(sb, pi, &de_addr);
+		de = (struct aeon_dentry *)de_addr;
+
+		de->i_blocknr = 1414153;
+
+		aeon_dbg("Change dentry member\n");
+		return 0;
 	}
 	default:
 		return -ENOTTY;

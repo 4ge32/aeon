@@ -57,6 +57,36 @@ static int aeon_remove_dir_tree(struct super_block *sb,
 	return 0;
 }
 
+int aeon_get_dentry_address(struct super_block *sb,
+			    struct aeon_inode *pi, u64 *de_addr)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_dentry *de;
+	unsigned long internal;
+	unsigned long blocknr;
+
+	if (pi->aeon_ino == cpu_to_le32(AEON_ROOT_INO))
+		return 0;
+
+	internal = le32_to_cpu(pi->i_d_internal_off);
+	blocknr = le64_to_cpu(pi->i_dentry_block);
+
+	*de_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
+					(internal << AEON_D_SHIFT);
+
+	de = (struct aeon_dentry *)(*de_addr);
+	if (pi->aeon_ino != de->ino) {
+		u32 pi_ino = le32_to_cpu(pi->aeon_ino);
+		u32 de_ino = le32_to_cpu(de->ino);
+
+		aeon_err(sb, "%s: pi_ino %u de_ino %u blocknr %lu, internal %lu\n"
+			 , __func__, pi_ino, de_ino, blocknr, internal);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 struct aeon_dentry *aeon_dotdot(struct super_block *sb,
 				struct dentry *dentry)
 {
@@ -335,7 +365,6 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino, u64 i_blocknr,
 
 	pidir->i_links_count++;
 	aeon_update_inode_csum(pidir);
-
 
 	return 0;
 out2:

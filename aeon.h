@@ -43,6 +43,8 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define	AEON_IOC_SETFLAGS		FS_IOC_SETFLAGS
 #define	AEON_IOC_GETVERSION		FS_IOC_GETVERSION
 #define	AEON_IOC_SETVERSION		FS_IOC_SETVERSION
+#define AEON_IOC_INODE_ATTACK		_IOWR('f', 5, long)
+#define AEON_IOC_DENTRY_ATTACK		_IOWR('f', 6, long)
 
 /*
  * ioctl commands in 32 bit emulation
@@ -493,7 +495,7 @@ static inline void aeon_memunlock_super(struct super_block *sb)
 #define VALID	1
 #define INVALID 0
 
-static inline int aeon_dentry_persisted(struct aeon_dentry *de)
+static inline int is_persisted_dentry(struct aeon_dentry *de)
 {
 	__le32 temp;
 
@@ -513,7 +515,7 @@ static inline void aeon_update_dentry_csum(struct aeon_dentry *de)
 			       AEON_DENTRY_CSIZE));
 }
 
-static inline int aeon_inode_persisted(struct aeon_inode *pi)
+static inline int is_persisted_inode(struct aeon_inode *pi)
 {
 	__le32 temp;
 
@@ -612,7 +614,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 umode_t mode, u32 parent_ino,
 				 u64 i_blocknr, u64 d_blocknr,
 				 size_t size, dev_t rdev,
-				 const struct qstr *qstr);
+				 struct dentry *dentry);
 u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr);
 void aeon_set_inode_flags(struct inode *inode, struct aeon_inode *pi,
 			  unsigned int flags);
@@ -634,6 +636,8 @@ int aeon_add_dentry(struct dentry *dentry, u32 ino,
 		    u64 i_blocknr, u64 *d_blocknr, int inc_link);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
+int aeon_get_dentry_address(struct super_block *sb,
+			    struct aeon_inode *pi, u64 *de_addr);
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 				     struct aeon_inode *pi,
 				     struct inode *inode, const char *name,
