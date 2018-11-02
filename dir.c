@@ -57,6 +57,9 @@ static int aeon_remove_dir_tree(struct super_block *sb,
 	return 0;
 }
 
+/*
+ * Filesystem already knows whether pi is valid or not.
+ */
 int aeon_get_dentry_address(struct super_block *sb,
 			    struct aeon_inode *pi, u64 *de_addr)
 {
@@ -64,12 +67,24 @@ int aeon_get_dentry_address(struct super_block *sb,
 	struct aeon_dentry *de;
 	unsigned long internal;
 	unsigned long blocknr;
+	unsigned long boundary;
 
 	if (pi->aeon_ino == cpu_to_le32(AEON_ROOT_INO))
 		return 0;
 
 	internal = le32_to_cpu(pi->i_d_internal_off);
 	blocknr = le64_to_cpu(pi->i_dentry_block);
+	boundary = sbi->last_blocknr;
+
+	if (blocknr > boundary) {
+		aeon_dbg("up to %lu but blocknr %lu\n", boundary, blocknr);
+		return -ENOENT;
+	}
+
+	if (internal == 0 || blocknr == 0) {
+		aeon_dbg("%s illegal block\n", __func__);
+		return -ENOENT;
+	}
 
 	*de_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(internal << AEON_D_SHIFT);

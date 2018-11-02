@@ -45,6 +45,7 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define	AEON_IOC_SETVERSION		FS_IOC_SETVERSION
 #define AEON_IOC_INODE_ATTACK		_IOWR('f', 5, long)
 #define AEON_IOC_DENTRY_ATTACK		_IOWR('f', 6, long)
+#define AEON_IOC_CHILD_ID_ATTACK	_IOWR('f', 7, long)
 
 /*
  * ioctl commands in 32 bit emulation
@@ -99,6 +100,12 @@ struct i_valid_child_list {
 	struct	list_head i_valid_child_list;
 };
 
+struct invalid_obj_queue {
+	struct aeon_inode *pi;
+	struct aeon_dentry *de;
+	struct list_head invalid_obj_queue;
+};
+
 struct inode_map {
 	struct mutex		inode_table_mutex;
 	struct rb_root		inode_inuse_tree;
@@ -125,6 +132,7 @@ struct aeon_sb_info {
 	void		*virt_addr;
 
 	unsigned long	num_blocks;
+	unsigned long	last_blocknr;
 
 	/* Mount options */
 	unsigned long	blocksize;
@@ -158,6 +166,9 @@ struct aeon_sb_info {
 
 	/* used show debug info */
 	struct aeon_stat_info *stat_info;
+
+	/* used in recovery process */
+	struct invalid_obj_queue *ioq;
 
 	struct mb_cache *s_ea_block_cache;
 };

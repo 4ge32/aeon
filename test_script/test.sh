@@ -136,6 +136,25 @@ write ()
   done
 }
 
+recover ()
+{
+  N=1
+  func="recover"
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-$func-$num"
+    test-$func-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
+
 source ./list_test.sh
 echo "===== TEST START ====="
 
@@ -160,6 +179,9 @@ case "$1" in
     ;;
   write)
     write
+    ;;
+  recover)
+    recover
     ;;
   all)
     mmap

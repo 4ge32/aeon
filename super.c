@@ -70,6 +70,7 @@ static void aeon_put_super(struct super_block *sb)
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
 			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
 	}
+	kfree(sbi->ioq);
 	kfree(sbi->inode_maps);
 
 	kfree(sbi);
@@ -541,6 +542,12 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);
 	sbi->mode = (0777);	/* it will be changed */
+	sbi->ioq = kzalloc(sizeof(struct invalid_obj_queue), GFP_KERNEL);
+	if (!sbi->ioq) {
+		ret = -ENOMEM;
+		goto out00;
+	}
+	INIT_LIST_HEAD(&sbi->ioq->invalid_obj_queue);
 	sbi->inode_maps = kcalloc(sbi->cpus,
 				  sizeof(struct inode_map), GFP_KERNEL);
 	if(!sbi->inode_maps) {
@@ -615,6 +622,8 @@ out1:
 	aeon_err(sb, "%s: free inode_maps\n", __func__);
 	kfree(sbi->inode_maps);
 out0:
+	kfree(sbi->ioq);
+out00:
 	kfree(sbi);
 
 	aeon_err(sb, "%s failed: return %d\n", __func__, ret);

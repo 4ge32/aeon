@@ -73,6 +73,8 @@ static void aeon_init_free_list(struct super_block *sb,
 
 	free_list->block_start = per_list_blocks * index;
 	free_list->block_end = free_list->block_start + per_list_blocks - 1;
+
+	sbi->last_blocknr = free_list->block_end;
 }
 
 void aeon_init_blockmap(struct super_block *sb)
@@ -186,7 +188,6 @@ bool aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	bool found = false;
 
 	temp = tree->rb_node;
-
 	while (temp) {
 		curr = container_of(temp, struct aeon_range_node, node);
 		compVal = aeon_rbtree_compare_rangenode(curr, key, type);

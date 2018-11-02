@@ -101,6 +101,11 @@ int aeon_get_inode_address(struct super_block *sb,
 	internal_ino = (((ino - cpu_id) / sbi->cpus) %
 					AEON_I_NUM_PER_PAGE);
 
+	if (i_blocknr == 0 || i_blocknr > sbi->last_blocknr) {
+		aeon_err(sb, "out of bounds\n");
+		return -EINVAL;
+	}
+
 	*pi_addr = (u64)sbi->virt_addr + (i_blocknr << AEON_SHIFT) +
 					(internal_ino << AEON_I_SHIFT);
 
@@ -791,11 +796,11 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		break;
 	}
 
-	pi->i_mode = 0;
-
 	ret = aeon_free_inode(sb, pi, sih);
 	if (ret)
 		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
+
+	memset(pi, 0, sizeof(*pi));
 
 	return ret;
 }

@@ -95,9 +95,49 @@ setversion_out:
 		return ret;
 	}
 	case AEON_IOC_INODE_ATTACK: {
+		struct aeon_inode *pi;
+
+		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
+
+		pi->i_inode_block = 0;
+
+		aeon_dbg("Destroy inode (ino %u) illegaly\n",
+			 le32_to_cpu(pi->aeon_ino));
 		return 0;
 	}
 	case AEON_IOC_DENTRY_ATTACK: {
+		struct aeon_inode *pi;
+		struct aeon_dentry *de;
+		u64 de_addr = 0;
+		enum failure_type {
+			CREATE = 1,
+			DELETE,
+		};
+		enum failure_type type;
+
+		if (get_user(type, (int __user *)arg))
+			ret = -EFAULT;
+		aeon_dbg("type %d\n", type);
+
+		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
+		aeon_get_dentry_address(sb, pi, &de_addr);
+		de = (struct aeon_dentry *)de_addr;
+
+		switch (type){
+		case CREATE: {
+			memset(de, 0, sizeof(*de));
+			break;
+		}
+		case DELETE: {
+			break;
+		}
+		}
+
+
+		aeon_dbg("Change dentry member\n");
+		return 0;
+	}
+	case AEON_IOC_CHILD_ID_ATTACK: {
 		struct aeon_inode *pi;
 		struct aeon_dentry *de;
 		u64 de_addr = 0;
@@ -106,10 +146,7 @@ setversion_out:
 		aeon_get_dentry_address(sb, pi, &de_addr);
 		de = (struct aeon_dentry *)de_addr;
 
-		de->i_blocknr = 1414153;
 
-		aeon_dbg("Change dentry member\n");
-		return 0;
 	}
 	default:
 		return -ENOTTY;

@@ -459,3 +459,28 @@ test-write-3 ()
   res=$?
   clean
 }
+
+test-recover-1 ()
+{
+  init
+
+  TARGET="nova"
+  OBJ="nvdimm nova dram pmem"
+  RES="nvdimm R-5 dram pmem"
+  gcc -o attack_dentry attack_dentry.c
+
+  for i in $OBJ
+  do
+    touch $DIR/$i
+  done
+  for i in $RES
+  do
+    touch $TMP/$i
+  done
+  ./attack_dentry $DIR/$TARGET
+  ./run.sh rm
+  diff $TMP $DIR
+  res=$?
+
+  clean
+}
