@@ -54,6 +54,9 @@ static int aeon_check_child(int p_state, int c_state)
 
 static void aeon_rebuild_dentry(struct aeon_dentry *de, struct aeon_inode *pi)
 {
+	/* TODO:
+	 * If there is a possiblity that name is valid, use it.
+	 */
 	snprintf(de->name, AEON_NAME_LEN-1, "R-%u", le32_to_cpu(pi->aeon_ino));
 	de->name_len = strlen(de->name);
 	de->ino = pi->aeon_ino;
@@ -99,9 +102,10 @@ static int de_has_dentry_block(struct super_block *sb, struct aeon_dentry *de)
 	return ((0 < blocknr && blocknr <= last) && (ino != 0));
 }
 
-static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi)
+static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi,
+			      struct aeon_dentry **de)
 {
-	struct aeon_dentry *de;
+	struct aeon_dentry *tmp;
 	unsigned long blocknr;
 	unsigned long offset;
 	int i;
@@ -112,11 +116,12 @@ static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi)
 	 */
 	blocknr = le64_to_cpu(pi->i_dentry_block);
 	offset = le32_to_cpu(pi->i_d_internal_off);
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
+	tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
 			(blocknr << AEON_SHIFT) + (offset << AEON_D_SHIFT));
 
-	if (de->ino == pi->aeon_ino) {
-		aeon_rebuild_dentry(de, pi);
+	if (tmp->ino == pi->aeon_ino) {
+		aeon_rebuild_dentry(tmp, pi);
+		*de = tmp;
 		return 0;
 	}
 
@@ -124,11 +129,12 @@ static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi)
 	  * Only if blocknr is valid, it would work well.
 	  */
 	for (i = 0; i < AEON_INTERNAL_ENTRY; i++) {
-		de = (struct aeon_dentry *)((u64)sbi->virt_addr +
+		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
 				 (blocknr << AEON_SHIFT) + (i << AEON_D_SHIFT));
-		if (de->ino == pi->aeon_ino) {
+		if (tmp->ino == pi->aeon_ino) {
 			pi->i_d_internal_off = cpu_to_le32(i);
-			aeon_rebuild_dentry(de, pi);
+			aeon_rebuild_dentry(tmp, pi);
+			*de = tmp;
 			return 0;
 		}
 	}
@@ -176,11 +182,11 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 
 		/* recover from inode */
 		parent_ino = le32_to_cpu(p_pi->aeon_ino);
-		parent_ino_in_c_pi = ((*c_pi)->parent_ino);
+		parent_ino_in_c_pi = le32_to_cpu(((*c_pi)->parent_ino));
 		if (parent_ino != parent_ino_in_c_pi) {
 			(*c_pi)->parent_ino = p_pi->aeon_ino;
 			if (pi_has_dentry_block(sb, *c_pi)) {
-				err = aeon_lookup_dentry(sbi, *c_pi);
+				err = aeon_lookup_dentry(sbi, *c_pi, c_de);
 				if (err)
 					goto next_lookup;
 				else

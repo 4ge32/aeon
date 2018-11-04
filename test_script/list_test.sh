@@ -538,9 +538,22 @@ test-recover-5 ()
 
   TARGET="dark"
   OBJ="nvdimm dark dram pmem"
-  RES="nvdimm dark dram pmem"
+  RES=$OBJ
 
   helper_recover_test 2 4
+
+  clean
+}
+
+test-recover-6 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES=$OBJ
+
+  helper_recover_test 3 5
 
   clean
 }

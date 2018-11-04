@@ -6,12 +6,14 @@
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 
-#define AEON_IOC_INODE_ATTACK _IOWR('f', 5, long)
-#define AEON_IOC_DENTRY_ATTACK _IOWR('f', 6, long)
+#define AEON_IOC_INODE_ATTACK		_IOWR('f', 5, long)
+#define AEON_IOC_DENTRY_ATTACK		_IOWR('f', 6, long)
+#define AEON_IOC_CHILD_ID_ATTACK	_IOWR('f', 7, long)
 
 enum attack_type {
 	DENTRY = 1,
 	INODE,
+	BOTH_OF_CHILD,
 };
 
 enum failure_type {
@@ -19,6 +21,9 @@ enum failure_type {
 	DELETE1,
 	DELETE2,
 	DELETE3,
+	CREATE_ID1,
+	CREATE_ID2,
+	CREATE_ID3,
 };
 
 int main(int argc, char *argv[])
@@ -45,6 +50,9 @@ int main(int argc, char *argv[])
 		break;
 	case DENTRY:
 		attack_type = AEON_IOC_DENTRY_ATTACK;
+		break;
+	case BOTH_OF_CHILD:
+		attack_type =  AEON_IOC_CHILD_ID_ATTACK;
 		break;
 	}
 

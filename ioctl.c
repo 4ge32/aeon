@@ -9,6 +9,9 @@ enum failure_type {
 	DELETE1,
 	DELETE2,
 	DELETE3,
+	CREATE_ID1,
+	CREATE_ID2,
+	CREATE_ID3,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -106,7 +109,7 @@ setversion_out:
 		enum failure_type type;
 
 		if (get_user(type, (int __user *)arg))
-			ret = -EFAULT;
+			return -EFAULT;
 
 		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
 		aeon_dbg("Destroy inode (ino %u) illegaly type %d\n",
@@ -134,8 +137,7 @@ setversion_out:
 			pi->deleted = 0;
 			break;
 		default:
-			ret = -EINVAL;
-			break;
+			return -EFAULT;
 		}
 
 		return 0;
@@ -147,8 +149,7 @@ setversion_out:
 		enum failure_type type;
 
 		if (get_user(type, (int __user *)arg))
-			ret = -EFAULT;
-		aeon_dbg("type %d\n", type);
+			return -EFAULT;
 
 		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
 		aeon_get_dentry_address(sb, pi, &de_addr);
@@ -159,8 +160,7 @@ setversion_out:
 			memset(de, 0, sizeof(*de));
 			break;
 		default:
-			ret = -EINVAL;
-			break;
+			return -EFAULT;
 		}
 
 		aeon_dbg("Destroy inode (ino %u) illegaly\n",
@@ -171,12 +171,40 @@ setversion_out:
 		struct aeon_inode *pi;
 		struct aeon_dentry *de;
 		u64 de_addr = 0;
+		enum failure_type type;
+
+		if (get_user(type, (int __user *)arg))
+			ret = -EFAULT;
 
 		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
 		aeon_get_dentry_address(sb, pi, &de_addr);
 		de = (struct aeon_dentry *)de_addr;
 
+		switch (type) {
+		/* If valid doesn't set, metadata is regarded as not exisit */
+		case CREATE_ID1:
+			/* No problem in fact */
+			aeon_dbg("hey?\n");
+			pi->csum = 0;
+			de->csum = 0;
+			break;
+		case CREATE_ID2:
+			break;
+		case CREATE_ID3:
+			/* valid bit is set, but... */
+			de->csum = 0;
+			pi->aeon_ino = 0;
+			pi->parent_ino = 0;
+			pi->i_dentry_block = 0;
+			pi->i_d_internal_off = 0;
+			pi->i_inode_block = 0;
+			de->csum = 0;
+			break;
+		default:
+			return -EFAULT;
+		}
 
+		return 0;
 	}
 	default:
 		return -ENOTTY;
