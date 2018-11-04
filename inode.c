@@ -800,8 +800,6 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	if (ret)
 		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
 
-	memset(pi, 0, sizeof(*pi));
-
 	return ret;
 }
 

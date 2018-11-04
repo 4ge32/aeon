@@ -4,6 +4,13 @@
 
 #include "aeon.h"
 
+enum failure_type {
+	CREATE = 1,
+	DELETE1,
+	DELETE2,
+	DELETE3,
+};
+
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
 {
 	if (S_ISDIR(mode))
@@ -96,23 +103,47 @@ setversion_out:
 	}
 	case AEON_IOC_INODE_ATTACK: {
 		struct aeon_inode *pi;
+		enum failure_type type;
+
+		if (get_user(type, (int __user *)arg))
+			ret = -EFAULT;
 
 		pi = aeon_get_inode(sb, &AEON_I(inode)->header);
+		aeon_dbg("Destroy inode (ino %u) illegaly type %d\n",
+			 le32_to_cpu(pi->aeon_ino), type);
 
-		pi->i_inode_block = 0;
+		switch (type) {
+		case CREATE:
+			memset(pi, 0, sizeof(*pi));
+			break;
+		/*
+		 * valid and deleted flags are important flags.
+		 * If valid is zero and deleted are one, AEON regards as
+		 * inode is fully discarded.
+		 */
+		case DELETE1:
+			pi->valid = 0;
+			pi->deleted = 0;
+			break;
+		case DELETE2:
+			pi->valid = 1;
+			pi->deleted = 1;
+			break;
+		case DELETE3:
+			pi->valid = 1;
+			pi->deleted = 0;
+			break;
+		default:
+			ret = -EINVAL;
+			break;
+		}
 
-		aeon_dbg("Destroy inode (ino %u) illegaly\n",
-			 le32_to_cpu(pi->aeon_ino));
 		return 0;
 	}
 	case AEON_IOC_DENTRY_ATTACK: {
 		struct aeon_inode *pi;
 		struct aeon_dentry *de;
 		u64 de_addr = 0;
-		enum failure_type {
-			CREATE = 1,
-			DELETE,
-		};
 		enum failure_type type;
 
 		if (get_user(type, (int __user *)arg))
@@ -123,18 +154,17 @@ setversion_out:
 		aeon_get_dentry_address(sb, pi, &de_addr);
 		de = (struct aeon_dentry *)de_addr;
 
-		switch (type){
-		case CREATE: {
+		switch (type) {
+		case CREATE:
 			memset(de, 0, sizeof(*de));
 			break;
-		}
-		case DELETE: {
+		default:
+			ret = -EINVAL;
 			break;
 		}
-		}
 
-
-		aeon_dbg("Change dentry member\n");
+		aeon_dbg("Destroy inode (ino %u) illegaly\n",
+			 le32_to_cpu(pi->aeon_ino));
 		return 0;
 	}
 	case AEON_IOC_CHILD_ID_ATTACK: {

@@ -159,7 +159,7 @@ static int aeon_lookup_inode(struct aeon_sb_info *sbi, struct aeon_dentry *de,
 static unsigned long aeon_recover_child(struct super_block *sb,
 					struct aeon_inode *p_pi,
 					struct aeon_dentry *p_de,
-					struct aeon_inode *c_pi,
+					struct aeon_inode **c_pi,
 					struct aeon_dentry **c_de, int err)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -176,11 +176,11 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 
 		/* recover from inode */
 		parent_ino = le32_to_cpu(p_pi->aeon_ino);
-		parent_ino_in_c_pi = (c_pi->parent_ino);
+		parent_ino_in_c_pi = ((*c_pi)->parent_ino);
 		if (parent_ino != parent_ino_in_c_pi) {
-			c_pi->parent_ino = p_pi->aeon_ino;
-			if (pi_has_dentry_block(sb, c_pi)) {
-				err = aeon_lookup_dentry(sbi, c_pi);
+			(*c_pi)->parent_ino = p_pi->aeon_ino;
+			if (pi_has_dentry_block(sb, *c_pi)) {
+				err = aeon_lookup_dentry(sbi, *c_pi);
 				if (err)
 					goto next_lookup;
 				else
@@ -206,18 +206,18 @@ next_lookup:
 		unsigned long offset;
 		int cpu_id;
 
-		blocknr = le64_to_cpu(c_pi->i_dentry_block);
-		offset = le32_to_cpu(c_pi->i_d_internal_off);
+		blocknr = le64_to_cpu((*c_pi)->i_dentry_block);
+		offset = le32_to_cpu((*c_pi)->i_d_internal_off);
 		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
 			(blocknr << AEON_SHIFT) + (offset << AEON_D_SHIFT));
 
 		cpu_id = ino % sbi->cpus;
-		ino = le32_to_cpu(c_pi->aeon_ino);
+		ino = le32_to_cpu((*c_pi)->aeon_ino);
 		aeon_info("Recover dentry (ino:%lu)\n", ino);
-		aeon_rebuild_dentry(tmp, c_pi);
+		aeon_rebuild_dentry(tmp, *c_pi);
 		*c_de = tmp;
 	} else if (err == P_AND_C_DENTRY_PERSIST) {
-		struct aeon_inode *test;
+		struct aeon_inode *tmp;
 		unsigned long blocknr;
 		unsigned long ino;
 		unsigned long internal_ino;
@@ -229,15 +229,12 @@ next_lookup:
 		internal_ino = ((ino - cpu_id) / sbi->cpus) %
 						AEON_I_NUM_PER_PAGE;
 
-		test = (struct aeon_inode *)((u64)sbi->virt_addr +
+		tmp = (struct aeon_inode *)((u64)sbi->virt_addr +
 			(blocknr << AEON_SHIFT) + (internal_ino << AEON_I_SHIFT));
 
-		if (c_pi != test)
-			c_pi = test;
-
 		aeon_info("Recover inode ino:%lu\n", ino);
-
-		aeon_rebuild_inode(c_pi, *c_de, p_pi);
+		aeon_rebuild_inode(tmp, *c_de, p_pi);
+		*c_pi = tmp;
 	} else
 		aeon_err(sb, "%s\n", __func__);
 
@@ -313,7 +310,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	return -ENOENT;
 
 found:
-	aeon_dbg("Rebuild %u directory\n", parent_ino);
+	aeon_dbg("Rebuild directory %u\n", parent_ino);
 	if (is_persisted_inode(pi))
 		p_state |= P_INODE_PERIST;
 
@@ -338,6 +335,7 @@ skip_get_dentry:
 			    i_valid_child_list) {
 
 		c_state = p_state;
+
 		child_pi = (struct aeon_inode *)ivcl->addr;
 		if (is_persisted_inode(child_pi)) {
 			aeon_dbg("pass1\n");
@@ -357,7 +355,7 @@ skip_get_dentry:
 		if (err) {
 			aeon_dbg("child state %d\n", err);
 			err = aeon_recover_child(sb, pi, parent_de,
-						 child_pi, &d, err);
+						 &child_pi, &d, err);
 			if (err)
 				/* Discard inode object */
 				continue;
@@ -455,7 +453,7 @@ static unsigned int imem_cache_rebuild(struct aeon_sb_info *sbi,
 		if (i == 1)
 			*next_blocknr = le64_to_cpu(pi->i_next_inode_block);
 
-		if (pi->valid && (count < allocated)) {
+		if (pi->valid && !pi->deleted && (count < allocated)) {
 			if (ino != le32_to_cpu(pi->aeon_ino))
 				goto next;
 
@@ -486,6 +484,8 @@ static unsigned int imem_cache_rebuild(struct aeon_sb_info *sbi,
 			u32 i = le32_to_cpu(art->i_range_high);
 			if (ino > (i * sbi->cpus + cpu_id))
 				goto next;
+			if (!pi->deleted)
+				pi->deleted = 1;
 			im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 			im->ino = ino;
 			im->addr = addr;

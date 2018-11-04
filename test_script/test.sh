@@ -138,7 +138,7 @@ write ()
 
 recover ()
 {
-  N=1
+  N=5
   func="recover"
   for num in `seq 1 $N`
   do
@@ -191,6 +191,7 @@ case "$1" in
     remove
     rename
     create
+    recover
     ;;
   *)
     echo "remoe rename create all"

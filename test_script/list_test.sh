@@ -460,14 +460,11 @@ test-write-3 ()
   clean
 }
 
-test-recover-1 ()
+helper_recover_test ()
 {
-  init
-
-  TARGET="nova"
-  OBJ="nvdimm nova dram pmem"
-  RES="nvdimm R-5 dram pmem"
-  gcc -o attack_dentry attack_dentry.c
+  if [ ! -e attack_metadata ]; then
+    gcc -o attack_metadata attack_metadata.c
+  fi
 
   for i in $OBJ
   do
@@ -477,10 +474,73 @@ test-recover-1 ()
   do
     touch $TMP/$i
   done
-  ./attack_dentry $DIR/$TARGET
+  ./attack_metadata $1 $2 $DIR/$TARGET
   ./run.sh rm
   diff $TMP $DIR
   res=$?
+}
+
+test-recover-1 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm R-5 dram pmem"
+
+  helper_recover_test 1 1
+
+  clean
+}
+
+test-recover-2 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  helper_recover_test 2 1
+
+  clean
+}
+
+test-recover-3 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  helper_recover_test 2 2
+
+  clean
+}
+
+test-recover-4 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  helper_recover_test 2 3
+
+  clean
+}
+
+test-recover-5 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test 2 4
 
   clean
 }
