@@ -12,6 +12,7 @@ enum failure_type {
 	CREATE_ID1,
 	CREATE_ID2,
 	CREATE_ID3,
+	CREATE_ID4,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -184,14 +185,18 @@ setversion_out:
 		/* If valid doesn't set, metadata is regarded as not exisit */
 		case CREATE_ID1:
 			/* No problem in fact */
-			aeon_dbg("hey?\n");
-			pi->csum = 0;
-			de->csum = 0;
+			pi->csum = 532;
+			de->csum = 51;
 			break;
 		case CREATE_ID2:
+			/* A inode doen't have legal info */
+			memset(pi, 0, sizeof(*pi));
+			de->csum = 0;
 			break;
 		case CREATE_ID3:
-			/* valid bit is set, but... */
+			memset(de, 0, sizeof(*de));
+			pi->csum = 0;
+		case CREATE_ID4:
 			de->csum = 0;
 			pi->aeon_ino = 0;
 			pi->parent_ino = 0;

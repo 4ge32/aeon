@@ -103,7 +103,7 @@ int aeon_get_inode_address(struct super_block *sb,
 
 	if (i_blocknr == 0 || i_blocknr > sbi->last_blocknr) {
 		aeon_err(sb, "out of bounds\n");
-		return -EINVAL;
+		return -ENOENT;
 	}
 
 	*pi_addr = (u64)sbi->virt_addr + (i_blocknr << AEON_SHIFT) +
@@ -461,10 +461,10 @@ static inline u64 aeon_get_reserved_inode_addr(struct super_block *sb, u32 ino)
 	return addr;
 }
 
-static int aeon_rebuild_inode(struct super_block *sb,
-			      struct aeon_inode_info *si,
+static int aeon_rebuild_inode(struct super_block *sb, struct inode *inode,
 			      u64 ino, u64 pi_addr, int rebuild_dir)
 {
+	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih  = &si->header;
 	struct aeon_inode *pi = (struct aeon_inode *)pi_addr;
 	int err;
@@ -480,7 +480,7 @@ static int aeon_rebuild_inode(struct super_block *sb,
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFDIR:
-		err = aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
+		err = aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, inode);
 		if (err) {
 			aeon_err(sb, "Can't rebuld dir tree\n");
 			return err;
@@ -575,7 +575,6 @@ bad_inode:
 struct inode *aeon_iget(struct super_block *sb, u32 ino)
 {
 	struct inode *inode;
-	struct aeon_inode_info *si;
 	u64 pi_addr = 0;
 	int err;
 
@@ -584,8 +583,6 @@ struct inode *aeon_iget(struct super_block *sb, u32 ino)
 		return ERR_PTR(ENOMEM);
 	if (!(inode->i_state & I_NEW))
 		return inode;
-
-	si = AEON_I(inode);
 
 	pi_addr = aeon_get_reserved_inode_addr(sb, ino);
 
@@ -597,7 +594,7 @@ struct inode *aeon_iget(struct super_block *sb, u32 ino)
 		goto fail;
 	}
 
-	err = aeon_rebuild_inode(sb, si, ino, pi_addr, 1);
+	err = aeon_rebuild_inode(sb, inode, ino, pi_addr, 1);
 	if (err) {
 		aeon_err(sb, "%s: failed to rebuild inode %lu\n", __func__, ino);
 		goto fail;

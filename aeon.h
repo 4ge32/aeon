@@ -86,9 +86,8 @@ struct imem_cache {
 };
 
 struct i_valid_list {
-	u32	ino;
-	u64	addr;
 	u32	parent_ino;
+	u64	addr;
 	struct	i_valid_child_list *ivcl;
 	struct	list_head i_valid_list;
 };
@@ -665,7 +664,7 @@ void aeon_free_invalid_dentry_list(struct super_block *sb,
 
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
-				u64 pi_addr, struct aeon_inode_info_header *sih);
+				u64 pi_addr, struct inode *inode);
 void aeon_rebuild_inode_cache(struct super_block *sb);
 
 /* symlink.c */

@@ -557,3 +557,16 @@ test-recover-6 ()
 
   clean
 }
+
+test-recover-7 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  helper_recover_test 3 6
+
+  clean
+}

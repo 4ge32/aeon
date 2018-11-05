@@ -168,9 +168,9 @@ struct aeon_dentry {
 	__le32	ino;			/* inode no pointed to by this entry */
 	__le64	i_blocknr;		/* block that holds a related inode */
 	/* 128 bytes */
-	char	name[AEON_NAME_LEN];	/* File name */
+	char	name[AEON_NAME_LEN+1];  /* File name */
 	/* padding */
-	char	pad[101];
+	char	pad[100];
 	__le32	csum;			/* entry checksum */
 } __attribute((__packed__));
 
