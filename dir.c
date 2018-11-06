@@ -81,7 +81,7 @@ int aeon_get_dentry_address(struct super_block *sb,
 		return -ENOENT;
 	}
 
-	if (internal == 0 || blocknr == 0) {
+	if (internal == 0 && blocknr == 0) {
 		aeon_dbg("%s illegal block\n", __func__);
 		return -ENOENT;
 	}

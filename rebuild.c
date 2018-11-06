@@ -242,6 +242,8 @@ next_lookup:
 		int cpu_id;
 
 		cpu_id = sbi->cpus;
+		if (cpu_id >= sbi->cpus)
+			cpu_id -= sbi->cpus;
 		blocknr = le64_to_cpu((*c_de)->i_blocknr);
 		ino = le32_to_cpu((*c_de)->ino);
 		internal_ino = ((ino - cpu_id) / sbi->cpus) %
@@ -250,7 +252,6 @@ next_lookup:
 		tmp = (struct aeon_inode *)((u64)sbi->virt_addr +
 			(blocknr << AEON_SHIFT) + (internal_ino << AEON_I_SHIFT));
 
-		aeon_info("Recover inode ino:%lu\n", ino);
 		aeon_rebuild_inode(tmp, *c_de, p_pi);
 		*c_pi = tmp;
 	} else
@@ -536,8 +537,8 @@ skip_get_dentry:
 				continue;
 		}
 
-		aeon_dbg("d->name %s d->name_len %d\n",
-			 d->name, d->name_len);
+		aeon_dbg("d->name %s d->name_len %d dino %u iino %u\n",
+			 d->name, d->name_len, le32_to_cpu(d->ino), le32_to_cpu(child_pi->aeon_ino));
 		err = aeon_insert_dir_tree(sb, sih, d->name, d->name_len, d);
 		if (err)
 			return err;
