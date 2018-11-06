@@ -570,3 +570,29 @@ test-recover-7 ()
 
   clean
 }
+
+test-recover-8 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test 3 7
+
+  clean
+}
+
+test-recover-9 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm R-5 dram pmem"
+
+  helper_recover_test 3 8
+
+  clean
+}

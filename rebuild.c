@@ -59,7 +59,7 @@ static void aeon_rebuild_dentry(struct aeon_dentry *dest,
 
 	name_len = src->name_len;
 	if (0 < name_len && name_len < AEON_NAME_LEN) {
-		if (src->name[name_len + 1] == '\0') {
+		if (src->name[0] != '\0' && src->name[name_len + 1] == '\0') {
 			dest->name_len = src->name_len;
 			strscpy(dest->name, src->name, name_len + 1);
 			goto next;
@@ -189,26 +189,24 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 		unsigned long parent_ino_in_c_pi;
 		int err;
 
-		if (c_de == NULL)
-			return -1;
-
 		/* recover from inode */
 		parent_ino = le32_to_cpu(p_pi->aeon_ino);
 		parent_ino_in_c_pi = le32_to_cpu(((*c_pi)->parent_ino));
-		if (parent_ino != parent_ino_in_c_pi) {
+		if (parent_ino != parent_ino_in_c_pi)
 			(*c_pi)->parent_ino = p_pi->aeon_ino;
-			if (pi_has_dentry_block(sb, *c_pi)) {
-				err = aeon_lookup_dentry(sbi, *c_pi, c_de);
-				if (err)
-					goto next_lookup;
-				else
-					return 0;
-			} else
-				return -1;
-		}
+
+		if (pi_has_dentry_block(sb, *c_pi)) {
+			err = aeon_lookup_dentry(sbi, *c_pi, c_de);
+			if (err)
+				goto next_lookup;
+			else
+				return 0;
+		} else
+			return -1;
 
 next_lookup:
 		/* recover from dentry */
+		aeon_dbg("perfect\n");
 		if (de_has_dentry_block(sb, *c_de)) {
 			err = aeon_lookup_inode(sbi, *c_de, c_pi, p_pi);
 			if (err)

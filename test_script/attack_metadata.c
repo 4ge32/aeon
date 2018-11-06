@@ -24,6 +24,8 @@ enum failure_type {
 	CREATE_ID1,
 	CREATE_ID2,
 	CREATE_ID3,
+	CREATE_ID4,
+	CREATE_ID5,
 };
 
 int main(int argc, char *argv[])

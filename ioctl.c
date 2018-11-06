@@ -13,6 +13,7 @@ enum failure_type {
 	CREATE_ID2,
 	CREATE_ID3,
 	CREATE_ID4,
+	CREATE_ID5,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -182,7 +183,10 @@ setversion_out:
 		de = (struct aeon_dentry *)de_addr;
 
 		switch (type) {
-		/* If valid doesn't set, metadata is regarded as not exisit */
+		/*
+		 * If valid doesn't set, metadata is regarded as not exisit
+		 * memo: CREATE_ID1 = 5
+		 */
 		case CREATE_ID1:
 			/* No problem in fact */
 			pi->csum = 532;
@@ -194,9 +198,19 @@ setversion_out:
 			de->csum = 0;
 			break;
 		case CREATE_ID3:
-			memset(de, 0, sizeof(*de));
-			pi->csum = 0;
+			/* A dentry doesn't have legal info */
+			de->i_blocknr = 0;
+			de->internal_offset = 0;
+			pi->csum = 32;
+			break;
 		case CREATE_ID4:
+			/* A dentry doesn't have legal info */
+			memset(de->name, 0, sizeof(de->name));
+			de->i_blocknr = 0;
+			de->internal_offset = 0;
+			pi->csum = 32;
+			break;
+		case CREATE_ID5:
 			de->csum = 0;
 			pi->aeon_ino = 0;
 			pi->parent_ino = 0;
