@@ -14,6 +14,7 @@ static inline void aeon_init_extent_header(struct aeon_extent_header *aeh)
 	aeh->eh_entries = 0;
 	aeh->eh_depth = 0;
 	aeh->eh_blocks = 0;
+	memset(aeh->eh_extent_blocks, 0, sizeof(aeh->eh_extent_blocks));
 }
 
 u64 aeon_pull_extent_addr(struct super_block *sb,

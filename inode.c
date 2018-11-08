@@ -102,7 +102,8 @@ int aeon_get_inode_address(struct super_block *sb,
 					AEON_I_NUM_PER_PAGE);
 
 	if (i_blocknr == 0 || i_blocknr > sbi->last_blocknr) {
-		aeon_err(sb, "out of bounds\n");
+		aeon_err(sb, "out of bounds i_blocknr %llu last %llu\n",
+			 i_blocknr, sbi->last_blocknr);
 		return -ENOENT;
 	}
 
@@ -966,7 +967,6 @@ expand:
 	if (err)
 		aeon_err(sb, "%s: ERROR\n", __func__);
 	mutex_unlock(&sih->truncate_mutex);
-
 }
 
 static int aeon_setsize(struct inode *inode, loff_t newsize)

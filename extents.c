@@ -111,21 +111,28 @@ struct aeon_extent *aeon_linear_search_extent(struct super_block *sb,
 	int index = 0;
 	u64 addr;
 
+
+	read_lock(&sih->i_meta_lock);
 	entries = le16_to_cpu(aeh->eh_entries);
 	while (entries > 0) {
 		addr = aeon_pull_extent_addr(sb, sih, index);
-		if (!addr)
+		if (!addr) {
+			read_unlock(&sih->i_meta_lock);
 			return NULL;
+		}
 		ae = (struct aeon_extent *)addr;
 
 		length = le16_to_cpu(ae->ex_length);
 		offset = le16_to_cpu(ae->ex_offset);
-		if (offset <= iblock && iblock < offset + length)
+		if (offset <= iblock && iblock < offset + length) {
+			read_unlock(&sih->i_meta_lock);
 			return (struct aeon_extent *)addr;
+		}
 
 		index++;
 		entries--;
 	}
+	read_unlock(&sih->i_meta_lock);
 
 	return NULL;
 }
@@ -273,6 +280,7 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 		return err;
 	}
 
+	read_lock(&sih->i_meta_lock);
 	ae->ex_index = aeh->eh_entries;
 	ae->ex_length = cpu_to_le16(num_blocks);
 	ae->ex_block = cpu_to_le64(blocknr);
@@ -284,9 +292,12 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
 
 	err = aeon_insert_extenttree(sb, sih, aeh, ae);
-	if (err)
+	if (err) {
+		read_unlock(&sih->i_meta_lock);
 		return err;
+	}
 
+	read_unlock(&sih->i_meta_lock);
 
 	return 0;
 }
@@ -330,15 +341,12 @@ aeon_delete_extenttree(struct super_block *sb,
 	int num;
 	int err;
 	int i;
-	bool has_external_block = false;
 	u64 addr;
 
 	/* TODO:
 	 * Free allocated extent pages if the inode has
 	 */
 	entries = le16_to_cpu(aeh->eh_entries);
-	if (entries > PI_MAX_INTERNAL_EXTENT)
-		has_external_block = true;
 	while (entries > 0) {
 		addr = aeon_pull_extent_addr(sb, sih, index);
 		if (!addr) {
@@ -365,12 +373,10 @@ next:
 		entries--;
 	}
 
-	if (!has_external_block)
-		goto end;
 	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT; i++) {
 		freed_blocknr = aeh->eh_extent_blocks[i];
 		if (!freed_blocknr)
-			continue;
+			goto end;
 
 		err = aeon_insert_blocks_into_free_list(sb, freed_blocknr, 1, 0);
 		if (err) {
