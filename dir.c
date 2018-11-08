@@ -186,8 +186,8 @@ static struct aeon_dentry *aeon_reuse_space_for_dentry(struct super_block *sb,
 				    head_addr + internal_offset);
 	de->internal_offset = cpu_to_le32(adi->internal);
 	de->global_offset = adi->global;
-	if (internal_entry == 0 && latest_entry == 0)
-		BUG();
+	//if (internal_entry == 0 && latest_entry == 0)
+	//	BUG();
 	*blocknr = head_addr >> AEON_SHIFT;
 
 	list_del(&adi->invalid_list);

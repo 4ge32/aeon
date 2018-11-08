@@ -3,6 +3,22 @@
 #include "aeon.h"
 #include "aeon_extents.h"
 
+
+static struct aeon_extent
+*aeon_rb_search_extent(struct super_block *sb,
+		       struct aeon_inode_info_header *sih, unsigned long offset)
+{
+	struct aeon_range_node *ret_node = NULL;
+	struct aeon_extent *ret = NULL;
+	bool found;
+
+	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
+	if (found)
+		ret = ret_node->extent;
+
+	return ret;
+}
+
 u64 aeon_pull_extent_addr(struct super_block *sb,
 			  struct aeon_inode_info_header *sih,
 			  int index)
@@ -112,21 +128,6 @@ struct aeon_extent *aeon_linear_search_extent(struct super_block *sb,
 	}
 
 	return NULL;
-}
-
-static struct aeon_extent
-*aeon_rb_search_extent(struct super_block *sb,
-		       struct aeon_inode_info_header *sih, unsigned long offset)
-{
-	struct aeon_range_node *ret_node = NULL;
-	struct aeon_extent *ret = NULL;
-	bool found;
-
-	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
-	if (found)
-		ret = ret_node->extent;
-
-	return ret;
 }
 
 struct aeon_extent
@@ -328,30 +329,61 @@ aeon_delete_extenttree(struct super_block *sb,
 	int index = 0;
 	int num;
 	int err;
+	int i;
+	bool has_external_block = false;
 	u64 addr;
 
+	/* TODO:
+	 * Free allocated extent pages if the inode has
+	 */
 	entries = le16_to_cpu(aeh->eh_entries);
+	if (entries > PI_MAX_INTERNAL_EXTENT)
+		has_external_block = true;
 	while (entries > 0) {
 		addr = aeon_pull_extent_addr(sb, sih, index);
-		if (!addr)
+		if (!addr) {
+			aeon_err(sb, "addr 0x%llx", addr);
 			return -EINVAL;
+		}
 		ae = (struct aeon_extent *)addr;
 
 		freed_blocknr = le64_to_cpu(ae->ex_block);
 		num = le16_to_cpu(ae->ex_length);
+		ae->ex_block = 0;
+		ae->ex_length = 0;
+		ae->ex_offset = 0;
+		if (freed_blocknr == 0)
+			goto next;
 		err = aeon_insert_blocks_into_free_list(sb, freed_blocknr, num, 0);
 		if (err) {
 			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
 			return -EINVAL;
 		}
+
+next:
 		index++;
 		entries--;
 	}
+
+	if (!has_external_block)
+		goto end;
+	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT; i++) {
+		freed_blocknr = aeh->eh_extent_blocks[i];
+		if (!freed_blocknr)
+			continue;
+
+		err = aeon_insert_blocks_into_free_list(sb, freed_blocknr, 1, 0);
+		if (err) {
+			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
+			return -EINVAL;
+		}
+	}
+
+end:
 	aeh->eh_entries = 0;
 
 #ifdef USE_RB
-	if (pi->use_rb)
-		aeon_destroy_range_node_tree(sb, &sih->rb_tree);
+	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 #endif
 
 	return 0;
@@ -363,12 +395,16 @@ aeon_cutoff_extenttree(struct super_block *sb,
 		       struct aeon_inode *pi, int remaining, int index)
 {
 	struct aeon_extent *ae;
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	unsigned long blocknr;
 	unsigned long offset;
 	int length;
 	int err;
 	u64 addr;
 
+	/* TODO:
+	 * Preparing for Reuse freed region
+	 */
 	while (remaining > 0) {
 		addr = aeon_pull_extent_addr(sb, sih, index);
 		if (!addr) {
@@ -390,6 +426,11 @@ aeon_cutoff_extenttree(struct super_block *sb,
 			aeon_err(sb, "%s: remove blocks from a tree\n", __func__);
 			return -EINVAL;
 		}
+
+		aeh->eh_entries--;
+		ae->ex_block = 0;
+		ae->ex_length = 0;
+		ae->ex_offset = 0;
 
 		index++;
 		remaining--;
