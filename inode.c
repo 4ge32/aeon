@@ -196,6 +196,12 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	aeon_update_inode_csum(pi);
 }
 
+static void aeon_init_inode_flags(struct inode *inode)
+{
+	inode->i_flags |= S_DAX;
+	inode->i_flags |= S_SYNC;
+}
+
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, u64 pi_addr,
 				 u32 ino, umode_t mode, u32 parent_ino,
@@ -220,6 +226,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_size = size;
 	inode->i_mode = mode;
 	inode->i_ino = ino;
+	aeon_init_inode_flags(inode);
 	//aeon_dbg("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
 
 	switch (type) {
@@ -746,6 +753,10 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	 */
 	mutex_lock(&inode_map->inode_table_mutex);
 	err = aeon_free_inuse_inode(sb, ino);
+	if (err) {
+		mutex_unlock(&inode_map->inode_table_mutex);
+		return err;
+	}
 	im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
 	im->ino = ino;
 	im->addr = sih->pi_addr;
@@ -961,7 +972,7 @@ expand:
 static int aeon_setsize(struct inode *inode, loff_t newsize)
 {
 	struct aeon_inode *pi;
-	//int err;
+	int err;
 
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 
@@ -974,10 +985,10 @@ static int aeon_setsize(struct inode *inode, loff_t newsize)
 	/* dio_wait ? */
 	inode_dio_wait(inode);
 
-	//err = iomap_zero_range(inode, newsize, PAGE_ALIGN(newsize) - newsize,
-	//		       NULL, &aeon_iomap_ops);
-	//if (err)
-	//	return err;
+	err = iomap_zero_range(inode, newsize, PAGE_ALIGN(newsize) - newsize,
+			       NULL, &aeon_iomap_ops);
+	if (err)
+		return err;
 	dax_sem_down_write(&AEON_I(inode)->header);
 	aeon_truncate_blocks(inode, newsize);
 	truncate_setsize(inode, newsize);
