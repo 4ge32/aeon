@@ -147,6 +147,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 
 	mutex_lock(&aeon_stat_mutex);
 	list_for_each_entry(si, &aeon_stat_list, stat_list) {
+		struct aeon_inode *pi;
 		int count = 0;
 		unsigned long blocknr;
 		unsigned long internal_ino;
@@ -191,6 +192,9 @@ static int stat_imem_show(struct seq_file *s, void *v)
 						AEON_I_NUM_PER_PAGE;
 			addr = (u64)si->sbi->virt_addr + (blocknr << AEON_SHIFT)
 				+ (internal_ino << AEON_I_SHIFT);
+			pi = (struct aeon_inode *)addr;
+			if (pi->valid || pi->deleted)
+				continue;
 			seq_printf(s, "ino: %3u : 0x%llx", ino, addr);
 			if (count % 4 == 0)
 				seq_printf(s, "\n");
