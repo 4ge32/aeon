@@ -87,34 +87,20 @@ int aeon_get_inode_address(struct super_block *sb,
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi;
-	unsigned long i_blocknr = le64_to_cpu(de->i_blocknr);
-	unsigned long internal_ino;
-	int cpu_id;
+	unsigned long addr = le64_to_cpu(de->d_inode_addr);
 
-	if (i_blocknr == 0)
-		return -ENOENT;
-
-	cpu_id = ino % sbi->cpus;
-	if (cpu_id >= sbi->cpus)
-		cpu_id -= sbi->cpus;
-
-	internal_ino = (((ino - cpu_id) / sbi->cpus) %
-					AEON_I_NUM_PER_PAGE);
-
-	if (i_blocknr == 0 || i_blocknr > sbi->last_blocknr) {
-		aeon_err(sb, "out of bounds i_blocknr %llu last %llu\n",
-			 i_blocknr, sbi->last_blocknr);
+	if (addr <= 0 || addr > sbi->last_addr) {
+		aeon_err(sb, "out of bounds i_blocknr 0x%llx last 0x%llx\n",
+			 addr, sbi->last_addr);
 		return -ENOENT;
 	}
 
-	*pi_addr = (u64)sbi->virt_addr + (i_blocknr << AEON_SHIFT) +
-					(internal_ino << AEON_I_SHIFT);
+	*pi_addr = (u64)sbi->virt_addr + addr;
 
 	pi = (struct aeon_inode *)(*pi_addr);
 	if (ino != le32_to_cpu(pi->aeon_ino)) {
-		aeon_err(sb, "%s:ino %u, pi_ino %u iblock %lu\n", __func__, ino,
-						    le32_to_cpu(pi->aeon_ino),
-						    i_blocknr);
+		aeon_err(sb, "%s:ino %u, pi_ino %u\n", __func__, ino,
+			 le32_to_cpu(pi->aeon_ino));
 		aeon_dbg("0x%llx\n", *pi_addr);
 		return -EINVAL;
 	}
@@ -161,12 +147,19 @@ void aeon_set_file_ops(struct inode *inode)
 
 static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct aeon_inode_info_header *sih,
-				       struct inode *inode, u32 parent_ino,
-				       u64 i_blocknr, u64 d_blocknr,
-				       struct dentry *dentry, dev_t rdev)
+				       struct inode *inode,
+				       struct aeon_inode *pidir, dev_t rdev,
+				       u64 pi_addr, u64 de_addr)
 {
+	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-	struct aeon_dentry *de = (struct aeon_dentry *)dentry->d_fsdata;
+	u64 i_addr_offset;
+	u64 d_addr_offset;
+	u64 p_addr_offset;
+
+	i_addr_offset = pi_addr - (u64)sbi->virt_addr;
+	d_addr_offset = de_addr - (u64)sbi->virt_addr;
+	p_addr_offset = (u64)pidir - (u64)sbi->virt_addr;
 
 	pi->deleted = 0;
 	pi->i_new = 1;
@@ -176,14 +169,13 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_uid = cpu_to_le32(i_uid_read(inode));
 	pi->i_gid = cpu_to_le32(i_gid_read(inode));
 	pi->aeon_ino = cpu_to_le32(inode->i_ino);
-	pi->parent_ino = cpu_to_le32(parent_ino);
+	pi->parent_ino = cpu_to_le32(pidir->aeon_ino);
 	pi->i_block = 0;
 	pi->i_blocks = 0;
 	pi->i_internal_allocated = 0;
-	pi->i_dentry_block = cpu_to_le64(d_blocknr);
-	pi->i_d_internal_off = de->internal_offset;
-	pi->i_d_global_off = de->global_offset;
-	pi->i_inode_block = cpu_to_le64(i_blocknr);
+	pi->i_pinode_addr = cpu_to_le64(p_addr_offset);
+	pi->i_inode_addr = cpu_to_le64(i_addr_offset);
+	pi->i_dentry_addr = cpu_to_le64(d_addr_offset);
 	pi->i_size = cpu_to_le64(inode->i_size);
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(rdev);
@@ -204,10 +196,9 @@ static void aeon_init_inode_flags(struct inode *inode)
 }
 
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
-				 struct inode *dir, u64 pi_addr,
-				 u32 ino, umode_t mode, u32 parent_ino,
-				 u64 i_blocknr, u64 d_blocknr, size_t size,
-				 dev_t rdev, struct dentry *dentry)
+				 struct inode *dir, u64 pi_addr, u64 de_addr,
+				 u32 ino, umode_t mode, struct aeon_inode *pidir,
+				 size_t size, dev_t rdev)
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
@@ -258,8 +249,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	sih = &si->header;
 	aeon_init_header(sb, sih, pi_addr);
 
-	fill_new_aeon_inode(sb, sih, inode, parent_ino,
-			    i_blocknr, d_blocknr, dentry, rdev);
+	fill_new_aeon_inode(sb, sih, inode, pidir, rdev, pi_addr, de_addr);
 
 	return inode;
 out:
@@ -322,8 +312,7 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid,
 }
 
 static u64 search_imem_addr(struct aeon_sb_info *sbi,
-			    struct inode_map *inode_map,
-			    u32 ino, u64 *i_blocknr)
+			    struct inode_map *inode_map, u32 ino)
 {
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	unsigned long blocknr;
@@ -336,7 +325,7 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 		list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
 			if (ino == im->ino) {
 				addr = im->addr;
-				*i_blocknr = im->blocknr;
+				//*i_blocknr = im->blocknr;
 				list_del(&im->imem_list);
 				kfree(im);
 				goto found;
@@ -361,18 +350,17 @@ found:
 }
 
 static int aeon_get_new_inode_address(struct super_block *sb, u32 free_ino,
-				      u64 *pi_addr, u64 *i_blocknr, int cpuid,
+				      u64 *pi_addr, int cpuid,
 				      struct inode_map *inode_map)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long ret;
 
-	if (i_blocknr) {
-		*i_blocknr = aeon_get_new_inode_block(sb, cpuid, free_ino);
-		if (*i_blocknr <= 0)
-			goto err;
-	}
+	ret = aeon_get_new_inode_block(sb, cpuid, free_ino);
+	if (ret <= 0)
+		goto err;
 
-	*pi_addr = search_imem_addr(sbi, inode_map, free_ino, i_blocknr);
+	*pi_addr = search_imem_addr(sbi, inode_map, free_ino);
 	if (*pi_addr == 0)
 		goto err;
 
@@ -383,7 +371,7 @@ err:
 	return 0;
 }
 
-u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr)
+u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
@@ -407,7 +395,7 @@ u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr)
 	}
 
 	ret = aeon_get_new_inode_address(sb, free_ino, pi_addr,
-					 i_blocknr, map_id, inode_map);
+					 map_id, inode_map);
 	if (!ret) {
 		aeon_err(sb, "%s: get inode addr failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);
@@ -763,7 +751,6 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	im->addr = sih->pi_addr;
 	im->independent = 1;
 	im->head = im;
-	im->blocknr = le64_to_cpu(pi->i_inode_block);
 	list_add(&im->imem_list, &inode_map->im->imem_list);
 	mutex_unlock(&inode_map->inode_table_mutex);
 

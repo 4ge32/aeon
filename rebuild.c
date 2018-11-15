@@ -71,9 +71,9 @@ static void aeon_rebuild_dentry(struct aeon_dentry *dest,
 
 next:
 	dest->ino = pi->aeon_ino;
-	dest->internal_offset = pi->i_d_internal_off;
-	dest->global_offset = pi->i_d_global_off;
-	dest->i_blocknr = cpu_to_le64(pi->i_inode_block);
+	//dest->internal_offset = pi->i_d_internal_off;
+	//dest->global_offset = pi->i_d_global_off;
+	//dest->i_blocknr = cpu_to_le64(pi->i_inode_block);
 	dest->valid = 1;
 	dest->persisted = 1;
 	aeon_update_dentry_csum(dest);
@@ -84,9 +84,9 @@ static void aeon_rebuild_inode(struct aeon_inode *pi, struct aeon_dentry *de,
 {
 	pi->aeon_ino = de->ino;
 	pi->parent_ino = parent->aeon_ino;
-	pi->i_d_internal_off = de->internal_offset;
-	pi->i_d_global_off = de->global_offset;
-	pi->i_inode_block = de->i_blocknr;
+	//pi->i_d_internal_off = de->internal_offset;
+	//pi->i_d_global_off = de->global_offset;
+	//pi->i_inode_block = de->i_blocknr;
 	pi->valid = 1;
 	pi->persisted = 1;
 	aeon_update_inode_csum(pi);
@@ -94,19 +94,22 @@ static void aeon_rebuild_inode(struct aeon_inode *pi, struct aeon_dentry *de,
 
 static int pi_has_dentry_block(struct super_block *sb, struct aeon_inode *pi)
 {
-	struct free_list *list = aeon_get_free_list(sb, AEON_SB(sb)->cpus - 1);
-	unsigned long blocknr = le64_to_cpu(pi->i_dentry_block);
-	unsigned long offset = le32_to_cpu(pi->i_d_internal_off);
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *list = aeon_get_free_list(sb, sbi->cpus - 1);
+	//unsigned long blocknr = le64_to_cpu(pi->i_dentry_block);
+	unsigned long blocknr;
 	unsigned long last = list->block_end;
 
-	return ((0 < blocknr && blocknr <= last) &&
-		(0 <= offset && offset < AEON_INTERNAL_ENTRY));
+	blocknr = (le64_to_cpu(pi->i_dentry_addr) -
+		   (u64)sbi->virt_addr) >> AEON_SHIFT;
+
+	return (0 < blocknr && blocknr <= last);
 }
 
 static int de_has_dentry_block(struct super_block *sb, struct aeon_dentry *de)
 {
 	struct free_list *list = aeon_get_free_list(sb, AEON_SB(sb)->cpus - 1);
-	unsigned long blocknr = le64_to_cpu(de->i_blocknr);
+	unsigned long blocknr = le64_to_cpu(de->d_dentry_addr) >> AEON_SHIFT;
 	unsigned long last = list->block_end;
 	unsigned long ino = le32_to_cpu(de->ino);
 
@@ -118,23 +121,24 @@ static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi,
 {
 	struct aeon_dentry *tmp;
 	unsigned long blocknr;
-	unsigned long offset;
 	int i;
 
 	/*
 	 * Access the dentry address safely thanks to
 	 * confirm it before go into this function.
 	 */
-	blocknr = le64_to_cpu(pi->i_dentry_block);
-	offset = le32_to_cpu(pi->i_d_internal_off);
+	//blocknr = le64_to_cpu(pi->i_dentry_block);
+	//offset = le32_to_cpu(pi->i_d_internal_off);
 	tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
-			(blocknr << AEON_SHIFT) + (offset << AEON_D_SHIFT));
+				     le64_to_cpu(pi->i_dentry_addr));
 
 	if (tmp->ino == pi->aeon_ino) {
 		aeon_rebuild_dentry(tmp, *de, pi);
 		*de = tmp;
 		return 0;
 	}
+
+	return 0;
 
 	 /* From now, do deep lookup
 	  * Only if blocknr is valid, it would work well.
@@ -143,7 +147,7 @@ static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi,
 		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
 				 (blocknr << AEON_SHIFT) + (i << AEON_D_SHIFT));
 		if (tmp->ino == pi->aeon_ino) {
-			pi->i_d_internal_off = cpu_to_le32(i);
+			//pi->i_d_internal_off = cpu_to_le32(i);
 			aeon_rebuild_dentry(tmp, *de, pi);
 			*de = tmp;
 			return 0;
@@ -218,16 +222,10 @@ next_lookup:
 	} else if (err == P_AND_C_INODE_PERSIST) {
 		struct aeon_dentry *tmp;
 		unsigned long ino;
-		unsigned long blocknr;
-		unsigned long offset;
-		int cpu_id;
 
-		blocknr = le64_to_cpu((*c_pi)->i_dentry_block);
-		offset = le32_to_cpu((*c_pi)->i_d_internal_off);
 		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
-			(blocknr << AEON_SHIFT) + (offset << AEON_D_SHIFT));
+					le64_to_cpu((*c_pi)->i_dentry_addr));
 
-		cpu_id = ino % sbi->cpus;
 		ino = le32_to_cpu((*c_pi)->aeon_ino);
 		aeon_info("Recover dentry (ino:%lu)\n", ino);
 		aeon_rebuild_dentry(tmp, *c_de, *c_pi);
@@ -242,7 +240,7 @@ next_lookup:
 		cpu_id = sbi->cpus;
 		if (cpu_id >= sbi->cpus)
 			cpu_id -= sbi->cpus;
-		blocknr = le64_to_cpu((*c_de)->i_blocknr);
+		blocknr = le64_to_cpu((*c_de)->d_inode_addr) >> AEON_SHIFT;
 		ino = le32_to_cpu((*c_de)->ino);
 		internal_ino = ((ino - cpu_id) / sbi->cpus) %
 						AEON_I_NUM_PER_PAGE;
@@ -541,7 +539,8 @@ skip_get_dentry:
 		if (err)
 			return err;
 
-		d_blocknr = le64_to_cpu(child_pi->i_dentry_block);
+		d_blocknr = le64_to_cpu(child_pi->i_dentry_addr) << AEON_SHIFT;
+		aeon_dbg("d_blocknr %llu\n", d_blocknr);
 		add_block_entry(de_map, d_blocknr, &first);
 		de_map->num_dentries++;
 		de_map->num_internal_dentries++;
@@ -617,7 +616,13 @@ static unsigned int imem_cache_rebuild(struct aeon_sb_info *sbi,
 			*next_blocknr = le64_to_cpu(pi->i_next_inode_block);
 
 		if (pi->valid && !pi->deleted && (count < allocated)) {
+			u64 addr;
+
 			if (ino != le32_to_cpu(pi->aeon_ino))
+				goto next;
+
+			addr = (u64)sbi->virt_addr + cpu_to_le64(pi->i_inode_addr);
+			if ((u64)pi != addr)
 				goto next;
 
 			mutex_lock(&sbi->s_lock);
@@ -674,7 +679,7 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 	struct aeon_region_table *art;
 	unsigned long offset;
 	unsigned long blocknr = 0;
-	int ino = AEON_INODE_START + cpu_id;
+	int ino = sbi->cpus + cpu_id;
 	unsigned int allocated;
 	unsigned int ret;
 	int i;

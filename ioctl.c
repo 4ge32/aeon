@@ -199,24 +199,24 @@ setversion_out:
 			break;
 		case CREATE_ID3:
 			/* A dentry doesn't have legal info */
-			de->i_blocknr = 0;
-			de->internal_offset = 0;
+			//de->i_blocknr = 0;
+			//de->internal_offset = 0;
 			pi->csum = 32;
 			break;
 		case CREATE_ID4:
 			/* A dentry doesn't have legal info */
 			memset(de->name, 0, sizeof(de->name));
-			de->i_blocknr = 0;
-			de->internal_offset = 0;
+			//de->i_blocknr = 0;
+			//de->internal_offset = 0;
 			pi->csum = 32;
 			break;
 		case CREATE_ID5:
 			de->csum = 0;
 			pi->aeon_ino = 0;
 			pi->parent_ino = 0;
-			pi->i_dentry_block = 0;
-			pi->i_d_internal_off = 0;
-			pi->i_inode_block = 0;
+			//pi->i_dentry_block = 0;
+			//pi->i_d_internal_off = 0;
+			//pi->i_inode_block = 0;
 			de->csum = 0;
 			break;
 		default:

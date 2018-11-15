@@ -107,6 +107,10 @@ static void aeon_evict_inode(struct inode *inode)
 			goto out;
 
 		if (pi) {
+			if (pi->aeon_ino == 0) {
+				aeon_dbg("%lu: What happend?\n", inode->i_ino);
+				pi->aeon_ino = le32_to_cpu(inode->i_ino);
+			}
 			ret = aeon_free_inode_resource(sb, pi, sih);
 			if (ret)
 				goto out;

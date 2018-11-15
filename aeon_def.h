@@ -38,7 +38,6 @@
 #define AEON_EXTENT_PER_PAGE	(AEON_DEF_BLOCK_SIZE_4K / AEON_EXTENT_SIZE)
 
 #define AEON_ROOT_INO		(1)
-#define AEON_INODE_START        (4)
 
 /*
  * The first block contains super blocks;
@@ -77,7 +76,6 @@ struct aeon_inode {
 	u8	valid;		 /* Is this inode valid? */
 	u8	deleted;	 /* Is this inode deleted? */
 	u8	i_new;           /* Is this inode new? */
-	u8	use_rb;		 /* Is this inode using rb for extent? */
 	/* 4  */
 	__le32	i_flags;	 /* Inode flags */
 	__le64	i_size;		 /* Size of data in bytes */
@@ -97,18 +95,16 @@ struct aeon_inode {
 	__le32	aeon_ino;	 /* aeon inode number */
 	__le32	parent_ino;	 /* parent inode number */
 
-	__le64	i_dentry_block;	/* block that holds a related dentry */
-	__le32	i_d_internal_off;
-	__le32	i_d_global_off;
-
-	__le64  i_inode_block;	/* inode itself belongs  */
+	__le64	i_pinode_addr;	 /* parent inode address offset */
+	__le64	i_dentry_addr;	 /* A related dentry address offset */
+	__le64	i_inode_addr;	 /* inode itself address offset */
 
 	__le64	i_next_inode_block;
 	u8      i_internal_allocated;
 
-	__le64  i_block;        /* exist extent or point extent block */
-	__le64	i_blocks;       /* block counts */
-	__le64	sym_block;      /* for symbolic link */
+	__le64  i_block;         /* exist extent or point extent block */
+	__le64	i_blocks;        /* block counts */
+	__le64	sym_block;	 /* for symbolic link */
 
 	struct {
 		__le32 rdev;	 /* major/minor # */
@@ -118,7 +114,7 @@ struct aeon_inode {
 	struct aeon_extent ae[PI_MAX_INTERNAL_EXTENT];
 	__le16 i_exblocks;
 
-	char	pad[6];
+	char	pad[7];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 
@@ -162,11 +158,11 @@ struct aeon_dentry {
 	u8	name_len;		/* length of the dentry name */
 	u8	valid;			/* Invalid now? */
 	u8	persisted;		/* fully persisted? */
-	/* dynamic variable */
-	__le32  internal_offset;
-	__le32  global_offset;
+
 	__le32	ino;			/* inode no pointed to by this entry */
-	__le64	i_blocknr;		/* block that holds a related inode */
+	__le64	d_inode_addr;
+	__le64	d_dentry_addr;
+
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN+1];  /* File name */
 	/* padding */

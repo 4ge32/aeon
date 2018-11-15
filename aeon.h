@@ -79,7 +79,6 @@ extern int wprotect;
 struct imem_cache {
 	u32	ino;
 	u64	addr;
-	u64	blocknr;
 	int	independent;
 	struct	imem_cache *head;
 	struct	list_head imem_list;
@@ -131,7 +130,7 @@ struct aeon_sb_info {
 	void		*virt_addr;
 
 	unsigned long	num_blocks;
-	unsigned long	last_blocknr;
+	unsigned long	last_addr;
 
 	/* Mount options */
 	unsigned long	blocksize;
@@ -247,8 +246,7 @@ struct aeon_inode_info {
 
 struct aeon_dentry_invalid {
 	struct list_head invalid_list;
-	unsigned int internal;
-	unsigned long global;
+	u64 d_addr;
 };
 
 struct aeon_dentry_map {
@@ -620,12 +618,10 @@ int aeon_get_inode_address(struct super_block *sb,
 u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 void aeon_set_file_ops(struct inode *inode);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
-				 struct inode *dir, u64 pi_addr, u32 ino,
-				 umode_t mode, u32 parent_ino,
-				 u64 i_blocknr, u64 d_blocknr,
-				 size_t size, dev_t rdev,
-				 struct dentry *dentry);
-u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr, u64 *i_blocknr);
+				 struct inode *dir, u64 pi_addr, u64 de_addr,
+				 u32 ino, umode_t mode, struct aeon_inode *pidir,
+				 size_t size, dev_t rdev);
+u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr);
 void aeon_set_inode_flags(struct inode *inode, struct aeon_inode *pi,
 			  unsigned int flags);
 struct inode *aeon_iget(struct super_block *sb, u32 ino);
@@ -642,8 +638,8 @@ int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
 			 const char *name, int namelen,
 			 struct aeon_dentry *direntry);
-int aeon_add_dentry(struct dentry *dentry, u32 ino,
-		    u64 i_blocknr, u64 *d_blocknr, int inc_link);
+u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
+		    u64 pi_addr, int inc_link);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
 int aeon_get_dentry_address(struct super_block *sb,

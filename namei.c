@@ -13,8 +13,7 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode *inode = NULL;
 	u64 pi_addr = 0;
-	u64 i_blocknr = 0;
-	u64 d_blocknr = 0;
+	u64 de_addr = 0;
 	u32 ino;
 	int err = PTR_ERR(inode);
 
@@ -22,17 +21,16 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	if (!pidir)
 		goto out;
 
-	ino = aeon_new_aeon_inode(sb, &pi_addr, &i_blocknr);
+	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, i_blocknr, &d_blocknr, 0);
-	if (err)
+	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
+	if (de_addr < 0)
 		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
-				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, 0, 0, dentry);
+	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, de_addr, ino,
+				   mode, pidir, 0, 0);
 	if (IS_ERR(inode))
 		goto out;
 
@@ -83,7 +81,6 @@ static int aeon_link(struct dentry *dest_dentry,
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct qstr *name = &dest_dentry->d_name;
 	struct aeon_dentry *de;
-	u64 d_blocknr = 0;
 	int err = -ENOENT;
 
 	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
@@ -102,9 +99,7 @@ static int aeon_link(struct dentry *dest_dentry,
 	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
 
-	err = aeon_add_dentry(dentry, dest_inode->i_ino,
-			      le64_to_cpu(de->i_blocknr),
-			      &d_blocknr, 0);
+	err = aeon_add_dentry(dentry, dest_inode->i_ino, (u64)pi, 0);
 	if (!err) {
 		d_instantiate(dentry, dest_inode);
 
@@ -186,8 +181,7 @@ static int aeon_symlink(struct inode *dir,
 	struct aeon_inode *pidir;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	u64 pi_addr = 0;
-	u64 i_blocknr = 0;
-	u64 d_blocknr = 0;
+	u64 de_addr = 0;
 	u64 ino;
 
 	if (l > sb->s_blocksize)
@@ -197,19 +191,18 @@ static int aeon_symlink(struct inode *dir,
 	if (!pidir)
 		goto err;
 
-	ino = aeon_new_aeon_inode(sb, &pi_addr, &i_blocknr);
+	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0) {
 		err = -ENOSPC;
 		goto err;
 	}
 
-	err = aeon_add_dentry(dentry, ino, i_blocknr, &d_blocknr, 0);
-	if (err)
+	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
+	if (de_addr < 0)
 		goto err;
 
-	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino, S_IFLNK|0777,
-				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, l, 0, dentry);
+	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, de_addr, ino,
+				   S_IFLNK|0777, pidir, 0, 0);
 
 	si = AEON_I(inode);
 	sih = &si->header;
@@ -240,23 +233,23 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct aeon_inode *pidir;
 	u64 ino;
 	u64 pi_addr = 0;
-	u64 i_blocknr = 0;
-	u64 d_blocknr = 0;
+	u64 de_addr = 0;
 	int err = -EMLINK;
 
 	pidir = aeon_get_inode(sb, sih);
 	if (!pidir)
 		goto out;
 
-	ino = aeon_new_aeon_inode(sb, &pi_addr, &i_blocknr);
+	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, i_blocknr, &d_blocknr, 0);
+	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
+	if (de_addr < 0)
+		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, ino, S_IFDIR | mode,
-				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, sb->s_blocksize, 0, dentry);
+	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, de_addr, ino,
+				   S_IFDIR | mode, pidir, sb->s_blocksize, 0);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out;
@@ -347,7 +340,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct aeon_inode *update;
 	struct qstr *old_name = &old_dentry->d_name;
 	struct qstr *new_name = &new_dentry->d_name;
-	u64 d_blocknr = 0;
 	int err;
 
 	if (old_dentry->d_fsdata) {
@@ -388,9 +380,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		update->i_links_count = cpu_to_le64(new_inode->i_nlink);
 	} else {
 		err = aeon_add_dentry(new_dentry, le32_to_cpu(old_inode->i_ino),
-				      le64_to_cpu(old_de->i_blocknr),
-				      &d_blocknr, 0);
-		pi->i_dentry_block = cpu_to_le64(d_blocknr);
+				      (u64)pi, 0);
 		if (err)
 			goto out_dir;
 		if (dir_de)
@@ -424,8 +414,7 @@ static int aeon_mknod(struct inode *dir, struct dentry *dentry,
 	struct aeon_super_block *aeon_sb = aeon_get_super(dir->i_sb);
 	struct inode *inode = NULL;
 	u64 pi_addr = 0;
-	u64 i_blocknr = 0;
-	u64 d_blocknr = 0;
+	u64 de_addr = 0;
 	u32 ino;
 	int err = PTR_ERR(inode);
 
@@ -433,17 +422,16 @@ static int aeon_mknod(struct inode *dir, struct dentry *dentry,
 	if (!pidir)
 		goto out;
 
-	ino = aeon_new_aeon_inode(sb, &pi_addr, &i_blocknr);
+	ino = aeon_new_aeon_inode(sb, &pi_addr);
 	if (ino == 0)
 		goto out;
 
-	err = aeon_add_dentry(dentry, ino, i_blocknr, &d_blocknr, 0);
-	if (err)
+	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
+	if (de_addr < 0)
 		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, ino, mode,
-				   le32_to_cpu(pidir->aeon_ino), i_blocknr,
-				   d_blocknr, 0, rdev, dentry);
+	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, de_addr, ino,
+				   mode, pidir, 0, rdev);
 	if (IS_ERR(inode))
 		goto out;
 
@@ -469,13 +457,12 @@ static int aeon_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (!pidir)
 		return -ENOENT;
 
-	ino = aeon_new_aeon_inode(dir->i_sb, &pi_addr, NULL);
+	ino = aeon_new_aeon_inode(dir->i_sb, &pi_addr);
 	if (ino == 0)
 		return -ENOSPC;
 
-	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, ino, mode,
-				   le32_to_cpu(pidir->aeon_ino), 0,
-				   0, 0, 0, dentry);
+	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, 0, ino, mode,
+				   pidir, 0, 0);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 

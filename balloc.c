@@ -74,7 +74,7 @@ static void aeon_init_free_list(struct super_block *sb,
 	free_list->block_start = per_list_blocks * index;
 	free_list->block_end = free_list->block_start + per_list_blocks - 1;
 
-	sbi->last_blocknr = free_list->block_end;
+	sbi->last_addr = free_list->block_end << AEON_SHIFT;
 }
 
 void aeon_init_blockmap(struct super_block *sb)

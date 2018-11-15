@@ -216,7 +216,6 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 		}
 	}
 
-	pi->use_rb = 1;
 	return 0;
 }
 
