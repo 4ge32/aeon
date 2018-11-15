@@ -87,7 +87,7 @@ int aeon_get_inode_address(struct super_block *sb,
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi;
-	unsigned long addr = le64_to_cpu(de->d_inode_addr);
+	u64 addr = le64_to_cpu(de->d_inode_addr);
 
 	if (addr <= 0 || addr > sbi->last_addr) {
 		aeon_err(sb, "out of bounds i_blocknr 0x%llx last 0x%llx\n",
@@ -325,7 +325,6 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 		list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
 			if (ino == im->ino) {
 				addr = im->addr;
-				//*i_blocknr = im->blocknr;
 				list_del(&im->imem_list);
 				kfree(im);
 				goto found;
