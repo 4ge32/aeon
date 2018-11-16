@@ -160,13 +160,14 @@ struct aeon_dentry {
 	u8	persisted;		/* fully persisted? */
 
 	__le32	ino;			/* inode no pointed to by this entry */
+	__le64	d_pinode_addr;
 	__le64	d_inode_addr;
 	__le64	d_dentry_addr;
 
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN+1];  /* File name */
 	/* padding */
-	char	pad[100];
+	char	pad[92];
 	__le32	csum;			/* entry checksum */
 } __attribute((__packed__));
 

@@ -287,15 +287,19 @@ static int aeon_get_dentry_addr(struct super_block *sb,
 	return 0;
 }
 
-static void aeon_fill_dentry_data(struct super_block *sb, struct aeon_dentry *de,
-				  u32 ino, u64 pi_addr, const char *name, int namelen)
+static
+void aeon_fill_dentry_data(struct super_block *sb, struct aeon_dentry *de,
+				  u32 ino, u64 pi_addr, u64 pidir_addr,
+				  const char *name, int namelen)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	u64 i_addr_offset = pi_addr - (u64)sbi->virt_addr;
 	u64 d_addr_offset = (u64)de - (u64)sbi->virt_addr;
+	u64 i_paddr_offset = pidir_addr - (u64)sbi->virt_addr;
 
 	de->name_len = le32_to_cpu(namelen);
 	de->ino = cpu_to_le32(ino);
+	de->d_pinode_addr = cpu_to_le64(i_paddr_offset);
 	de->d_inode_addr = cpu_to_le64(i_addr_offset);
 	de->d_dentry_addr = cpu_to_le64(d_addr_offset);
 	strscpy(de->name, name, namelen + 1);
@@ -344,7 +348,8 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 		goto out;
 	}
 
-	aeon_fill_dentry_data(sb, new_direntry, ino, pi_addr, name, namelen);
+	aeon_fill_dentry_data(sb, new_direntry, ino, pi_addr,
+			      (u64)pidir, name, namelen);
 	dentry->d_fsdata = (void *)new_direntry;
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);
