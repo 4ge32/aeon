@@ -60,8 +60,8 @@ static void aeon_rebuild_dentry(struct aeon_dentry *dest,
 	name_len = src->name_len;
 	if (0 < name_len && name_len < AEON_NAME_LEN) {
 		if (src->name[0] != '\0' && src->name[name_len + 1] == '\0') {
-			dest->name_len = src->name_len;
 			strscpy(dest->name, src->name, name_len + 1);
+			dest->name_len = strlen(dest->name);
 			goto next;
 		}
 	}
@@ -71,9 +71,9 @@ static void aeon_rebuild_dentry(struct aeon_dentry *dest,
 
 next:
 	dest->ino = pi->aeon_ino;
-	//dest->internal_offset = pi->i_d_internal_off;
-	//dest->global_offset = pi->i_d_global_off;
-	//dest->i_blocknr = cpu_to_le64(pi->i_inode_block);
+	dest->d_pinode_addr = pi->i_pinode_addr;
+	dest->d_dentry_addr = pi->i_dentry_addr;
+	dest->d_inode_addr = pi->i_inode_addr;
 	dest->valid = 1;
 	dest->persisted = 1;
 	aeon_update_dentry_csum(dest);
@@ -82,56 +82,66 @@ next:
 static void aeon_rebuild_inode(struct aeon_inode *pi, struct aeon_dentry *de,
 			       struct aeon_inode *parent)
 {
+	/*
+	 * First two are possibity when system failure occures in creating
+	 * process. There is a possibility that uid & gid would belong root user & group
+	 */
+	if (pi->i_flags == 0) {
+		pi->i_flags |= le16_to_cpu(S_DAX);
+		pi->i_flags |= le16_to_cpu(S_SYNC);
+	}
+	if (pi->i_mode == 0)
+		pi->i_mode = cpu_to_le16(0700);
+
 	pi->aeon_ino = de->ino;
 	pi->parent_ino = parent->aeon_ino;
-	//pi->i_d_internal_off = de->internal_offset;
-	//pi->i_d_global_off = de->global_offset;
-	//pi->i_inode_block = de->i_blocknr;
+	pi->i_pinode_addr = parent->i_inode_addr;
+	pi->i_dentry_addr = de->d_dentry_addr;
+	pi->i_inode_addr = de->d_inode_addr;
 	pi->valid = 1;
 	pi->persisted = 1;
 	aeon_update_inode_csum(pi);
 }
 
-static int pi_has_dentry_block(struct super_block *sb, struct aeon_inode *pi)
+static int pi_has_valid_de_addr(struct super_block *sb, struct aeon_inode *pi)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct free_list *list = aeon_get_free_list(sb, sbi->cpus - 1);
-	//unsigned long blocknr = le64_to_cpu(pi->i_dentry_block);
-	unsigned long blocknr;
-	unsigned long last = list->block_end;
+	unsigned long last = sbi->last_addr;
+	u64 addr = pi->i_dentry_addr;
 
-	blocknr = (le64_to_cpu(pi->i_dentry_addr) -
-		   (u64)sbi->virt_addr) >> AEON_SHIFT;
-
-	return (0 < blocknr && blocknr <= last);
+	return (0 < addr && addr <= last);
 }
 
-static int de_has_dentry_block(struct super_block *sb, struct aeon_dentry *de)
+static int de_has_valid_pi_addr(struct super_block *sb, struct aeon_dentry *de)
 {
-	struct free_list *list = aeon_get_free_list(sb, AEON_SB(sb)->cpus - 1);
-	unsigned long blocknr = le64_to_cpu(de->d_dentry_addr) >> AEON_SHIFT;
-	unsigned long last = list->block_end;
-	unsigned long ino = le32_to_cpu(de->ino);
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long last = sbi->last_addr;
+	u64 addr = de->d_inode_addr;
 
-	return ((0 < blocknr && blocknr <= last) && (ino != 0));
+	return (0 < addr && addr <= last);
+}
+
+static int de_has_valid_de_addr(struct super_block *sb, struct aeon_dentry *de)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long last = sbi->last_addr;
+	u64 addr = de->d_dentry_addr;
+
+	return (0 < addr && addr <= last);
 }
 
 static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi,
 			      struct aeon_dentry **de)
 {
 	struct aeon_dentry *tmp;
-	unsigned long blocknr;
-	int i;
+	u64 addr;
 
 	/*
 	 * Access the dentry address safely thanks to
 	 * confirm it before go into this function.
 	 */
-	//blocknr = le64_to_cpu(pi->i_dentry_block);
-	//offset = le32_to_cpu(pi->i_d_internal_off);
-	tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				     le64_to_cpu(pi->i_dentry_addr));
-
+	addr = le64_to_cpu(pi->i_dentry_addr);
+	tmp = (struct aeon_dentry *)((u64)sbi->virt_addr + addr);
 	if (tmp->ino == pi->aeon_ino) {
 		aeon_rebuild_dentry(tmp, *de, pi);
 		*de = tmp;
@@ -139,22 +149,6 @@ static int aeon_lookup_dentry(struct aeon_sb_info *sbi, struct aeon_inode *pi,
 	}
 
 	return 0;
-
-	 /* From now, do deep lookup
-	  * Only if blocknr is valid, it would work well.
-	  */
-	for (i = 0; i < AEON_INTERNAL_ENTRY; i++) {
-		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				 (blocknr << AEON_SHIFT) + (i << AEON_D_SHIFT));
-		if (tmp->ino == pi->aeon_ino) {
-			//pi->i_d_internal_off = cpu_to_le32(i);
-			aeon_rebuild_dentry(tmp, *de, pi);
-			*de = tmp;
-			return 0;
-		}
-	}
-
-	return -1;
 }
 
 static int aeon_lookup_inode(struct aeon_sb_info *sbi, struct aeon_dentry *de,
@@ -189,29 +183,47 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 	if (err == PARENT_PERSIST) {
 		/* return -1 means giving up recovering */
 		//struct invalid_obj_queue *ioq;
-		unsigned long parent_ino;
-		unsigned long parent_ino_in_c_pi;
+		void *tmp;
+		u64 addr;
 		int err;
 
 		/* recover from inode */
-		parent_ino = le32_to_cpu(p_pi->aeon_ino);
-		parent_ino_in_c_pi = le32_to_cpu(((*c_pi)->parent_ino));
-		if (parent_ino != parent_ino_in_c_pi)
-			(*c_pi)->parent_ino = p_pi->aeon_ino;
+		addr = le64_to_cpu((*c_pi)->i_pinode_addr);
+		tmp = (void *)((u64)sbi->virt_addr + addr);
+		if ((struct aeon_inode *)tmp != p_pi)
+			(*c_pi)->i_pinode_addr = p_pi->i_inode_addr;
 
-		if (pi_has_dentry_block(sb, *c_pi)) {
+		addr =  le64_to_cpu((*c_pi)->i_inode_addr);
+		tmp = (void *)((u64)sbi->virt_addr + addr);
+		if (unlikely((struct aeon_inode *)tmp != (*c_pi))) {
+			addr = (u64)(*c_pi);
+			(*c_pi)->i_inode_addr = addr - (u64)sbi->virt_addr;
+		}
+
+		if (pi_has_valid_de_addr(sb, *c_pi)) {
+			addr = le64_to_cpu((*c_pi)->i_dentry_addr);
+			tmp = (void *)((u64)sbi->virt_addr + addr);
+			aeon_rebuild_dentry(tmp, *c_de, *c_pi);
+			*c_de = (struct aeon_dentry *)tmp;
+		}
+
+		if (de_has_valid_pi_addr(sb, *c_de)) {
+			addr = le64_to_cpu((*c_de)->d_inode_addr);
+			tmp = (void *)((u64)sbi->virt_addr + addr);
+			aeon_rebuild_inode(tmp, *c_de, p_pi);
+			*c_pi = (struct aeon_inode *)tmp;
+		}
+
+		return 0;
+
+		if (pi_has_valid_de_addr(sb, *c_pi)) {
 			err = aeon_lookup_dentry(sbi, *c_pi, c_de);
-			if (err)
-				goto next_lookup;
-			else
+			if (!err)
 				return 0;
-		} else
-			return -1;
+		}
 
-next_lookup:
 		/* recover from dentry */
-		aeon_dbg("perfect\n");
-		if (de_has_dentry_block(sb, *c_de)) {
+		if (de_has_valid_de_addr(sb, *c_de)) {
 			err = aeon_lookup_inode(sbi, *c_de, c_pi, p_pi);
 			if (err)
 				return -1;
@@ -222,31 +234,26 @@ next_lookup:
 	} else if (err == P_AND_C_INODE_PERSIST) {
 		struct aeon_dentry *tmp;
 		unsigned long ino;
+		u64 addr;
 
-		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr +
-					le64_to_cpu((*c_pi)->i_dentry_addr));
+		addr = le64_to_cpu((*c_pi)->i_dentry_addr);
+		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr + addr);
 
 		ino = le32_to_cpu((*c_pi)->aeon_ino);
 		aeon_info("Recover dentry (ino:%lu)\n", ino);
+
 		aeon_rebuild_dentry(tmp, *c_de, *c_pi);
 		*c_de = tmp;
 	} else if (err == P_AND_C_DENTRY_PERSIST) {
 		struct aeon_inode *tmp;
-		unsigned long blocknr;
 		unsigned long ino;
-		unsigned long internal_ino;
-		int cpu_id;
+		u64 addr;
 
-		cpu_id = sbi->cpus;
-		if (cpu_id >= sbi->cpus)
-			cpu_id -= sbi->cpus;
-		blocknr = le64_to_cpu((*c_de)->d_inode_addr) >> AEON_SHIFT;
-		ino = le32_to_cpu((*c_de)->ino);
-		internal_ino = ((ino - cpu_id) / sbi->cpus) %
-						AEON_I_NUM_PER_PAGE;
+		addr = le64_to_cpu((*c_de)->d_inode_addr);
+		tmp = (struct aeon_inode *)((u64)sbi->virt_addr + addr);
 
-		tmp = (struct aeon_inode *)((u64)sbi->virt_addr +
-			(blocknr << AEON_SHIFT) + (internal_ino << AEON_I_SHIFT));
+		ino = le32_to_cpu((*c_pi)->aeon_ino);
+		aeon_info("Recover dentry (ino:%lu)\n", ino);
 
 		aeon_rebuild_inode(tmp, *c_de, p_pi);
 		*c_pi = tmp;
@@ -539,7 +546,7 @@ skip_get_dentry:
 		if (err)
 			return err;
 
-		d_blocknr = le64_to_cpu(child_pi->i_dentry_addr) << AEON_SHIFT;
+		d_blocknr = le64_to_cpu(child_pi->i_dentry_addr) >> AEON_SHIFT;
 		aeon_dbg("d_blocknr %llu\n", d_blocknr);
 		add_block_entry(de_map, d_blocknr, &first);
 		de_map->num_dentries++;

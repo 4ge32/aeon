@@ -484,6 +484,7 @@ test-recover-1 ()
 {
   init
 
+  # Only success under the num of 4 CPU cores.
   TARGET="dark"
   OBJ="nvdimm dark dram pmem"
   RES="nvdimm R-5 dram pmem"
