@@ -340,6 +340,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct aeon_inode *update;
 	struct qstr *old_name = &old_dentry->d_name;
 	struct qstr *new_name = &new_dentry->d_name;
+	u64 de_addr;
 	int err;
 
 	if (old_dentry->d_fsdata) {
@@ -370,6 +371,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 					  new_name->name, new_name->len);
 		if (!new_de)
 			goto out_dir;
+
 		aeon_set_link(new_dir, new_de, old_inode, 1);
 		new_inode->i_ctime = current_time(new_inode);
 		if (dir_de)
@@ -379,10 +381,14 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 					&AEON_I(new_inode)->header);
 		update->i_links_count = cpu_to_le64(new_inode->i_nlink);
 	} else {
-		err = aeon_add_dentry(new_dentry, le32_to_cpu(old_inode->i_ino),
-				      (u64)pi, 0);
-		if (err)
+		de_addr = aeon_add_dentry(new_dentry,
+					  le32_to_cpu(old_inode->i_ino),
+					  (u64)pi, 0);
+		if (de_addr < 0)
 			goto out_dir;
+
+		pi->i_dentry_addr = cpu_to_le64(de_addr);
+
 		if (dir_de)
 			inc_nlink(new_dir);
 	}
