@@ -18,6 +18,10 @@ static struct kmem_cache *aeon_range_node_cachep;
 int wprotect = 0;
 unsigned int aeon_dbgmask;
 
+module_param(wprotect, int, 0444);
+MODULE_PARM_DESC(wprotect, "Write-protect pmem region and use CR0.WP to allow updates");
+
+
 static struct inode *aeon_alloc_inode(struct super_block *sb)
 {
 	struct aeon_inode_info *si;
@@ -305,12 +309,13 @@ err:
 
 enum {
 	Opt_init, Opt_dax, Opt_dbgmask, Opt_user_xattr, Opt_nouser_xattr,
-	Opt_err,
+	Opt_wprotect, Opt_err,
 };
 
 static const match_table_t tokens = {
 	{ Opt_init,		"init"	     },
 	{ Opt_dax,		"dax"	     },
+	{ Opt_wprotect,		"wprotect"   },
 	{ Opt_dbgmask,		"dbgmask=%u" },
 	{ Opt_user_xattr,	"user_xattr"},
 	{ Opt_nouser_xattr,	"nouser_xattr"},
@@ -340,6 +345,10 @@ static int aeon_parse_options(char *options, struct aeon_sb_info *sbi,
 			break;
 		case Opt_dax:
 			set_opt(sbi->s_mount_opt, DAX);
+			break;
+		case Opt_wprotect:
+			set_opt(sbi->s_mount_opt, PROTECT);
+			aeon_info("AEON: Enabling write protection (CR0.WP)\n");
 			break;
 		case Opt_dbgmask:
 			if (match_int(&args[0], &option))

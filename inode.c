@@ -161,6 +161,9 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	d_addr_offset = de_addr - (u64)sbi->virt_addr;
 	p_addr_offset = (u64)pidir - (u64)sbi->virt_addr;
 
+	//aeon_memunlock_inode(sb, pi);
+	aeon_memlock_inode(sb, pi);
+
 	pi->deleted = 0;
 	pi->i_new = 1;
 	pi->i_links_count = cpu_to_le16(inode->i_nlink);
@@ -187,6 +190,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->valid = 1;
 
 	aeon_update_inode_csum(pi);
+	aeon_memlock_inode(sb, pi);
 }
 
 static void aeon_init_inode_flags(struct inode *inode)
