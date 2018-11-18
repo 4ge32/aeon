@@ -161,7 +161,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	d_addr_offset = de_addr - (u64)sbi->virt_addr;
 	p_addr_offset = (u64)pidir - (u64)sbi->virt_addr;
 
-	//aeon_memunlock_inode(sb, pi);
+	aeon_memunlock_inode(sb, pi);
 	aeon_memlock_inode(sb, pi);
 
 	pi->deleted = 0;
@@ -867,7 +867,6 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	int index = 0;
 	int err;
 	int length;
-
 
 #ifdef USE_RB
 	pi = aeon_get_inode(sb, sih);

@@ -343,10 +343,8 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 	}
 
 	err = aeon_get_dentry_addr(sb, sih->de_info, &new_direntry);
-	if (err) {
-		mutex_unlock(&sih->de_info->dentry_mutex);
+	if (err)
 		goto out;
-	}
 
 	aeon_fill_dentry_data(sb, new_direntry, ino, pi_addr,
 			      (u64)pidir, name, namelen);
@@ -357,7 +355,6 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 		goto out2;
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
-
 	pidir->i_links_count++;
 	aeon_update_inode_csum(pidir);
 
@@ -394,13 +391,16 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	if (ret)
 		goto out;
 
+	mutex_lock(&de_info->dentry_mutex);
+
 	adi->d_addr = (u64)de;
 	list_add(&adi->invalid_list, &de_info->di->invalid_list);
-
 	de_map->num_dentries--;
 	de->valid = 0;
 	memset(de->name, '\0', de->name_len + 1);
 	aeon_update_dentry_csum(de);
+
+	mutex_unlock(&de_info->dentry_mutex);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
