@@ -82,6 +82,7 @@ static int aeon_link(struct dentry *dest_dentry,
 	struct qstr *name = &dest_dentry->d_name;
 	struct aeon_dentry *de;
 	int err = -ENOENT;
+	u64 de_addr;
 
 	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
 	if (!pidir)
@@ -99,8 +100,8 @@ static int aeon_link(struct dentry *dest_dentry,
 	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
 
-	err = aeon_add_dentry(dentry, dest_inode->i_ino, (u64)pi, 0);
-	if (!err) {
+	de_addr = aeon_add_dentry(dentry, dest_inode->i_ino, (u64)pi, 0);
+	if (de_addr >= 0) {
 		d_instantiate(dentry, dest_inode);
 
 		aeon_sb->s_num_inodes--;
@@ -113,6 +114,7 @@ static int aeon_link(struct dentry *dest_dentry,
 	iput(dest_inode);
 
 out:
+	aeon_err(dest_inode->i_sb, "%s\n", __func__);
 	return err;
 }
 
@@ -182,7 +184,7 @@ static int aeon_symlink(struct inode *dir,
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	u64 pi_addr = 0;
 	u64 de_addr = 0;
-	u64 ino;
+	u32 ino;
 
 	if (l > sb->s_blocksize)
 		goto err;
@@ -231,7 +233,7 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pidir;
-	u64 ino;
+	u32 ino;
 	u64 pi_addr = 0;
 	u64 de_addr = 0;
 	int err = -EMLINK;
