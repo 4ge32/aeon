@@ -537,6 +537,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("extent       %lu\n", sizeof(struct aeon_extent));
 	aeon_dbg("extentheader %lu\n", sizeof(struct aeon_extent_header));
 
+	if (num_online_cpus() == 1)
+		return -EINVAL;
+
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
@@ -545,7 +548,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	ret = aeon_get_nvmm_info(sb, sbi);
 	if (ret)
-		goto out0;
+		goto out00;
 
 	sbi->sb   = sb;
 	sbi->uid  = current_fsuid();
