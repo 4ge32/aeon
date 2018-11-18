@@ -770,17 +770,15 @@ void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
 		do_aeon_init_new_inode_block(sbi, i, ino + i);
 }
 
-unsigned long aeon_get_new_dentry_block(struct super_block *sb,
-					u64 *pi_addr, int cpuid)
+unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = AEON_PAGES_FOR_DENTRY;
 
-	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
-
-	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
+	*de_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 
 	return blocknr;
 }

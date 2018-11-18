@@ -218,7 +218,7 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
 	unsigned long blocknr;
 	u64 pi_addr = 0;
 
-	blocknr = aeon_get_new_dentry_block(sb, &pi_addr, ANY_CPU);
+	blocknr = aeon_get_new_dentry_block(sb, &pi_addr);
 	if (blocknr == 0)
 		return -ENOSPC;
 
@@ -251,7 +251,7 @@ static struct aeon_dentry *aeon_alloc_new_dentry_block(struct super_block *sb,
 	struct aeon_dentry *direntry;
 	u64 de_addr = 0;
 
-	*d_blocknr = aeon_get_new_dentry_block(sb, &de_addr, ANY_CPU);
+	*d_blocknr = aeon_get_new_dentry_block(sb, &de_addr);
 	if (*d_blocknr == 0)
 		return ERR_PTR(-ENOSPC);
 
