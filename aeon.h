@@ -98,10 +98,10 @@ struct i_valid_child_list {
 	struct	list_head i_valid_child_list;
 };
 
-struct invalid_obj_queue {
+struct obj_queue {
 	struct aeon_inode *pi;
 	struct aeon_dentry *de;
-	struct list_head invalid_obj_queue;
+	struct list_head obj_queue;
 };
 
 struct inode_map {
@@ -166,7 +166,8 @@ struct aeon_sb_info {
 	struct aeon_stat_info *stat_info;
 
 	/* used in recovery process */
-	struct invalid_obj_queue *ioq;
+	struct obj_queue *oq;
+	struct obj_queue *spare_oq;
 
 	struct mb_cache *s_ea_block_cache;
 };
@@ -407,6 +408,24 @@ struct aeon_inode *aeon_get_inode(struct super_block *sb,
 		aeon_err(sb, "%s: ERROR\n", __func__);
 		return NULL;
 	}
+
+	return (struct aeon_inode *)addr;
+}
+
+/*
+ * This function only is called from ioctl.c for the purpose of
+ * file system test so far.
+ */
+static inline
+struct aeon_inode *aeon_get_parent_inode(struct super_block *sb,
+					 struct aeon_inode_info_header *sih)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_inode *pi;
+	u64 addr;
+
+	pi = aeon_get_inode(sb, sih);
+	addr = (u64)sbi->virt_addr + le64_to_cpu(pi->i_pinode_addr);
 
 	return (struct aeon_inode *)addr;
 }

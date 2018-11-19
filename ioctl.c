@@ -13,7 +13,8 @@ enum failure_type {
 	CREATE_ID2,
 	CREATE_ID3,
 	CREATE_ID4,
-	CREATE_ID5,
+	RENAME_ID1,
+	RENAME_ID2,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -137,6 +138,7 @@ setversion_out:
 		case DELETE3:
 			pi->valid = 1;
 			pi->deleted = 0;
+			pi->csum = 21;
 			break;
 		default:
 			return -EFAULT;
@@ -203,15 +205,24 @@ setversion_out:
 			 */
 			memset(de, 0, sizeof(*de));
 			pi->csum = 32;
+			break;
+		case CREATE_ID4: {
+			struct aeon_inode *pidir;
+
+			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+
+			pidir->csum = 91;
+			aeon_dbg("ino %u\n", le32_to_cpu(pidir->aeon_ino));
 			aeon_dbg("LAST!!\n");
 			break;
-		case CREATE_ID4:
+		}
+		case RENAME_ID1:
 			de->csum = 0;
 			//pi->i_dentry_block = 0;
 			//pi->i_d_internal_off = 0;
 			//pi->i_inode_block = 0;
 			break;
-		case CREATE_ID5:
+		case RENAME_ID2:
 			de->csum = 0;
 			break;
 		default:

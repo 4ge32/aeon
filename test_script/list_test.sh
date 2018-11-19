@@ -480,14 +480,38 @@ helper_recover_test ()
   res=$?
 }
 
+helper_recover_test_im ()
+{
+  if [ ! -e attack_metadata ]; then
+    gcc -o attack_metadata attack_metadata.c
+  fi
+
+  for i in $OBJ
+  do
+    touch $DIR/$i
+  done
+  for i in $RES
+  do
+    touch $TMP/$i
+  done
+  ./attack_metadata $1 $2 $DIR/$TARGET
+  ./run.sh rm
+  touch $TMP/MARS
+  touch $DIR/MARS
+  ls $TMP
+  ls $DIR
+  diff $TMP $DIR
+  res=$?
+}
+
 test-recover-1 ()
 {
   init
 
-  # Only success under the num of 4 CPU cores.
+  # Only success under the num of 16 CPU cores.
   TARGET="dark"
   OBJ="nvdimm dark dram pmem"
-  RES="nvdimm R-5 dram pmem"
+  RES="nvdimm R-17 dram pmem"
 
   helper_recover_test 1 1
 
@@ -578,7 +602,7 @@ test-recover-8 ()
 
   TARGET="dark"
   OBJ="nvdimm dark dram pmem"
-  RES="nvdimm dark dram pmem"
+  RES="nvdimm R-17 dram pmem"
 
   helper_recover_test 3 7
 
@@ -591,9 +615,22 @@ test-recover-9 ()
 
   TARGET="dark"
   OBJ="nvdimm dark dram pmem"
-  RES="nvdimm R-5 dram pmem"
+  RES="nvdimm dark dram pmem"
 
   helper_recover_test 3 8
+
+  clean
+}
+
+test-recover-10 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test_im 3 8
 
   clean
 }
