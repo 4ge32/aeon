@@ -75,6 +75,7 @@ static void aeon_put_super(struct super_block *sb)
 			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
 	}
 	kfree(sbi->oq);
+	kfree(sbi->spare_oq);
 	kfree(sbi->inode_maps);
 
 	kfree(sbi);
@@ -301,10 +302,10 @@ static int aeon_super_block_check(struct super_block *sb)
 		goto err;
 	}
 
-	return 0;
+	return 1;
 err:
 	aeon_err(sb, "%s: 0x%px", __func__, aeon_sb);
-	return 1;
+	return 0;
 }
 
 enum {
@@ -341,6 +342,7 @@ static int aeon_parse_options(char *options, struct aeon_sb_info *sbi,
 		token = match_token(p, tokens, args);
 		switch (token) {
 		case Opt_init:
+			aeon_info("MKFS AEON\n");
 			set_opt(sbi->s_mount_opt, FORMAT);
 			break;
 		case Opt_dax:
@@ -492,7 +494,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	} else {
 		if (unlikely(root_i->i_new == 1))
 			root_i->i_new = 0;
-		if (aeon_super_block_check(sb))
+		if (!aeon_super_block_check(sb))
 			return NULL;
 	}
 
@@ -598,6 +600,11 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	root_pi = aeon_init(sb, sbi->initsize);
+	if (!root_pi) {
+		ret = -EINVAL;
+		goto out2;
+	}
+
 	if (aeon_root_check(sb, root_pi)) {
 		ret = -ENOTDIR;
 		goto out2;

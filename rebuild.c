@@ -4,15 +4,15 @@
 
 #include "aeon.h"
 
-#define FULL_PERSIST            17
-#define P_INODE_PERSIST         9
-#define C_INODE_PERSIST         5
-#define C_DENTRY_PERSIST        3
+#define FULL_PERSIST            14
+#define P_INODE_PERSIST         8
+#define C_INODE_PERSIST         4
+#define C_DENTRY_PERSIST        2
 #define PARENT_PERSIST          (P_INODE_PERSIST)
 #define CHILD_PERSIST           (C_INODE_PERSIST | C_DENTRY_PERSIST)
 #define P_AND_C_INODE_PERSIST   (PARENT_PERSIST | C_INODE_PERSIST)
 #define P_AND_C_DENTRY_PERSIST  (PARENT_PERSIST | C_DENTRY_PERSIST)
-#define NOT_FOUND               1
+#define NOT_FOUND               0
 
 static void add_block_entry(struct aeon_dentry_map *de_map,
 			    u64 blocknr, bool *first)
@@ -441,7 +441,7 @@ found:
 
 		child_pi = (struct aeon_inode *)ivcl->addr;
 		if (is_persisted_inode(child_pi)) {
-			aeon_dbg("pass1\n");
+			//aeon_dbg("pass1\n");
 			c_state |= C_INODE_PERSIST;
 		}
 
@@ -449,7 +449,7 @@ found:
 		if (!err || err == -EINVAL) {
 			d = (struct aeon_dentry *)de_addr;
 			if (is_persisted_dentry(d)) {
-				aeon_dbg("pass2\n");
+				//aeon_dbg("pass2\n");
 				c_state |= C_DENTRY_PERSIST;
 			}
 		}
