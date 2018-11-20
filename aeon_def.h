@@ -119,7 +119,10 @@ struct aeon_inode {
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 
+#include "aeon_tree.h"
 struct aeon_region_table {
+	struct tt_root block_free_tree;
+
 	__le64 freed;
 	__le32 i_num_allocated_pages;
 	__le32 i_range_high;

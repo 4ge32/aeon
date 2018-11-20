@@ -34,6 +34,7 @@ void aeon_delete_free_lists(struct super_block *sb)
 
 	/* Each tree is freed in save_blocknode_mappings */
 	kfree(sbi->free_lists);
+	sbi->free_lists = NULL;
 }
 
 unsigned long aeon_count_free_blocks(struct super_block *sb)
@@ -811,4 +812,19 @@ unsigned long aeon_get_new_extents_block(struct super_block *sb)
 	}
 
 	return blocknr;
+}
+
+u64 aeon_get_new_blk(struct super_block *sb)
+{
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	int num_blocks = 1;
+
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
+	if (allocated <= 0) {
+		aeon_err(sb, "failed to get new exttens block\n");
+		return -ENOSPC;
+	}
+
+	return (blocknr << AEON_SHIFT);
 }
