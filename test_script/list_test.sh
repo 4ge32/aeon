@@ -498,8 +498,8 @@ helper_recover_test_im ()
   ./run.sh rm
   touch $TMP/MARS
   touch $DIR/MARS
-  ls $TMP
-  ls $DIR
+  #ls $TMP
+  #ls $DIR
   diff $TMP $DIR
   res=$?
 }
@@ -635,7 +635,7 @@ test-recover-10 ()
   clean
 }
 
-test-recover-10 ()
+test-recover-11 ()
 {
   init
 

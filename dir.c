@@ -260,9 +260,9 @@ static struct aeon_dentry *aeon_alloc_new_dentry_block(struct super_block *sb,
 	return direntry;
 }
 
-static int aeon_get_dentry_addr(struct super_block *sb,
-				struct aeon_dentry_info *de_info,
-				struct aeon_dentry **direntry)
+static int aeon_get_dentry_space(struct super_block *sb,
+				 struct aeon_dentry_info *de_info,
+				 struct aeon_dentry **direntry)
 {
 	struct aeon_dentry_map *de_map = &de_info->de_map;
 	u64 blocknr = 0;
@@ -342,7 +342,7 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 			goto out;
 	}
 
-	err = aeon_get_dentry_addr(sb, sih->de_info, &new_direntry);
+	err = aeon_get_dentry_space(sb, sih->de_info, &new_direntry);
 	if (err)
 		goto out;
 

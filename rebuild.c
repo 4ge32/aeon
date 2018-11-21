@@ -403,7 +403,7 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	de_map = &de_info->de_map;
 	de_map->num_dentries = 2;
 	de_map->num_latest_dentry = 0;
-	de_map->num_internal_dentries = 0;
+	de_map->num_internal_dentries = 2;
 	INIT_LIST_HEAD(&de_info->di->invalid_list);
 
 	parent_ino = le32_to_cpu(pi->aeon_ino);
