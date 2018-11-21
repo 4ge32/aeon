@@ -519,21 +519,21 @@ void __test(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_range_node *blknode;
-	struct inode_map *inode_map;
 	struct aeon_region_table *art;
 	struct free_list *free_list;
-	struct tt_root tree;
+	struct tt_root *tree;
 	int err;
 	int i;
 
 	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_map = &sbi->inode_maps[i];
-		art = AEON_R_TABLE(inode_map);
-		tree = art->block_free_tree;
-		tree = TT_ROOT;
+		art = aeon_get_rtable(sb, i);
+		art->pmem_pool_addr = pmem_create_pool(sb, i);
+
+		tree = &art->block_free_tree;
 		free_list = aeon_get_free_list(sb, i);
-		blknode = pmem_malloc(sb, sizeof(struct aeon_range_node));
+
+		blknode = aeon_pmem_alloc_range_node(sb, i);
 		if (!blknode) {
 			aeon_err(sb, "pmem...\n");
 			return;
@@ -544,12 +544,11 @@ void __test(struct super_block *sb)
 			blknode->range_low = free_list->block_start;
 		blknode->range_low += AEON_PAGES_FOR_INODE;
 		blknode->range_high = free_list->block_end;
-		err = tt_insert(&blknode->tt_node, &tree);
+		err = tt_insert(&blknode->tt_node, tree);
 		if (err) {
 			aeon_err(sb, "What the hell am I doing?\n");
 			return;
 		}
-
 	}
 
 }
@@ -581,6 +580,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("extent       %lu\n", sizeof(struct aeon_extent));
 	aeon_dbg("extentheader %lu\n", sizeof(struct aeon_extent_header));
 	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
+	aeon_dbg("range node   %lu\n", sizeof(struct aeon_range_node));
 
 	if (num_online_cpus() == 1)
 		return -EINVAL;

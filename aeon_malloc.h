@@ -1,8 +1,8 @@
 #ifndef __AEON_MALLOC_H
 #define __AEON_MALLOC_H
 
-void *pmem_malloc(struct super_block *sb, unsigned long bytes);
+void *aeon_pmem_alloc_range_node(struct super_block *, int);
 void *pmem_free(void *head);
-void *pmem_create_pool(struct super_block *sb);
+u64 pmem_create_pool(struct super_block *sb, int cpu_id);
 
 #endif

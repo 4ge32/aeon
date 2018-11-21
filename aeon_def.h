@@ -119,9 +119,14 @@ struct aeon_inode {
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 
+#include <linux/uaccess.h>
 #include "aeon_tree.h"
 struct aeon_region_table {
+	spinlock_t r_lock;
+
 	struct tt_root block_free_tree;
+
+	u64	pmem_pool_addr;
 
 	__le64 freed;
 	__le32 i_num_allocated_pages;
@@ -141,6 +146,8 @@ struct aeon_region_table {
 } __attribute((__packed__));
 
 struct aeon_super_block {
+	spinlock_t s_lock;
+
 	__le16 s_map_id;	   /* for allocating inodes in round-robin order */
 	__le16 s_cpus;		   /* number of cpus */
 	__le32 s_magic;            /* magic signature */
@@ -154,7 +161,7 @@ struct aeon_super_block {
 	__le64 s_num_inodes;
 	__le64 s_num_free_blocks;
 
-	char   pad[456];
+	char   pad[452];
 	__le32 s_csum;              /* checksum of this sb */
 } __attribute((__packed__));
 

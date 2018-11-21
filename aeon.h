@@ -364,6 +364,15 @@ static inline struct aeon_region_table *AEON_R_TABLE(struct inode_map *inode_map
 	return (struct aeon_region_table *)(inode_map->i_table_addr);
 }
 
+static inline
+struct aeon_region_table *aeon_get_rtable(struct super_block *sb, int cpu_id)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
+
+	return (struct aeon_region_table *)(inode_map->i_table_addr);
+}
+
 static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi) {
 	return (u64)sbi->virt_addr;
 }
