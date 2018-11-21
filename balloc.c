@@ -836,3 +836,23 @@ u64 aeon_get_new_blk(struct super_block *sb)
 
 	return (blocknr << AEON_SHIFT);
 }
+
+u64 aeon_get_xattr_blk(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	int num_blocks = 1;
+	u64 addr;
+
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
+	if (allocated <= 0) {
+		aeon_err(sb, "failed to get new exttens block\n");
+		return -ENOSPC;
+	}
+
+	addr = blocknr << AEON_SHIFT;
+	memset((void *)((u64)sbi->virt_addr + addr), 0, 1<<AEON_SHIFT);
+
+	return addr;
+}

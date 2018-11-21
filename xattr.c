@@ -1,5 +1,6 @@
 #include <linux/rwsem.h>
 #include <linux/mbcache.h>
+#include <linux/quotaops.h>
 
 #include "aeon.h"
 #include "xattr.h"
@@ -11,6 +12,12 @@ struct aeon_xattr_header *HDR(struct super_block *sb, u64 blocknr)
 
 	return (struct aeon_xattr_header *)((u64)sbi->virt_addr +
 					   (blocknr << AEON_SHIFT));
+}
+
+static inline
+struct aeon_xattr_header *_HDR(u64 addr)
+{
+	return (struct aeon_xattr_header *)addr;
 }
 
 static inline
@@ -32,6 +39,13 @@ struct aeon_xattr_entry *FIRST_ENTRY(struct super_block *sb, u64 blocknr) {
 }
 
 static inline
+struct aeon_xattr_entry *_FIRST_ENTRY(u64 addr)
+{
+	return (struct aeon_xattr_entry *)(addr +
+					   sizeof(struct aeon_xattr_header));
+}
+
+static inline
 struct aeon_xattr_entry *LAST_ENTRY(struct super_block *sb, u64 blocknr) {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
@@ -39,11 +53,8 @@ struct aeon_xattr_entry *LAST_ENTRY(struct super_block *sb, u64 blocknr) {
 					   ((blocknr + 1) << AEON_SHIFT));
 }
 
-static inline bool IS_LAST_ENTRY(struct aeon_xattr_entry *entry)
-{
-	return entry == NULL ? true : false;
-}
-
+#define _ENTRY(xattr) ((struct aeon_xattr_entry *)xattr)
+#define IS_LAST_ENTRY(entry) (*(__u32 *)(entry) == 0)
 #define AEON_XATTR_PAD_BITS	2
 #define AEON_XATTR_PAD		(1<<AEON_XATTR_PAD_BITS)
 #define AEON_XATTR_ROUND	(AEON_XATTR_PAD-1)
@@ -56,12 +67,11 @@ static inline bool IS_LAST_ENTRY(struct aeon_xattr_entry *entry)
 #define AEON_XATTR_SIZE(size) \
 	(((size) + AEON_XATTR_ROUND) & ~AEON_XATTR_ROUND)
 
-//static int aeon_xattr_set2(struct inode *, struct buffer_head *,
-//			   struct aeon_xattr_header *);
+static int aeon_xattr_set2(struct inode *, u64,
+			   struct aeon_xattr_header *);
 static int aeon_xattr_cache_insert(struct mb_cache *, struct super_block *sb,
 				   u64 blocknr);
-//static struct buffer_head *aeon_xattr_cache_find(struct inode *,
-//						 struct aeon_xattr_header *);
+static u64 aeon_xattr_cache_find(struct inode *, struct aeon_xattr_header *);
 static void aeon_xattr_rehash(struct aeon_xattr_header *,
 			      struct aeon_xattr_entry *);
 
@@ -127,7 +137,7 @@ int aeon_xattr_get(struct inode *inode, int name_index, const char *name,
 
 	down_read(&sih->xattr_sem);
 	err = -ENODATA;
-	if (!sih->i_file_acl)
+	if (!pi->i_xattr)
 		goto cleanup;
 	blocknr = le64_to_cpu(pi->i_xattr);
 	header = HDR(sb, blocknr);
@@ -136,7 +146,7 @@ int aeon_xattr_get(struct inode *inode, int name_index, const char *name,
 	    header->h_blocks != cpu_to_le32(1)) {
 bad_block:
 		aeon_err(sb, "aeon_xattr_get inode %ld: bad block %d\n",
-			 inode->i_ino, sih->i_file_acl);
+			 inode->i_ino, pi->i_xattr);
 		err = EIO;
 		goto cleanup;
 	}
@@ -190,10 +200,10 @@ int aeon_xattr_set(struct inode *inode, int name_index, const char *name,
 	size_t name_len;
 	size_t free;
 	size_t min_offs = sb->s_blocksize;
+	char *end;
 	bool not_found = true;
 	int err;
-	char *end;
-	u64 blocknr = 0;
+	u64 xattr = 0;
 
 	if (value == NULL)
 		value_len = 0;
@@ -204,23 +214,34 @@ int aeon_xattr_set(struct inode *inode, int name_index, const char *name,
 		return -ERANGE;
 
 	down_write(&sih->xattr_sem);
-	blocknr = le64_to_cpu(pi->i_xattr);
-	if (blocknr) {
-		/*
-		 * Check whether header is valid or not.
-		 */
-		header = HDR(sb, blocknr);
+	xattr = le64_to_cpu(pi->i_xattr);
+	if (!xattr) {
+		u64 addr;
+		xattr = aeon_get_xattr_blk(sb);
+		pi->i_xattr = cpu_to_le64(xattr);
+		addr = (u64)AEON_SB(sb)->virt_addr + xattr;
+		header = (struct aeon_xattr_header *)addr;
+		header->h_magic = cpu_to_le32(AEON_XATTR_MAGIC);
+		header->h_blocks = cpu_to_le32(1);
+		rwlock_init(&header->x_lock);
+	}
+
+	xattr = (u64)AEON_SB(sb)->virt_addr + xattr;
+	if (xattr) {
+		/* Check whether header is valid or not. */
+		header = _HDR(xattr);
+		end = (char *)(xattr + (1<<AEON_SHIFT));
 		if (header->h_magic != cpu_to_le32(AEON_XATTR_MAGIC) ||
 		    header->h_blocks != cpu_to_le32(1)) {
 bad_block:
-			aeon_err(sb, "%s inode %ld: bad block %d",
-				 __func__, inode->i_ino, blocknr);
+			aeon_err(sb, "%s inode %ld: bad addr 0x%llx",
+				 __func__, inode->i_ino, xattr);
 			err = -EIO;
 			goto cleanup;
 		}
 
-		here = FIRST_ENTRY(sb, blocknr);
-		end = (char *)LAST_ENTRY(sb, blocknr);
+		/* Find the named attribute. */
+		here = _FIRST_ENTRY(xattr);
 		while (!IS_LAST_ENTRY(here)) {
 			struct aeon_xattr_entry *next = AEON_XATTR_NEXT(here);
 			if ((char *)next >= end)
@@ -253,14 +274,25 @@ bad_block:
 			last = next;
 		}
 
+		/* Check whether we have enough space left. */
 		free = min_offs - ((char *)last - (char *)header) - sizeof(__u32);
 	} else {
+		/* We will use a new extended attribute block. */
 		free = sb->s_blocksize -
 			sizeof(struct aeon_xattr_header) - sizeof(__u32);
 		here = last = NULL;
 	}
 
 	if (not_found) {
+		/* Request to remove a nonexistent attribute? */
+		err = -ENODATA;
+		if (flags & XATTR_REPLACE)
+			goto cleanup;
+		err = 0;
+		if (value == NULL)
+			goto cleanup;
+	} else {
+		/* Request to create an existing attribute? */
 		err = -EEXIST;
 		if (flags & XATTR_CREATE)
 			goto cleanup;
@@ -278,30 +310,36 @@ bad_block:
 	if (free < AEON_XATTR_LEN(name_len) + AEON_XATTR_SIZE(value_len))
 		goto cleanup;
 
+	/* Here we know that we can set the new attribute. */
+
 	if (header) {
 		if (header->h_refcount == cpu_to_le32(1)) {
 			__u32 hash = le32_to_cpu(header->h_hash);
+
+			aeon_info("modifying in-place\n");
 			mb_cache_entry_delete(EA_BLOCK_CACHE(inode), hash,
-					      blocknr);
+					      0);
 		} else {
 			int offset;
 
 			header = kmalloc((1<<AEON_SHIFT), GFP_KERNEL);
-			if (header == NULL) {
-				err = -ENOMEM;
+			err = -ENOMEM;
+			if (header == NULL)
 				goto cleanup;
-			}
-			memcpy(header, HDR(sb, blocknr), 1<<AEON_SHIFT);
+
+			/*
+			 * can it be improved?
+			 */
+			memcpy(header, _HDR(xattr), 1<<AEON_SHIFT);
 			header->h_refcount = cpu_to_le32(1);
 
-			offset = (char *)here - (char *)FIRST_ENTRY(sb, blocknr);
-			aeon_dbg("dbg1 offset %d\n", offset);
-			here = ENTRY(sb, blocknr, offset);
-			offset = (char *)last - (char *)FIRST_ENTRY(sb, blocknr);
-			aeon_dbg("dbg2 offset %d\n", offset);
-			last = ENTRY(sb, blocknr, offset);
+			offset = (char *)here - (char *)_FIRST_ENTRY(xattr);
+			here = _ENTRY((char *)header + offset);
+			offset = (char *)last - (char *)_FIRST_ENTRY(xattr);
+			last = _ENTRY((char *)xattr + offset);
 		}
 	} else {
+		/* Allocate a buffer where we construct the new block. */
 		header = kzalloc(sb->s_blocksize, GFP_KERNEL);
 		err = -ENOMEM;
 		if (header == NULL)
@@ -309,10 +347,13 @@ bad_block:
 		end = (char *)header + sb->s_blocksize;
 		header->h_magic = cpu_to_le32(AEON_XATTR_MAGIC);
 		header->h_blocks = header->h_refcount = cpu_to_le32(1);
-		last = here = ENTRY(sb, blocknr, 0);
+		last = here = _ENTRY(header+1);
 	}
 
+	/* Iff we are modifying the block in-place, xattr obj is locked here. */
+
 	if (not_found) {
+		/* Insert the new name */
 		size_t size = AEON_XATTR_LEN(name_len);
 		size_t rest = (char *)last - (char *)here;
 		memmove((char *)here + size, here, rest);
@@ -336,12 +377,14 @@ bad_block:
 				goto skip_replace;
 			}
 
+			/* Remove the old value */
 			memmove(first_val + size, first_val, val - first_val);
 			memset(first_val, 0, size);
 			here->e_value_offs = 0;
 			min_offs += size;
 
-			last = FIRST_ENTRY(sb, blocknr);
+			/* Adjust all value offsets. */
+			last = _ENTRY(header+1);
 			while (!IS_LAST_ENTRY(last)) {
 				size_t o = le16_to_cpu(last->e_value_offs);
 				if (!last->e_value_block && o < offs)
@@ -352,7 +395,7 @@ bad_block:
 		}
 		if (value == NULL) {
 			size_t size = AEON_XATTR_LEN(name_len);
-			last = LAST_ENTRY(sb, blocknr);
+			last = _ENTRY((char *)last - size);
 			memmove(here, (char *)here + size,
 				(char *)last - (char *)here);
 			memset(last, 0, size);
@@ -360,6 +403,7 @@ bad_block:
 	}
 
 	if (value != NULL) {
+		/* Insert the new value */
 		here->e_value_size = cpu_to_le32(value_len);
 		if (value_len) {
 			size_t size = AEON_XATTR_SIZE(value_len);
@@ -372,18 +416,47 @@ bad_block:
 	}
 
 skip_replace:
-	return -ENOSPC;
-	if (IS_LAST_ENTRY(ENTRY(sb, blocknr, 0))) {
-		//err = aeon_xattr_set2(inode, bh, NULL);
+	if (IS_LAST_ENTRY(_ENTRY(header+1))) {
+		err = aeon_xattr_set2(inode, xattr, NULL);
 		// not set next block
 	} else {
 		aeon_xattr_rehash(header, here);
+		err = aeon_xattr_set2(inode, xattr, header);
 	}
 
 cleanup:
 	up_write(&sih->xattr_sem);
 
 	return err;
+}
+
+static int
+aeon_xattr_set2(struct inode *inode, u64 addr,
+		struct aeon_xattr_header *header)
+{
+	//struct super_block *sb = inode->i_sb;
+	u64 new_addr;
+	int err;
+	//struct mb_cache *ea_block_cache = EA_BLOCK_CACHE(inode);
+
+	if (header) {
+		new_addr = aeon_xattr_cache_find(inode, header);
+		if (new_addr) {
+			/* We found an identical block in the cache */
+			if (new_addr == addr)
+				aeon_dbg("Keeping this block\n");
+			else {
+				/* The old block is released after updating
+				   the inode */
+				aeon_dbg("reusing block\n");
+
+				err = dquot_alloc_block(inode, 1);
+			}
+		} else if (addr && header == _HDR(addr)) {
+		} else {
+		}
+	 }
+	return 0;
 }
 
 static int
@@ -401,6 +474,12 @@ aeon_xattr_cache_insert(struct mb_cache *cache,
 	}
 
 	return err;
+}
+
+static u64
+aeon_xattr_cache_find(struct inode *inode, struct aeon_xattr_header *header)
+{
+	return 0;
 }
 
 
@@ -441,9 +520,6 @@ static inline void aeon_xattr_hash_entry(struct aeon_xattr_header *header,
 static void aeon_xattr_rehash(struct aeon_xattr_header *header,
 			      struct aeon_xattr_entry *entry)
 {
-	struct aeon_xattr_entry *here;
-	__u32 hash = 0;
-
 	aeon_xattr_hash_entry(header, entry);
 }
 

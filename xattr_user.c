@@ -28,8 +28,6 @@ static int aeon_xattr_user_set(const struct xattr_handler *handler,
 	if (!test_opt(inode->i_sb, XATTR_USER))
 		return -EOPNOTSUPP;
 
-	aeon_dbg("let's get\n");
-
 	return aeon_xattr_set(inode, AEON_XATTR_INDEX_USER,
 			      name, value, size, flags);
 }

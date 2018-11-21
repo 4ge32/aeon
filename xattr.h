@@ -16,11 +16,12 @@
 #define AEON_XATTR_INDEX_SECURITY	        6
 
 struct aeon_xattr_header {
-	__le32	h_magic;	/* magic number for identification */
-	__le32	h_refcount;	/* reference count */
-	__le32	h_blocks;	/* number of disk blocks used */
-	__le32	h_hash;		/* hash value of all attributes */
-	__u32	h_reserved[4];	/* zero right now */
+	rwlock_t   x_lock;
+	__le32     h_magic;		/* magic number for identification */
+	__le32	   h_refcount;		/* reference count */
+	__le32	   h_blocks;		/* number of disk blocks used */
+	__le32	   h_hash;		/* hash value of all attributes */
+	__u32	   h_reserved[4];	/* zero right now */
 };
 
 struct aeon_xattr_entry {

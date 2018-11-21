@@ -3,7 +3,7 @@
 FS="aeon"
 DEV=/dev/pmem0
 MOUNT_POINT=/mnt
-OPT=init,dax,wprotect
+OPT=init,dax,wprotect,user_xattr
 
 run () {
   sudo insmod $FS.ko

@@ -560,6 +560,7 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_extents_block(struct super_block *sb);
 u64 aeon_get_new_blk(struct super_block *sb);
+u64 aeon_get_xattr_blk(struct super_block *sb);
 
 /* inode.c */
 int aeon_init_inode_inuse_list(struct super_block *sb);
