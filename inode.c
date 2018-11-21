@@ -657,8 +657,7 @@ int aeon_free_dram_resource(struct super_block *sb,
 
 	if (S_ISREG(pi->i_mode)) {
 		//last_blocknr = nova_get_last_blocknr(sb, sih);
-		//freed = nova_delete_file_tree(sb, sih, 0,
-		//			last_blocknr, false, false, 0);
+		aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 	} else {
 		aeon_delete_dir_tree(sb, sih);
 		freed = 1;

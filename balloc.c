@@ -31,8 +31,16 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 void aeon_delete_free_lists(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	struct rb_root *disposal;
+	int i;
 
-	/* Each tree is freed in save_blocknode_mappings */
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = aeon_get_free_list(sb, i);
+		disposal = &free_list->block_free_tree;
+		aeon_destroy_range_node_tree(sb, disposal);
+
+	}
 	kfree(sbi->free_lists);
 	sbi->free_lists = NULL;
 }

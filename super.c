@@ -70,11 +70,11 @@ static void aeon_put_super(struct super_block *sb)
 		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
 			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
+		aeon_free_inode_node(inode_map->first_inode_range);
 	}
 
 	if (sbi->virt_addr) {
 		/* Save everything before blocknode mapping! */
-		sbi->virt_addr = NULL;
 	}
 
 	kfree(sbi->oq);
