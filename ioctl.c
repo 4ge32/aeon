@@ -210,18 +210,20 @@ setversion_out:
 			struct aeon_inode *pidir;
 
 			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+			pidir->csum = 91;
+			break;
+		}
+		case RENAME_ID1: {
+			/* links count is not added */
+			struct aeon_inode *pidir;
 
+			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+			pidir->i_links_count--;
 			pidir->csum = 91;
 			aeon_dbg("ino %u\n", le32_to_cpu(pidir->aeon_ino));
 			aeon_dbg("LAST!!\n");
 			break;
 		}
-		case RENAME_ID1:
-			de->csum = 0;
-			//pi->i_dentry_block = 0;
-			//pi->i_d_internal_off = 0;
-			//pi->i_inode_block = 0;
-			break;
 		case RENAME_ID2:
 			de->csum = 0;
 			break;

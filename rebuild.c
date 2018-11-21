@@ -321,13 +321,14 @@ static int aeon_recover_child_again(struct super_block *sb,
 	links = le64_to_cpu(pi->i_links_count);
 	entries = de_map->num_dentries;
 
-	//if (links > candidate) {
-	//	aeon_info("Not enough candidate - search more from a list\n");
-	//} else if (links < candidate) {
-	//	aeon_info("More candidate than expected - update the num of links\n");
-	//	links = candidate;
-	//	pi->i_links_count = cpu_to_le64(links);
-	//}
+	if (links > candidate + entries) {
+		aeon_info("Not enough candidate(%d) - search more from a list\n",
+			  candidate);
+	} else if (links < candidate + entries) {
+		aeon_info("More candidate than expected - update the num of links\n");
+		links = candidate + entries;
+		pi->i_links_count = cpu_to_le64(links);
+	}
 
 	lost = links - entries;
 	aeon_info("let's recover %lu objs\n", lost);
