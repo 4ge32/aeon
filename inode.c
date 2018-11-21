@@ -448,12 +448,12 @@ found:
 	return pi_addr;
 }
 
-static inline u64 aeon_get_reserved_inode_addr(struct super_block *sb, u32 ino)
+static u64 aeon_get_inode_addr_on_pmem(struct super_block *sb, u32 ino)
 {
 	u64 addr = 0;
 
 	if (ino == AEON_ROOT_INO)
-		addr =  _aeon_get_reserved_inode_addr(sb, ino);
+		addr = aeon_get_reserved_inode_addr(sb, ino);
 	else
 		addr = aeon_get_created_inode_addr(sb, ino);
 
@@ -583,7 +583,7 @@ struct inode *aeon_iget(struct super_block *sb, u32 ino)
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	pi_addr = aeon_get_reserved_inode_addr(sb, ino);
+	pi_addr = aeon_get_inode_addr_on_pmem(sb, ino);
 
 	//aeon_dbgv("%s: nvmm 0x%llx\n", __func__, pi_addr);
 

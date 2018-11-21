@@ -490,7 +490,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	int inode_start = sbi->cpus;
 
 	sbi->aeon_sb = aeon_get_super(sb);
-	root_i = aeon_get_inode_by_ino(sb, AEON_ROOT_INO);
+	root_i = aeon_get_reserved_inode_ino(sb, AEON_ROOT_INO);
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT) {
 		aeon_init_super_block(sb, size);
 		aeon_init_root_inode(sb, root_i);
@@ -683,7 +683,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	aeon_dbg("Mount filesystem\n");
-	__test(sb);
+	//__test(sb);
 
 	return 0;
 

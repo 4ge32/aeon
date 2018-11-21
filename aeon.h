@@ -377,31 +377,27 @@ static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi) {
 	return (u64)sbi->virt_addr;
 }
 
-static inline u64 _aeon_get_reserved_inode_addr(struct super_block *sb,
-						u64 inode_number)
+static inline
+u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 inode_number)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
-	return aeon_get_addr_off(sbi) + AEON_SB_SIZE
-		+ (inode_number % 32 - 1) * AEON_INODE_SIZE;
+	return aeon_get_addr_off(sbi) + AEON_SB_SIZE +
+		(inode_number % 32 - 1) * AEON_INODE_SIZE;
 }
 
-static inline struct aeon_inode *aeon_get_reserved_inode(struct super_block *sb,
-							 u64 inode_number)
+static inline
+struct aeon_inode *aeon_get_reserved_inode(struct super_block *sb, u64 ino)
 {
-	u64 addr;
-
-	addr = _aeon_get_reserved_inode_addr(sb, inode_number);
-
-	return (struct aeon_inode *)addr;
+	return (struct aeon_inode *)aeon_get_reserved_inode_addr(sb, ino);
 }
 
-static inline struct aeon_inode *aeon_get_inode_by_ino(struct super_block *sb,
-						       u64 ino)
+static inline
+struct aeon_inode *aeon_get_reserved_inode_ino(struct super_block *sb, u64 ino)
 {
 	if (ino == 0)
 		return NULL;
-	return aeon_get_reserved_inode(sb, ino);
+	return (struct aeon_inode *)aeon_get_reserved_inode_addr(sb, ino);
 }
 
 static inline
