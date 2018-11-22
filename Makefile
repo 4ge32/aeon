@@ -2,13 +2,18 @@
 # Makefile for the linux filesystem.
 #
 CONFIG_AEON_FS_XATTR=y
-ccflags-y := -DCONFIG_AEON_FS_XATTR
+ccflags-y += -DCONFIG_AEON_FS_XATTR
+ccflags-y += -I$(src)/libaeon
 
 obj-m += aeon.o
 
-aeon-y := super.o balloc.o inode.o mprotect.o namei.o dir.o  \
+aeon-y += 	$(addprefix libaeon/, \
+		malloc.o \
+		tree.o \
+		)
+
+aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \
 	file.o extents.o rebuild.o symlink.o debug.o ioctl.o \
-	malloc.o tree.o
 
 aeon-$(CONFIG_AEON_FS_XATTR) += xattr.o xattr_user.o
 

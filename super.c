@@ -12,7 +12,7 @@
 
 #include "aeon.h"
 #include "xattr.h"
-#include "aeon_malloc.h"
+#include "libaeon/aeon_malloc.h"
 
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
