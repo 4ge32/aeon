@@ -365,6 +365,7 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long new_blocknr = 0;
 	long ret_blocks = 0;
 	int retried = 0;
+	u64 addr;
 
 	num_blocks = num * aeon_get_numblocks(btype);
 
@@ -412,6 +413,9 @@ alloc:
 	}
 
 	*blocknr = new_blocknr;
+
+	addr = (new_blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
+	memset((void *)addr, 0, ret_blocks * 4096);
 
 	return ret_blocks / aeon_get_numblocks(btype);
 }
