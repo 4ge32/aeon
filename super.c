@@ -515,6 +515,106 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	return root_i;
 }
 
+void __test2(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_region_table *art;
+	struct tt_root *tree;
+	struct tt_node *temp;
+	struct aeon_range_node *curr;
+	int i;
+
+	aeon_dbg("LOOKUP\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		art = aeon_get_rtable(sb, i);
+		art->pmem_pool_addr = pmem_create_pool(sb, i);
+
+		tree = &art->block_free_tree;
+		temp = tt_first(tree);
+		while (temp) {
+			curr = container_of(temp, struct aeon_range_node, tt_node);
+			aeon_dbg("key:%lu - node:range_low:%lu\n", temp->key, curr->range_low);
+			temp = tt_next(temp);
+		}
+	}
+
+	aeon_dbg("INSERT\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		int err;
+		int j = 0;
+
+		art = aeon_get_rtable(sb, i);
+		tree = &art->block_free_tree;
+		temp = tt_first(tree);
+		for (j = 0; j < 1; j++) {
+			struct aeon_range_node *blknode;
+
+			blknode = aeon_pmem_alloc_range_node(sb, i);
+			if (!blknode) {
+				aeon_err(sb, "pmem2...\n");
+				return;
+			}
+			blknode->range_low = j + i + 10;
+			blknode->range_high = j + i + 10 * 10;
+
+			err = aeon_pmem_insert_blocktree(&blknode->tt_node, tree);
+			if (err) {
+				aeon_err(sb, "What?\n");
+				return;
+			}
+		}
+	}
+
+	aeon_dbg("LOOKUP2\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		art = aeon_get_rtable(sb, i);
+
+		tree = &art->block_free_tree;
+		temp = tt_first(tree);
+		while (temp) {
+			curr = container_of(temp, struct aeon_range_node, tt_node);
+			aeon_dbg("key:%lu - node:range_low:%lu\n", temp->key, curr->range_low);
+			temp = tt_next(temp);
+		}
+	}
+
+	aeon_dbg("ERASE\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		struct tt_node *next;
+		int err;
+
+		art = aeon_get_rtable(sb, i);
+		tree = &art->block_free_tree;
+		next = tt_first(tree);
+		while (next) {
+			temp = next;
+			curr = container_of(temp, struct aeon_range_node, tt_node);
+			aeon_dbg("key:%lu - node:range_low:%lu\n",
+				 temp->key, curr->range_low);
+			next = tt_next(temp);
+			err = tt_erase(temp, tree);
+			if (err)
+				aeon_err(sb, "erase...\n");
+			pmem_free(temp);
+		}
+	}
+
+	aeon_dbg("ERASE?\n");
+	for (i = 0; i < sbi->cpus; i++) {
+		aeon_dbg("cpu %d\n", i);
+		art = aeon_get_rtable(sb, i);
+
+		tree = &art->block_free_tree;
+		temp = tt_first(tree);
+		while (temp) {
+			curr = container_of(temp, struct aeon_range_node, tt_node);
+			aeon_dbg("key:%lu - node:range_low:%lu\n",
+				 temp->key, curr->range_low);
+			temp = tt_next(temp);
+		}
+	}
+}
+
 void __test(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -544,12 +644,15 @@ void __test(struct super_block *sb)
 			blknode->range_low = free_list->block_start;
 		blknode->range_low += AEON_PAGES_FOR_INODE;
 		blknode->range_high = free_list->block_end;
-		err = tt_insert(&blknode->tt_node, tree);
+
+		err = aeon_pmem_insert_blocktree(&blknode->tt_node, tree);
 		if (err) {
 			aeon_err(sb, "What the hell am I doing?\n");
 			return;
 		}
 	}
+
+	__test2(sb);
 
 }
 
@@ -683,7 +786,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	aeon_dbg("Mount filesystem\n");
-	//__test(sb);
+	__test(sb);
 
 	return 0;
 

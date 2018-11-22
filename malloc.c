@@ -1,12 +1,10 @@
 #include <linux/module.h>
 #include "aeon.h"
 
-struct allocator_state {
-	int initialized;
-	void *head;
-	void *next;
-	void *last;
-};
+//struct pmem_allocator {
+//	u64 curr;
+//	u64 next;
+//};
 
 struct mem_control_block {
 	int is_used;
@@ -81,7 +79,7 @@ alloc:
 	}
 
 	memory_location += sizeof(struct mem_control_block);
-	aeon_dbg("0x%llx", (u64)memory_location);
+	//aeon_dbg("0x%llx", (u64)memory_location);
 
 	spin_unlock(&art->r_lock);
 
