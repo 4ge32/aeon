@@ -802,7 +802,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 }
 
 int aeon_update_time(struct inode *inode,
-		     struct timespec *time, int flags)
+		     struct timespec64 *time, int flags)
 {
 	struct aeon_inode *pi;
 
