@@ -221,12 +221,19 @@ setversion_out:
 			pidir->i_links_count--;
 			pidir->csum = 91;
 			aeon_dbg("ino %u\n", le32_to_cpu(pidir->aeon_ino));
+			break;
+		}
+		case RENAME_ID2: {
+			/* links count is not substracted */
+			struct aeon_inode *pidir;
+
+			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+			pidir->i_links_count++;
+			pidir->csum = 91;
+			aeon_dbg("ino %u\n", le32_to_cpu(pidir->aeon_ino));
 			aeon_dbg("LAST!!\n");
 			break;
 		}
-		case RENAME_ID2:
-			de->csum = 0;
-			break;
 		default:
 			return -EFAULT;
 		}

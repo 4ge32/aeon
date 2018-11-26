@@ -322,8 +322,9 @@ static int aeon_recover_child_again(struct super_block *sb,
 	entries = de_map->num_dentries;
 
 	if (links > candidate + entries) {
-		aeon_info("Not enough candidate(%d) - search more from a list\n",
+		aeon_info("Not enough candidate(%d) - update the num of links\n",
 			  candidate);
+		links = candidate + entries;
 	} else if (links < candidate + entries) {
 		aeon_info("More candidate than expected - update the num of links\n");
 		links = candidate + entries;
@@ -363,6 +364,8 @@ static int aeon_recover_child_again(struct super_block *sb,
 		list_del(&oq->obj_queue);
 		kfree(oq);
 	}
+
+	aeon_update_inode_csum(pi);
 
 	return 0;
 }

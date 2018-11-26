@@ -647,3 +647,44 @@ test-recover-11 ()
 
   clean
 }
+
+test-recover-12 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test_im 3 9
+
+  clean
+}
+
+test-recover-13 ()
+{
+  init
+
+  a=3
+  b=10
+  TARGET="dram"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  for i in $OBJ
+  do
+    touch $DIR/$i
+  done
+  for i in $RES
+  do
+    touch $TMP/$i
+  done
+  rm $DIR/dark
+  ./attack_metadata $a $b $DIR/$TARGET
+  ./run.sh rm
+  diff $TMP $DIR
+  res=$?
+
+  clean
+}
+

@@ -138,7 +138,7 @@ write ()
 
 recover ()
 {
-  N=11
+  N=13
   func="recover"
   for num in `seq 1 $N`
   do
