@@ -225,7 +225,7 @@ static int aeon_check_pidir(struct aeon_inode *pi,
 				int state)
 {
 	if (state == PARENT_PERSIST) {
-		pi->i_links_count = cpu_to_le64(de_map->num_dentries);
+		de_map->num_dentries = le64_to_cpu(pi->i_links_count);
 		return 0;
 	}
 

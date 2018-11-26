@@ -438,28 +438,6 @@ test-write-1 ()
   clean
 }
 
-test-write-2 ()
-{
-  init
-
-  cat article-1 > $TMP/art
-  cat article-1 > $DIR/art
-  diff $TMP $DIR
-  res=$?
-  clean
-}
-
-test-write-3 ()
-{
-  init
-
-  cat article-2 > $TMP/art
-  cat article-2 > $DIR/art
-  diff $TMP $DIR
-  res=$?
-  clean
-}
-
 helper_recover_test ()
 {
   if [ ! -e attack_metadata ]; then

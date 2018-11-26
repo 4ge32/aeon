@@ -119,7 +119,7 @@ mmap ()
 
 write ()
 {
-  N=3
+  N=1
   func="write"
   for num in `seq 1 $N`
   do

@@ -735,9 +735,9 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	struct rb_root *tree;
 	struct rb_node *temp;
 	struct aeon_range_node *node;
-
 	unsigned long blocknr = 0;
 	u64 addr = (u64)sbi->virt_addr + AEON_SB_SIZE + AEON_INODE_SIZE;
+	u64 temp_addr;
 	__le64 *table_blocknr;
 
 	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
@@ -759,6 +759,8 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	node = container_of(temp, struct aeon_range_node, node);
 
 	blocknr = node->range_low;
+	temp_addr = (blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
+	memset((void *)temp_addr, 0, 4096 * AEON_PAGES_FOR_INODE);
 	node->range_low += AEON_PAGES_FOR_INODE;
 
 	free_list->num_free_blocks -= AEON_PAGES_FOR_INODE;
