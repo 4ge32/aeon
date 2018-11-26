@@ -377,20 +377,18 @@ err:
 u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode_map *inode_map;
-	int map_id;
+	int cpu_id;
 	int ret;
 	u32 ino = 0;
 	u32 free_ino = 0;
 
-	map_id = aeon_sb->s_map_id;
-	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
-	inode_map = &sbi->inode_maps[map_id];
+	cpu_id = aeon_get_cpuid(sb);
+	inode_map = &sbi->inode_maps[cpu_id];
 
 	mutex_lock(&inode_map->inode_table_mutex);
 
-	ret = aeon_alloc_unused_inode(sb, map_id, &free_ino, inode_map);
+	ret = aeon_alloc_unused_inode(sb, cpu_id, &free_ino, inode_map);
 	if (ret) {
 		aeon_err(sb, "%s: alloc inode num failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);
@@ -398,7 +396,7 @@ u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 	}
 
 	ret = aeon_get_new_inode_address(sb, free_ino, pi_addr,
-					 map_id, inode_map);
+					 cpu_id, inode_map);
 	if (!ret) {
 		aeon_err(sb, "%s: get inode addr failed %d\n", __func__, ret);
 		mutex_unlock(&inode_map->inode_table_mutex);
