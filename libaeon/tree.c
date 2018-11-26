@@ -81,7 +81,6 @@ int tt_insert(unsigned long key, struct tt_node *new, struct tt_root *tree)
 	while (temp) {
 		parent = temp;
 		compVal = compare_node(temp, key);
-		aeon_dbg("temp->key %lu key %lu\n", temp->key, key);
 		if (compVal == -1)
 			temp = temp->tt_left;
 		else if (compVal == 1)
@@ -111,6 +110,7 @@ int tt_erase(struct tt_node *target, struct tt_root *tree)
 		return -ENOENT;
 
 	if (target->tt_left && target->tt_right) {
+		aeon_dbg("Both\n");
 		temp_parent = target;
 		temp = target->tt_right;
 		while (temp->tt_left) {
@@ -120,13 +120,25 @@ int tt_erase(struct tt_node *target, struct tt_root *tree)
 
 		target = temp;
 	} else if (target->tt_left) {
-		if (target == tree->tt_node)
+		if (target == tree->tt_node) {
 			tree->tt_node = target->tt_left;
+			aeon_dbg("Left1\n");
+		}
 		else {
-			if (target->parent->tt_left == target)
+			if (target->parent->tt_left == target) {
+				aeon_dbg("Left2\n");
 				target->parent->tt_left = target->tt_left;
-			else
-				target->parent->tt_right = target->tt_left;
+			}
+			else {
+				aeon_dbg("Left3\n");
+				if (target->parent->key < target->tt_left->key) {
+					target->parent->tt_left = target->tt_left;
+					target->parent->tt_right = NULL;
+				} else {
+					target->parent->tt_right = target->tt_left;
+					target->parent->tt_left = NULL;
+				}
+			}
 
 			target->tt_left->parent = target->parent;
 		}
@@ -170,7 +182,6 @@ int aeon_pmem_insert_blocktree(struct tt_node *node, struct tt_root *tree)
 	struct aeon_range_node *curr;
 
 	curr = container_of(node, struct aeon_range_node, tt_node);
-	aeon_dbg("!! %lu\n", curr->range_low);
 	node->key = curr->range_low;
 	return tt_insert(node->key, node, tree);
 }

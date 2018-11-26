@@ -46,6 +46,7 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define AEON_IOC_INODE_ATTACK		_IOWR('f', 5, long)
 #define AEON_IOC_DENTRY_ATTACK		_IOWR('f', 6, long)
 #define AEON_IOC_CHILD_ID_ATTACK	_IOWR('f', 7, long)
+#define AEON_IOC_TEST_LIBAEON		_IOWR('f', 8, long)
 
 /*
  * ioctl commands in 32 bit emulation

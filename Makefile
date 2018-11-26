@@ -10,6 +10,7 @@ obj-m += aeon.o
 aeon-y += 	$(addprefix libaeon/, \
 		malloc.o \
 		tree.o \
+		libtest.o \
 		)
 
 aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \

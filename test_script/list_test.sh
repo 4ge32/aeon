@@ -1,5 +1,6 @@
 DIR=/mnt
 TMP=/tmp/aeon_test
+TEST_AEON=aeonfstest
 
 source ./makeManyfile.sh
 
@@ -9,6 +10,9 @@ init () {
 
 clean () {
   rm -r $TMP 1>/dev/null
+  if [ -e $TEST_AEON ]; then
+    rm $TEST_AEON
+  fi
 }
 
 # directory operations
@@ -440,8 +444,8 @@ test-write-1 ()
 
 helper_recover_test ()
 {
-  if [ ! -e attack_metadata ]; then
-    gcc -o attack_metadata attack_metadata.c
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
   fi
 
   for i in $OBJ
@@ -452,7 +456,7 @@ helper_recover_test ()
   do
     touch $TMP/$i
   done
-  ./attack_metadata $1 $2 $DIR/$TARGET
+  ./$TEST_AEON $1 $2 $DIR/$TARGET
   ./run.sh rm
   diff $TMP $DIR
   res=$?
@@ -460,8 +464,8 @@ helper_recover_test ()
 
 helper_recover_test_im ()
 {
-  if [ ! -e attack_metadata ]; then
-    gcc -o attack_metadata attack_metadata.c
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
   fi
 
   for i in $OBJ
@@ -472,7 +476,7 @@ helper_recover_test_im ()
   do
     touch $TMP/$i
   done
-  ./attack_metadata $1 $2 $DIR/$TARGET
+  ./$TEST_AEON $1 $2 $DIR/$TARGET
   ./run.sh rm
   touch $TMP/MARS
   touch $DIR/MARS
@@ -658,7 +662,7 @@ test-recover-13 ()
     touch $TMP/$i
   done
   rm $DIR/dark
-  ./attack_metadata $a $b $DIR/$TARGET
+  ./$TEST_AEON $a $b $DIR/$TARGET
   ./run.sh rm
   diff $TMP $DIR
   res=$?
@@ -666,3 +670,17 @@ test-recover-13 ()
   clean
 }
 
+test-libaeon-1 ()
+{
+  init
+
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
+  touch $DIR/fake
+  ./$TEST_AEON 4 1 $DIR/fake
+  res=$?
+
+  clean
+}

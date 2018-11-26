@@ -9,11 +9,13 @@
 #define AEON_IOC_INODE_ATTACK		_IOWR('f', 5, long)
 #define AEON_IOC_DENTRY_ATTACK		_IOWR('f', 6, long)
 #define AEON_IOC_CHILD_ID_ATTACK	_IOWR('f', 7, long)
+#define AEON_IOC_TEST_LIBAEON		_IOWR('f', 8, long)
 
-enum attack_type {
+enum test_type {
 	DENTRY = 1,
 	INODE,
 	BOTH_OF_CHILD,
+	LIBAEON,
 };
 
 enum failure_type {
@@ -32,7 +34,7 @@ enum failure_type {
 int main(int argc, char *argv[])
 {
 	char *path;
-	unsigned long attack_type;
+	unsigned long test_type;
 	int target;
 	int fd;
 	int err;
@@ -49,14 +51,16 @@ int main(int argc, char *argv[])
 
 	switch (target) {
 	case INODE:
-		attack_type = AEON_IOC_INODE_ATTACK;
+		test_type = AEON_IOC_INODE_ATTACK;
 		break;
 	case DENTRY:
-		attack_type = AEON_IOC_DENTRY_ATTACK;
+		test_type = AEON_IOC_DENTRY_ATTACK;
 		break;
 	case BOTH_OF_CHILD:
-		attack_type =  AEON_IOC_CHILD_ID_ATTACK;
+		test_type =  AEON_IOC_CHILD_ID_ATTACK;
 		break;
+	case LIBAEON:
+		test_type = AEON_IOC_TEST_LIBAEON;
 	}
 
 	if ((fd = open(path, O_RDWR)) < 0) {
@@ -64,7 +68,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	if ((err = ioctl(fd, attack_type, &arg)) < 0) {
+	if ((err = ioctl(fd, test_type, &arg)) < 0) {
 		perror("ioctl: ");
 		goto close_fd;
 	}

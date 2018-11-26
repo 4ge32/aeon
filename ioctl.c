@@ -3,6 +3,7 @@
 #include <linux/uaccess.h>
 
 #include "aeon.h"
+#include "libaeon/aeon_libtest.h"
 
 enum failure_type {
 	CREATE = 1,
@@ -238,6 +239,14 @@ setversion_out:
 			return -EFAULT;
 		}
 
+		return 0;
+	}
+	case AEON_IOC_TEST_LIBAEON: {
+		aeon_info("TEST LIBAEON START\n");
+		if (!_test(sb)) {
+			//BUG();
+			aeon_err(sb, "LIBAEON\n");
+		}
 		return 0;
 	}
 	default:

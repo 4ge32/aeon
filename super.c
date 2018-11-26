@@ -515,7 +515,7 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 	return root_i;
 }
 
-void __test2(struct super_block *sb)
+void ___test2(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_region_table *art;
@@ -652,8 +652,7 @@ void __test(struct super_block *sb)
 		}
 	}
 
-	__test2(sb);
-
+	___test2(sb);
 }
 
 static int aeon_fill_super(struct super_block *sb, void *data, int silent)
@@ -786,7 +785,6 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	aeon_dbg("Mount filesystem\n");
-	__test(sb);
 
 	return 0;
 

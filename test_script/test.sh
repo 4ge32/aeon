@@ -9,6 +9,25 @@ FAILED ()
 {
   echo -e "\t [FAILED]"
 }
+
+_do_test ()
+{
+  N=$1
+  for num in `seq 1 $N`
+  do
+    res=1
+    ./run.sh
+    echo -n "test-$2-$num"
+    test-$2-$num
+    if [ "$res" = "0" ]; then
+      OK
+    else
+      FAILED
+    fi
+    ./run.sh clean
+  done
+}
+
 rename ()
 {
   N=5
@@ -138,21 +157,12 @@ write ()
 
 recover ()
 {
-  N=13
-  func="recover"
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-$func-$num"
-    test-$func-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 13 recover
+}
+
+libaeon ()
+{
+  _do_test 1 libaeon
 }
 
 source ./list_test.sh
@@ -182,6 +192,9 @@ case "$1" in
     ;;
   recover)
     recover
+    ;;
+  libaeon)
+    libaeon
     ;;
   all)
     mmap
