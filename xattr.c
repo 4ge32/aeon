@@ -81,9 +81,9 @@ static const struct xattr_handler *aeon_xattr_handler_map[] = {
 	[AEON_XATTR_INDEX_POSIX_ACL_ACCESS]  = &posix_acl_access_xattr_handler,
 	[AEON_XATTR_INDEX_POSIX_ACL_DEFAULT] = &posix_acl_default_xattr_handler,
 #endif
-	//[AEON_XATTR_INDEX_TRUSTED]	     = &aeon_xattr_trusted_handler,
+	[AEON_XATTR_INDEX_TRUSTED]	     = &aeon_xattr_trusted_handler,
 #ifdef CONFIG_AEON_FS_SECURITY
-	//[AEON_XATTR_INDEX_SECURITY]	     = &aeon_xattr_security_handler,
+	[AEON_XATTR_INDEX_SECURITY]	     = &aeon_xattr_security_handler,
 #endif
 };
 
@@ -91,13 +91,13 @@ static const struct xattr_handler *aeon_xattr_handler_map[] = {
 
 const struct xattr_handler *aeon_xattr_handlers[] = {
 	&aeon_xattr_user_handler,
-	//&aeon_xattr_trusted_handler,
+	&aeon_xattr_trusted_handler,
 #ifdef CONFIG_AEON_FS_POSIX_ACL
 	&posix_acl_access_xattr_handler,
 	&posix_acl_default_xattr_handler,
 #endif
 #ifdef CONFIG_AEON_FS_SECURITY
-	//&aeon_xattr_security_handler,
+	&aeon_xattr_security_handler,
 #endif
 	NULL
 };

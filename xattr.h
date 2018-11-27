@@ -46,7 +46,8 @@ extern const struct xattr_handler aeon_xattr_security_handler;
 extern ssize_t aeon_listxattr(struct dentry *, char *, size_t);
 
 extern int aeon_xattr_get(struct inode *, int, const char *, void *, size_t);
-extern int aeon_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
+extern int aeon_xattr_set(struct inode *, int, const char *,
+			  const void *, size_t, int);
 
 extern void aeon_xattr_delete_inode(struct inode *);
 
