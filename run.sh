@@ -4,6 +4,7 @@ FS="aeon"
 DEV=/dev/pmem0
 MOUNT_POINT=/mnt
 OPT=init,dax,wprotect,user_xattr
+R_OPT=dax,wprotect,user_xattr
 
 run () {
   sudo insmod $FS.ko
@@ -13,7 +14,7 @@ run () {
 remount_run() {
   # Now actual remount is not supported.
   sudo umount $MOUNT_POINT
-  sudo mount -t $FS -o dax $DEV $MOUNT_POINT
+  sudo mount -t $FS -o $R_OPT $DEV $MOUNT_POINT
 }
 
 debug_run() {

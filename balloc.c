@@ -843,6 +843,12 @@ u64 aeon_get_new_blk(struct super_block *sb)
 	return (blocknr << AEON_SHIFT);
 }
 
+/**
+ * aeon_get_xattr_blk - Get a block for extended attribution
+ *
+ * Return:
+ * The head address of the gotten block
+ */
 u64 aeon_get_xattr_blk(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
