@@ -762,7 +762,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih)
 {
 	unsigned long last_blocknr;
-	int ret;
+	int err;
 
 	pi->deleted = 1;
 	if (pi->valid)
@@ -793,11 +793,11 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		break;
 	}
 
-	ret = aeon_free_inode(sb, pi, sih);
-	if (ret)
+	err = aeon_free_inode(sb, pi, sih);
+	if (err)
 		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
 
-	return ret;
+	return err;
 }
 
 int aeon_update_time(struct inode *inode,
