@@ -168,7 +168,6 @@ struct aeon_sb_info {
 
 	/* used in recovery process */
 	struct obj_queue *oq;
-	struct obj_queue *spare_oq;
 
 	struct mb_cache *s_ea_block_cache;
 };

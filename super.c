@@ -78,7 +78,6 @@ static void aeon_put_super(struct super_block *sb)
 	}
 
 	kfree(sbi->oq);
-	kfree(sbi->spare_oq);
 	kfree(sbi->inode_maps);
 
 	kfree(sbi);
@@ -695,7 +694,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	ret = aeon_get_nvmm_info(sb, sbi);
 	if (ret)
-		goto out00;
+		goto out;
 
 	sbi->sb   = sb;
 	sbi->uid  = current_fsuid();
@@ -708,15 +707,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->oq = kzalloc(sizeof(struct obj_queue), GFP_KERNEL);
 	if (!sbi->oq) {
 		ret = -ENOMEM;
-		goto out000;
+		goto out;
 	}
 	INIT_LIST_HEAD(&sbi->oq->obj_queue);
-	sbi->spare_oq = kzalloc(sizeof(struct obj_queue), GFP_KERNEL);
-	if (!sbi->spare_oq) {
-		ret = -ENOMEM;
-		goto out00;
-	}
-	INIT_LIST_HEAD(&sbi->spare_oq->obj_queue);
 	sbi->inode_maps = kcalloc(sbi->cpus,
 				  sizeof(struct inode_map), GFP_KERNEL);
 	if(!sbi->inode_maps) {
@@ -797,9 +790,7 @@ out1:
 	kfree(sbi->inode_maps);
 out0:
 	kfree(sbi->oq);
-out00:
-	kfree(sbi->spare_oq);
-out000:
+out:
 	kfree(sbi);
 
 	aeon_err(sb, "%s failed: return %d\n", __func__, ret);

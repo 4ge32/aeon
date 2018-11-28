@@ -208,30 +208,38 @@ static int aeon_init_dentry_map(struct super_block *sb,
 	return 0;
 }
 
-static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pidir,
+static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pi,
 			    struct aeon_dentry_info *de_info, u32 ino)
 {
+	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_dentry *direntry;
 	struct aeon_dentry_map *de_map = &de_info->de_map;
 	unsigned long blocknr;
+	u64 de_addr = 0;
 	u64 pi_addr = 0;
+	u64 de_addr_base = 0;
 
-	blocknr = aeon_get_new_dentry_block(sb, &pi_addr);
+	blocknr = aeon_get_new_dentry_block(sb, &de_addr);
 	if (blocknr == 0)
 		return -ENOSPC;
 
-	direntry = (struct aeon_dentry *)pi_addr;
+	pi_addr = (u64)pi - (u64)sbi->virt_addr;
+	de_addr_base = de_addr - (u64)sbi->virt_addr;
+	direntry = (struct aeon_dentry *)de_addr;
 	strncpy(direntry->name, ".\0", 2);
 	direntry->name_len = 2;
-	direntry->ino = cpu_to_le32(pidir->aeon_ino);
+	direntry->ino = cpu_to_le32(pi->aeon_ino);
+	direntry->d_inode_addr = cpu_to_le64(pi_addr);
+	direntry->d_dentry_addr = cpu_to_le64(de_addr_base);
 	direntry->valid = 1;
 	direntry->persisted = 1;
 	aeon_update_dentry_csum(direntry);
 
-	direntry = (struct aeon_dentry *)(pi_addr + (1 << AEON_D_SHIFT));
+	de_addr_base += sizeof(struct aeon_dentry);
+	direntry = (struct aeon_dentry *)(de_addr + (1 << AEON_D_SHIFT));
 	strncpy(direntry->name, "..\0", 3);
 	direntry->name_len = 3;
-	direntry->ino = cpu_to_le32(pidir->parent_ino);
+	direntry->ino = cpu_to_le32(pi->parent_ino);
 	direntry->persisted = 1;
 	direntry->valid = 1;
 	aeon_update_dentry_csum(direntry);
