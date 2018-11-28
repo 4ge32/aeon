@@ -654,13 +654,8 @@ int aeon_free_dram_resource(struct super_block *sb,
 	    !(S_ISDIR(le16_to_cpu(pi->i_mode))))
 		return 0;
 
-	if (S_ISREG(pi->i_mode)) {
-		//last_blocknr = nova_get_last_blocknr(sb, sih);
-		aeon_destroy_range_node_tree(sb, &sih->rb_tree);
-	} else {
-		aeon_delete_dir_tree(sb, sih);
-		freed = 1;
-	}
+	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
+	freed = 1;
 
 	return freed;
 }
@@ -778,7 +773,9 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		break;
 	case S_IFDIR:
 		//aeon_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
-		aeon_delete_dir_tree(sb, sih);
+		err = aeon_delete_dir_tree(sb, sih);
+		if (err)
+			goto out;
 		break;
 	case S_IFLNK:
 		/* Log will be freed later */
@@ -795,8 +792,12 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 
 	err = aeon_free_inode(sb, pi, sih);
 	if (err)
-		aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
+		goto out;
 
+	return 0;
+
+out:
+	aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
 	return err;
 }
 

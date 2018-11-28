@@ -558,8 +558,8 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 				     struct aeon_inode *pi,
 				     struct inode *inode, const char *name,
 				     unsigned long name_len);
-void aeon_delete_dir_tree(struct super_block *sb,
-			  struct aeon_inode_info_header *sih);
+int aeon_delete_dir_tree(struct super_block *sb,
+			 struct aeon_inode_info_header *sih);
 struct aeon_dentry *aeon_dotdot(struct super_block *sb,
 				struct dentry *dentry);
 void aeon_set_link(struct inode *dir, struct aeon_dentry *de,

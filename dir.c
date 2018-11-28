@@ -110,10 +110,32 @@ struct aeon_dentry *aeon_dotdot(struct super_block *sb,
 	return de;
 }
 
-void aeon_delete_dir_tree(struct super_block *sb,
-			  struct aeon_inode_info_header *sih)
+int aeon_delete_dir_tree(struct super_block *sb,
+			 struct aeon_inode_info_header *sih)
 {
+	struct aeon_dentry_map *de_map;
+	int length = AEON_PAGES_FOR_DENTRY;
+	int err = 0;
+	int i;
+
+	de_map = aeon_get_dentry_map(sb, sih);
+	for (i = 0; i < de_map->num_latest_dentry; i++) {
+		unsigned long blocknr;
+
+		blocknr = de_map->block_dentry[i];
+		err = aeon_insert_blocks_into_free_list(sb, blocknr, length, 0);
+		if (err) {
+			aeon_err(sb, "%s: free dentry resource\n", __func__);
+			goto out;
+		}
+
+	}
+
+	aeon_free_invalid_dentry_list(sb, sih);
 	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
+
+out:
+	return err;
 }
 
 static int isInvalidSpace(struct aeon_dentry_info *de_info)
@@ -372,35 +394,6 @@ out:
 	return err;
 }
 
-static int
-aeon_release_dentry_resource(struct super_block *sb, struct dentry *dentry)
-{
-	struct inode *inode = d_inode(dentry);
-	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
-	struct aeon_dentry_map *de_map;
-	int length = AEON_PAGES_FOR_DENTRY;
-	int err = 0;
-	int i;
-
-	de_map = aeon_get_dentry_map(sb, sih);
-	for (i = 0; i < de_map->num_latest_dentry; i++) {
-		unsigned long blocknr;
-
-		blocknr = de_map->block_dentry[i];
-		err = aeon_insert_blocks_into_free_list(sb, blocknr, length, 0);
-		if (err) {
-			aeon_err(sb, "%s: free dentry resource\n", __func__);
-			goto out;
-		}
-
-	}
-
-	aeon_free_invalid_dentry_list(sb, sih);
-
-out:
-	return err;
-}
-
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de)
 {
@@ -436,12 +429,6 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	aeon_update_dentry_csum(de);
 
 	mutex_unlock(&de_info->dentry_mutex);
-
-	if (dec_link == -1) {
-		err = aeon_release_dentry_resource(sb, dentry);
-		if (err)
-			goto out;
-	}
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
