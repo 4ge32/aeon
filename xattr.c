@@ -127,10 +127,10 @@ int aeon_xattr_get(struct inode *inode, int name_index, const char *name,
 	u64 blocknr;
 	u64 xattr = 0;
 
-	aeon_dbg("name=%d.%s, buffer=%p, buffer_size=%ld\n",
-		 name_index, name, buffer, (long)buffer_size);
-	aeon_dbg("ino %u\n", le32_to_cpu(pi->aeon_ino));
-	aeon_dbg("pixatt 0x%llx\n", le64_to_cpu(pi->i_xattr));
+	//aeon_dbg("name=%d.%s, buffer=%p, buffer_size=%ld\n",
+	//	 name_index, name, buffer, (long)buffer_size);
+	//aeon_dbg("ino %u\n", le32_to_cpu(pi->aeon_ino));
+	//aeon_dbg("pixatt 0x%llx\n", le64_to_cpu(pi->i_xattr));
 
 	if (name == NULL)
 		return -EINVAL;
@@ -146,8 +146,8 @@ int aeon_xattr_get(struct inode *inode, int name_index, const char *name,
 	xattr = le64_to_cpu(pi->i_xattr) + (u64)AEON_SB(sb)->virt_addr;
 	header = _HDR(xattr);
 	end = (char *)xattr + 4096;
-	aeon_dbg("xattr 0x%llx\n", xattr);
-	aeon_dbg("header 0x%llx\n", (u64)header);
+	//aeon_dbg("xattr 0x%llx\n", xattr);
+	//aeon_dbg("header 0x%llx\n", (u64)header);
 	if (header->h_magic != cpu_to_le32(AEON_XATTR_MAGIC) ||
 	    header->h_blocks != cpu_to_le32(1)) {
 bad_block:
@@ -175,7 +175,7 @@ bad_block:
 		aeon_dbg("cache insert failed");
 	goto cleanup;
 found:
-	aeon_dbg("FOUND: %llx\n", (u64)entry);
+	//aeon_dbg("FOUND: %llx\n", (u64)entry);
 	if (entry->e_value_block != 0)
 		goto bad_block;
 
@@ -190,9 +190,9 @@ found:
 		err = -ERANGE;
 		if (size > buffer_size)
 			goto cleanup;
-		aeon_dbg("xattr 0x%llx\n", xattr);
-		aeon_dbg("offs %d\n", le16_to_cpu(entry->e_value_offs));
-		aeon_dbg("size %ld\n", size);
+		//aeon_dbg("xattr 0x%llx\n", xattr);
+		//aeon_dbg("offs %d\n", le16_to_cpu(entry->e_value_offs));
+		//aeon_dbg("size %ld\n", size);
 		memcpy(buffer,
 		       (void *)(xattr + le16_to_cpu(entry->e_value_offs)),
 		       size);
@@ -230,8 +230,8 @@ int aeon_xattr_set(struct inode *inode, int name_index, const char *name,
 	if (name_len > 255 || value_len > sb->s_blocksize)
 		return -ERANGE;
 
-	aeon_dbg("---%s---\n", name);
-	aeon_dbg("ino %u\n", le32_to_cpu(pi->aeon_ino));
+	//aeon_dbg("---%s---\n", name);
+	//aeon_dbg("ino %u\n", le32_to_cpu(pi->aeon_ino));
 
 	down_write(&sih->xattr_sem);
 	xattr = le64_to_cpu(pi->i_xattr);
@@ -283,7 +283,7 @@ bad_block:
 		}
 		last = here;
 
-		aeon_dbg("Find here %llx\n", (u64)here);
+		//aeon_dbg("Find here %llx\n", (u64)here);
 
 		while (!IS_LAST_ENTRY(last)) {
 			struct aeon_xattr_entry *next = AEON_XATTR_NEXT(last);
@@ -343,7 +343,6 @@ bad_block:
 					      blocknr);
 		} else {
 			int offset;
-		aeon_dbg("1\n");
 
 			/*
 			 * can it be improved?
@@ -355,10 +354,10 @@ bad_block:
 			offset = (char *)last - (char *)header;
 			last = _ENTRY((char *)header + offset);
 
-			aeon_dbg("header 0x%llx\n", (u64)header);
-			aeon_dbg("here   0x%llx\n", (u64)here);
-			aeon_dbg("offet  %d\n", offset);
-			aeon_dbg("last   0x%llx\n", (u64)last);
+			//aeon_dbg("header 0x%llx\n", (u64)header);
+			//aeon_dbg("here   0x%llx\n", (u64)here);
+			//aeon_dbg("offet  %d\n", offset);
+			//aeon_dbg("last   0x%llx\n", (u64)last);
 		}
 	} else {
 		/* Allocate a buffer where we construct the new block. */
@@ -374,22 +373,18 @@ bad_block:
 	}
 
 	/* Iff we are modifying the block in-place, xattr obj is locked here. */
-	aeon_dbg("reach here!\n");
-	aeon_dbg("head %llx\n", (u64)header);
-	aeon_dbg("here %llx\n", (u64)here);
-	aeon_dbg("last %llx\n", (u64)last);
-	if (header->h_magic != le32_to_cpu(AEON_XATTR_MAGIC)) {
-		aeon_dbg("4!!!!!!!!!!!!!!!11!");
-	}
+	//aeon_dbg("reach here!\n");
+	//aeon_dbg("head %llx\n", (u64)header);
+	//aeon_dbg("here %llx\n", (u64)here);
+	//aeon_dbg("last %llx\n", (u64)last);
 
 	if (not_found) {
 		/* Insert the new name */
 		size_t size = AEON_XATTR_LEN(name_len);
 		size_t rest = (char *)last - (char *)here;
-		aeon_dbg("IN1\n");
-		aeon_dbg("here %llx\n", (u64)here);
-		aeon_dbg("size %ld\n", size);
-		aeon_dbg("rest %llx\n", (u64)rest);
+		//aeon_dbg("here %llx\n", (u64)here);
+		//aeon_dbg("size %ld\n", size);
+		//aeon_dbg("rest %llx\n", (u64)rest);
 		memmove((char *)here + size, here, rest);
 		memset(here, 0, size);
 		here->e_name_index = name_index;
@@ -429,7 +424,6 @@ bad_block:
 		}
 		if (value == NULL) {
 			size_t size = AEON_XATTR_LEN(name_len);
-		aeon_dbg("IN3\n");
 			last = _ENTRY((char *)last - size);
 			memmove(here, (char *)here + size,
 				(char *)last - (char *)here);
@@ -439,6 +433,7 @@ bad_block:
 
 	if (value != NULL) {
 		/* Insert the new value */
+		aeon_dbg("IN3\n");
 		here->e_value_size = cpu_to_le32(value_len);
 		if (value_len) {
 			size_t size = AEON_XATTR_SIZE(value_len);

@@ -653,6 +653,10 @@ test-recover-13 ()
   OBJ="nvdimm dark dram pmem"
   RES="nvdimm dram pmem"
 
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
   for i in $OBJ
   do
     touch $DIR/$i

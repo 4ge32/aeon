@@ -221,26 +221,7 @@ struct free_list {
 	u32		csum;		/* Protect integrity */
 };
 
-enum aeon_new_inode_type {
-	TYPE_CREATE = 0,
-	TYPE_MKNOD,
-	TYPE_SYMLINK,
-	TYPE_MKDIR
-};
-
-struct aeon_inode_info_header {
-	/* Map from file offsets to write log entries. */
-	struct     aeon_dentry_info *de_info;
-	struct     rb_root rb_tree;		/* RB tree for directory or extent*/
-	struct     rw_semaphore dax_sem;
-	struct     rw_semaphore xattr_sem;
-	struct     mutex truncate_mutex;
-	int	   num_vmas;
-	u64	   pi_addr;
-	u8	   i_blk_type;
-	spinlock_t i_exlock;
-	rwlock_t   i_meta_lock;
-};
+#include "aeon_inode.h"
 
 struct aeon_inode_info {
 	struct aeon_inode_info_header header;
@@ -562,28 +543,6 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 unsigned long aeon_get_new_extents_block(struct super_block *sb);
 u64 aeon_get_new_blk(struct super_block *sb);
 u64 aeon_get_xattr_blk(struct super_block *sb);
-
-/* inode.c */
-int aeon_init_inode_inuse_list(struct super_block *sb);
-int aeon_get_inode_address(struct super_block *sb,
-			   u32 ino, u64 *pi_addr, struct aeon_dentry *de);
-u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
-void aeon_set_file_ops(struct inode *inode);
-struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
-				 struct inode *dir, u64 pi_addr, u64 de_addr,
-				 u32 ino, umode_t mode, struct aeon_inode *pidir,
-				 size_t size, dev_t rdev);
-u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr);
-void aeon_set_inode_flags(struct inode *inode, struct aeon_inode *pi,
-			  unsigned int flags);
-struct inode *aeon_iget(struct super_block *sb, u32 ino);
-int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
-			     struct aeon_inode_info_header *sih);
-int aeon_free_dram_resource(struct super_block *sb,
-			    struct aeon_inode_info_header *sih);
-int aeon_update_time(struct inode *inode, struct timespec64 *time, int flags);
-void aeon_truncate_blocks(struct inode *inode, loff_t offset);
-int aeon_setattr(struct dentry *dentry, struct iattr *iattr);
 
 /* dir.c */
 int aeon_insert_dir_tree(struct super_block *sb,

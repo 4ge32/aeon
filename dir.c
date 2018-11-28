@@ -3,8 +3,6 @@
 
 #include "aeon.h"
 
-#define IF2DT(sif) (((sif) & S_IFMT) >> 12)
-
 
 int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,

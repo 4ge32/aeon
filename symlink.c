@@ -3,6 +3,7 @@
 
 #include "aeon.h"
 
+
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 		       const char *symname, int len)
 {

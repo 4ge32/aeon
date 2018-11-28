@@ -1,7 +1,7 @@
-#ifndef __AEON_EXTENTS
-#define __AEON_EXTENTS
+#ifndef __AEON_EXTENTS_H
+#define __AEON_EXTENTS_H
 
-#include "aeon.h"
+#include "aeon_inode.h"
 
 static inline
 struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
@@ -9,7 +9,8 @@ struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
 	return &pi->aeh;
 }
 
-static inline void aeon_init_extent_header(struct aeon_extent_header *aeh)
+static inline
+void aeon_init_extent_header(struct aeon_extent_header *aeh)
 {
 	aeh->eh_entries = 0;
 	aeh->eh_depth = 0;

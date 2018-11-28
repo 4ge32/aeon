@@ -8,6 +8,7 @@
 #include <linux/dax.h>
 
 #include "aeon.h"
+//#include "aeon_inode.h"
 #include "aeon_extents.h"
 
 #define AEON_BLOCK_TYPE_MAX 1
