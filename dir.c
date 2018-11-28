@@ -120,7 +120,7 @@ int aeon_delete_dir_tree(struct super_block *sb,
 
 	de_map = aeon_get_dentry_map(sb, sih);
 	if (!de_map)
-		goto skip;
+		goto out;
 
 	for (i = 0; i < de_map->num_latest_dentry; i++) {
 		unsigned long blocknr;
@@ -134,13 +134,12 @@ int aeon_delete_dir_tree(struct super_block *sb,
 
 	}
 
-skip:
+out:
 	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 	aeon_free_invalid_dentry_list(sb, sih);
 	kfree(sih->de_info);
 	sih->de_info = NULL;
 
-out:
 	return err;
 }
 

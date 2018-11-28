@@ -39,6 +39,8 @@ void aeon_delete_free_lists(struct super_block *sb)
 		free_list = aeon_get_free_list(sb, i);
 		disposal = &free_list->block_free_tree;
 		aeon_destroy_range_node_tree(sb, disposal);
+		free_list->first_node = NULL;
+		free_list->last_node = NULL;
 
 	}
 	kfree(sbi->free_lists);

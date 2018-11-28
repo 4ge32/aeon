@@ -115,6 +115,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih);
 int aeon_free_dram_resource(struct super_block *sb,
 			    struct aeon_inode_info_header *sih);
+void aeon_destroy_imem_cache(struct inode_map *inode_map);
 int aeon_update_time(struct inode *inode, struct timespec64 *time, int flags);
 void aeon_truncate_blocks(struct inode *inode, loff_t offset);
 int aeon_setattr(struct dentry *dentry, struct iattr *iattr);

@@ -660,6 +660,18 @@ int aeon_free_dram_resource(struct super_block *sb,
 	return freed;
 }
 
+void aeon_destroy_imem_cache(struct inode_map *inode_map)
+{
+	struct imem_cache *im;
+	struct imem_cache *dend = NULL;
+
+	list_for_each_entry_safe(im, dend, &inode_map->im->imem_list, imem_list) {
+		list_del(&im->imem_list);
+		kfree(im);
+		im = NULL;
+	}
+}
+
 static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -672,7 +684,6 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	int found;
 	int ret = 0;
 
-	//aeon_dbgv("Free inuse ino: %lu\n", ino);
 	inode_map = &sbi->inode_maps[cpuid];
 	art = AEON_R_TABLE(inode_map);
 
