@@ -795,7 +795,6 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		goto out;
 
 	return 0;
-
 out:
 	aeon_err(sb, "%s: free inode %lu failed\n", __func__, pi->aeon_ino);
 	return err;
