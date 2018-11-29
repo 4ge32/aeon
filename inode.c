@@ -613,34 +613,6 @@ fail:
 	return ERR_PTR(err);
 }
 
-static unsigned long aeon_get_last_blocknr(struct super_block *sb,
-					   struct aeon_inode_info_header *sih)
-{
-	unsigned long last_blocknr;
-	unsigned int btype;
-	unsigned int data_bits;
-	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-	int ret;
-	return 0;
-
-	if (ret) {
-		//aeon_dbgv("%s: read pi @ 0x%lx failed\n",
-		//		__func__, sih->pi_addr);
-		btype = 0;
-	} else {
-		btype = sih->i_blk_type;
-	}
-
-	data_bits = blk_type_to_shift[btype];
-
-	if (pi->i_size == 0)
-		last_blocknr = 0;
-	else
-		last_blocknr = (pi->i_size - 1) >> data_bits;
-
-	return last_blocknr;
-}
-
 int aeon_free_dram_resource(struct super_block *sb,
 			    struct aeon_inode_info_header *sih)
 {
@@ -655,6 +627,13 @@ int aeon_free_dram_resource(struct super_block *sb,
 		return 0;
 
 	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
+	if (S_ISDIR(le16_to_cpu(pi->i_mode))) {
+		aeon_free_invalid_dentry_list(sb, sih);
+		if (sih->de_info) {
+			kfree(sih->de_info);
+			sih->de_info = NULL;
+		}
+	}
 	freed = 1;
 
 	return freed;
@@ -767,7 +746,6 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih)
 {
-	unsigned long last_blocknr;
 	int err;
 
 	pi->deleted = 1;
@@ -776,14 +754,11 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
-		last_blocknr = aeon_get_last_blocknr(sb, sih);
-		//aeon_dbgv("%s: file ino %lu\n", __func__, sih->ino);
-		//freed = aeon_delete_file_tree(sb, sih, 0,
-		//			last_blocknr, true, true);
-		aeon_delete_extenttree(sb, sih);
+		err = aeon_delete_extenttree(sb, sih);
+		if (err)
+			goto out;
 		break;
 	case S_IFDIR:
-		//aeon_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
 		err = aeon_delete_dir_tree(sb, sih);
 		if (err)
 			goto out;

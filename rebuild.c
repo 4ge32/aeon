@@ -489,6 +489,9 @@ found:
 			 le64_to_cpu(pi->i_links_count), de_map->num_dentries);
 	}
 
+	if (de_map->num_internal_dentries == 0)
+		de_map->num_internal_dentries = AEON_INTERNAL_ENTRY;
+
 	mutex_unlock(&de_info->dentry_mutex);
 
 	return 0;

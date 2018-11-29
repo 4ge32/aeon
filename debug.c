@@ -50,17 +50,15 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	struct inode_map *inode_map;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sbi->sb);
 	struct aeon_region_table *art;
-	struct tt_root *tt_tree;
-	struct tt_node *tt_temp;
+	//struct tt_root *tt_tree;
+	//struct tt_node *tt_temp;
 
 	free_list = &sbi->free_lists[cpu];
 	inode_map = &sbi->inode_maps[cpu];
 	art = AEON_R_TABLE(inode_map);
-	tt_tree = &art->block_free_tree;
-	tt_temp = tt_tree->tt_node;
-	curr = container_of(tt_temp, struct aeon_range_node, tt_node);
-	aeon_dbg("T:%lu\n", curr->range_low);
-	aeon_dbg("T*%lu\n", curr->range_high);
+	//tt_tree = &art->block_free_tree;
+	//tt_temp = tt_tree->tt_node;
+	//curr = container_of(tt_temp, struct aeon_range_node, tt_node);
 
 
 	/* Store data related to pmem region */
