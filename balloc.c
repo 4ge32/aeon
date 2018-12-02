@@ -5,7 +5,10 @@
 #include <linux/rwlock.h>
 
 #include "aeon.h"
+#include "aeon_super.h"
 #include "aeon_extents.h"
+#include "aeon_balloc.h"
+
 
 int aeon_alloc_block_free_lists(struct super_block *sb)
 {

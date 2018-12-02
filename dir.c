@@ -2,6 +2,8 @@
 #include <linux/slab.h>
 
 #include "aeon.h"
+#include "aeon_super.h"
+#include "aeon_balloc.h"
 
 
 int aeon_insert_dir_tree(struct super_block *sb,

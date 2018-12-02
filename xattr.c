@@ -3,6 +3,7 @@
 #include <linux/quotaops.h>
 
 #include "aeon.h"
+#include "aeon_balloc.h"
 #include "xattr.h"
 
 static inline

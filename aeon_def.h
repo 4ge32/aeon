@@ -76,26 +76,6 @@ struct aeon_region_table {
 	__le64 freed_data_pages;
 } __attribute((__packed__));
 
-struct aeon_super_block {
-	spinlock_t s_lock;
-
-	__le16 s_map_id;	   /* for allocating inodes in round-robin order */
-	__le16 s_cpus;		   /* number of cpus */
-	__le32 s_magic;            /* magic signature */
-	__le32 s_blocksize;        /* blocksize in bytes */
-	__le64 s_size;             /* total size of fs in bytes */
-	__le64 s_start_dynamic;
-
-	__le32 s_mtime;            /* mount time */
-	__le32 s_wtime;            /* write time */
-
-	__le64 s_num_inodes;
-	__le64 s_num_free_blocks;
-
-	char   pad[452];
-	__le32 s_csum;              /* checksum of this sb */
-} __attribute((__packed__));
-
 struct aeon_dentry {
 	u8	name_len;		/* length of the dentry name */
 	u8	valid;			/* Invalid now? */

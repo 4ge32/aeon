@@ -4,6 +4,8 @@
 #include <linux/uio.h>
 
 #include "aeon.h"
+#include "aeon_balloc.h"
+
 
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 {

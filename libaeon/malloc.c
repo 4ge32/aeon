@@ -1,5 +1,6 @@
 #include <linux/module.h>
 #include "../aeon.h"
+#include "../aeon_balloc.h"
 
 //struct pmem_allocator {
 //	u64 curr;

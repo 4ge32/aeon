@@ -1,7 +1,9 @@
 #include <linux/fs.h>
 
 #include "aeon.h"
+#include "aeon_super.h"
 #include "aeon_extents.h"
+#include "aeon_balloc.h"
 
 
 static struct aeon_extent

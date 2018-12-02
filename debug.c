@@ -2,6 +2,7 @@
 #include <linux/slab.h>
 
 #include "aeon.h"
+#include "aeon_balloc.h"
 
 
 static struct dentry *aeon_debugfs_root;

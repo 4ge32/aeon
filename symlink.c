@@ -2,6 +2,7 @@
 #include <linux/crc32.h>
 
 #include "aeon.h"
+#include "aeon_balloc.h"
 
 
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,

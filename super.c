@@ -11,6 +11,8 @@
 #include <linux/statfs.h>
 
 #include "aeon.h"
+#include "aeon_super.h"
+#include "aeon_balloc.h"
 #include "xattr.h"
 #include "libaeon/aeon_malloc.h"
 

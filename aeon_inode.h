@@ -98,6 +98,78 @@ struct aeon_inode_info_header {
 	rwlock_t   i_meta_lock;
 };
 
+struct aeon_inode_info {
+	struct aeon_inode_info_header header;
+	struct inode vfs_inode;
+};
+
+static inline struct aeon_inode_info *AEON_I(struct inode *inode)
+{
+	return container_of(inode, struct aeon_inode_info, vfs_inode);
+}
+
+#include "aeon_super.h"
+
+static inline
+u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 inode_number)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return aeon_get_addr_off(sbi) + AEON_SB_SIZE +
+		(inode_number % 32 - 1) * AEON_INODE_SIZE;
+}
+
+static inline
+struct aeon_inode *aeon_get_reserved_inode(struct super_block *sb, u64 ino)
+{
+	return (struct aeon_inode *)aeon_get_reserved_inode_addr(sb, ino);
+}
+
+static inline
+struct aeon_inode *aeon_get_reserved_inode_ino(struct super_block *sb, u64 ino)
+{
+	if (ino == 0)
+		return NULL;
+	return (struct aeon_inode *)aeon_get_reserved_inode_addr(sb, ino);
+}
+
+static inline
+struct aeon_inode *aeon_get_inode(struct super_block *sb,
+				  struct aeon_inode_info_header *sih)
+{
+	struct aeon_inode fake_pi;
+	void *addr;
+	int rc;
+
+	addr = (void *)sih->pi_addr;
+	rc = memcpy_mcsafe(&fake_pi, addr, sizeof(struct aeon_inode));
+	if (rc) {
+		aeon_err(sb, "%s: ERROR\n", __func__);
+		return NULL;
+	}
+
+	return (struct aeon_inode *)addr;
+}
+
+/*
+ * This function only is called from ioctl.c for the purpose of
+ * file system test so far.
+ */
+static inline
+struct aeon_inode *aeon_get_parent_inode(struct super_block *sb,
+					 struct aeon_inode_info_header *sih)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_inode *pi;
+	u64 addr;
+
+	pi = aeon_get_inode(sb, sih);
+	addr = (u64)sbi->virt_addr + le64_to_cpu(pi->i_pinode_addr);
+
+	return (struct aeon_inode *)addr;
+}
+
+
 int aeon_init_inode_inuse_list(struct super_block *sb);
 int aeon_get_inode_address(struct super_block *sb,
 			   u32 ino, u64 *pi_addr, struct aeon_dentry *de);
