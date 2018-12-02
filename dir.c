@@ -493,6 +493,49 @@ int aeon_empty_dir(struct inode *inode)
 	return 1;
 }
 
+int aeon_free_cached_dentry_blocks(struct super_block *sb,
+				   struct aeon_inode_info_header *sih)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_dentry_map *de_map;
+	struct aeon_dentry *de;
+	unsigned long blocknr;
+	int global;
+	int internal;
+	int err;
+	bool free;
+
+	de_map = aeon_get_dentry_map(sb, sih);
+	if (!de_map)
+		return 0;
+
+	/* It can be improved */
+	for (global = 1; global <= de_map->num_latest_dentry; global++) {
+		free = true;
+		blocknr = de_map->block_dentry[global];
+		aeon_dbg("blocknr %lu\n", blocknr);
+		for (internal = 0; internal < AEON_INTERNAL_ENTRY; internal++) {
+			de = (struct aeon_dentry *)(sbi->virt_addr +
+						    (blocknr << AEON_SHIFT) +
+						    (internal << AEON_D_SHIFT));
+			if (de->valid) {
+				free = false;
+				break;
+			}
+		}
+		if (free) {
+			err = aeon_insert_blocks_into_free_list(sb, blocknr,
+						AEON_PAGES_FOR_DENTRY, 0);
+			if (err) {
+				aeon_err(sb, "%s\n", __func__);
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
+
 void aeon_free_invalid_dentry_list(struct super_block *sb,
 				   struct aeon_inode_info_header *sih)
 {

@@ -628,6 +628,13 @@ int aeon_free_dram_resource(struct super_block *sb,
 
 	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 	if (S_ISDIR(le16_to_cpu(pi->i_mode))) {
+		int err;
+
+		err = aeon_free_cached_dentry_blocks(sb, sih);
+		if (err) {
+			aeon_err(sb, "%s: free_cached_dentry_blocks", __func__);
+			return -1;
+		}
 		aeon_free_invalid_dentry_list(sb, sih);
 		if (sih->de_info) {
 			kfree(sih->de_info);
