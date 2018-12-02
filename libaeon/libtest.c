@@ -39,12 +39,15 @@ static bool _traverse_and_check_tree(struct super_block *sb, int cpu_id,
 	while (temp) {
 		if (i >= num) {
 			aeon_err(sb, "out of bounds\n");
+			aeon_dbg("temp->key %ld\n", temp->key);
 			res = false;
 			break;
 		}
 
-		if (origin[i] == -1)
+		if (origin[i] == -1) {
+			aeon_dbg("deleted %d\n", i);
 			goto next;
+		}
 
 		curr = container_of(temp, struct aeon_range_node, tt_node);
 		if (origin[i] != curr->range_low || temp->key != curr->range_low) {
@@ -112,6 +115,7 @@ bool __test2(struct super_block *sb, const int cpu_id)
 	int found;
 	int err;
 	int count = 12;
+	int last = 0;
 
 	art = aeon_get_rtable(sb, cpu_id);
 	tree = &art->block_free_tree;
@@ -161,8 +165,8 @@ loop:
 	if (!_traverse_and_check_tree(sb, cpu_id, sorted, num))
 		return false;
 
-	count++;
-	if (count < 1)
+	count--;
+	if (count >= last)
 		goto loop;
 
 	return true;

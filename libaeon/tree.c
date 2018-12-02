@@ -20,6 +20,7 @@ struct tt_node *tt_next(const struct tt_node *node)
 		node = node->tt_right;
 		while (node->tt_left)
 			node = node->tt_left;
+
 		return (struct tt_node *)node;
 	}
 
@@ -98,6 +99,10 @@ int tt_insert(unsigned long key, struct tt_node *new, struct tt_root *tree)
 	else
 		temp->parent->tt_right = temp;
 
+	new->tt_left = NULL;
+	new->tt_right = NULL;
+
+	aeon_dbg("INSERT: key %ld parent %ld compval %d\n", new->key, parent->key, compVal);
 	return 0;
 }
 
@@ -109,8 +114,13 @@ int tt_erase(struct tt_node *target, struct tt_root *tree)
 	if (!target)
 		return -ENOENT;
 
+	aeon_dbg("DELETE TARGET %ld\n", target->key);
+
 	if (target->tt_left && target->tt_right) {
 		aeon_dbg("Both\n");
+		aeon_dbg("left %ld", target->tt_left->key);
+		aeon_dbg("righ %ld", target->tt_right->key);
+		aeon_dbg("pare %ld", target->parent->key);
 		temp_parent = target;
 		temp = target->tt_right;
 		while (temp->tt_left) {
@@ -118,46 +128,70 @@ int tt_erase(struct tt_node *target, struct tt_root *tree)
 			temp = temp->tt_left;
 		}
 
+		//if (target->tt_left->parent != target)
+		temp->tt_left = target->tt_left;
+		if (target->tt_right->parent != target)
+			temp->tt_right = target->tt_right;
+		temp->parent = target->parent;
+
+		target->tt_left->parent = temp;
+		if (target->tt_right != temp)
+			target->tt_right->parent = temp;
+
+		if (target->parent->tt_left == target)
+			target->parent->tt_left = temp;
+		else
+			target->parent->tt_right = temp;
+
+		temp_parent->tt_left = NULL;
+
+		aeon_dbg("H! %ld\n", temp->key);
+		if (temp->tt_left)
+			aeon_dbg("lH! %ld\n", temp->tt_left->key);
+		if (temp->tt_right)
+			aeon_dbg("rH! %ld\n", temp->tt_right->key);
+		if (temp->parent)
+			aeon_dbg("pH! %ld\n", temp->parent->key);
+		if (temp->parent->tt_left)
+			aeon_dbg("plH! %ld\n", temp->parent->tt_left->key);
+		if (temp->parent->tt_right)
+			aeon_dbg("prH! %ld\n", temp->parent->tt_right->key);
+
 		target = temp;
 	} else if (target->tt_left) {
 		if (target == tree->tt_node) {
-			tree->tt_node = target->tt_left;
 			aeon_dbg("Left1\n");
-		}
-		else {
+			tree->tt_node = target->tt_left;
+		} else {
 			if (target->parent->tt_left == target) {
 				aeon_dbg("Left2\n");
 				target->parent->tt_left = target->tt_left;
-			}
-			else {
+			} else {
 				aeon_dbg("Left3\n");
-				if (target->parent->key < target->tt_left->key) {
-					target->parent->tt_left = target->tt_left;
-					target->parent->tt_right = NULL;
-				} else {
-					target->parent->tt_right = target->tt_left;
-					target->parent->tt_left = NULL;
-				}
+				target->parent->tt_right = target->tt_left;
 			}
 
 			target->tt_left->parent = target->parent;
+			target->tt_left = NULL;
+			target->parent = NULL;
 		}
 	} else if (target->tt_right) {
 		if (target == tree->tt_node) {
 			aeon_dbg("Right1\n");
 			tree->tt_node = target->tt_right;
-		}
-		else {
+			tree->tt_node->parent = NULL;
+		} else {
 			if (target->parent->tt_left == target) {
 				aeon_dbg("Right2\n");
-				target->parent->tt_left = target->tt_left;
-			}
-			else {
+				target->parent->tt_left = target->tt_right;
+			} else {
 				aeon_dbg("Right3\n");
-				target->parent->tt_right = target->tt_left;
+				target->parent->tt_right = target->tt_right;
 			}
 
 			target->tt_right->parent = target->parent;
+			target->tt_right = NULL;
+			target->parent = NULL;
 		}
 	} else {
 		if (!target->parent) {
