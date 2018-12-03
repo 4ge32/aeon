@@ -23,6 +23,8 @@ struct tt_node *tt_parent(const struct tt_node *node)
 	return node->parent;
 }
 
+#define TT_ROOT (struct tt_root) {NULL, }
+
 struct tt_node *tt_next(const struct tt_node *);
 struct tt_node *tt_prev(const struct tt_node *);
 struct tt_node *tt_first(const struct tt_root *);

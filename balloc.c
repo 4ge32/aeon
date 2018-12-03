@@ -8,6 +8,9 @@
 #include "aeon_super.h"
 #include "aeon_extents.h"
 #include "aeon_balloc.h"
+#ifdef USE_LIBAEON
+#include "libaeon/aeon_tree.h"
+#endif
 
 
 int aeon_alloc_block_free_lists(struct super_block *sb)
@@ -23,7 +26,11 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = aeon_get_free_list(sb, i);
+#ifdef USE_LIBAEON
+		free_list->tt_block_free_tree = TT_ROOT;
+#else
 		free_list->block_free_tree = RB_ROOT;
+#endif
 		spin_lock_init(&free_list->s_lock);
 		free_list->index = i;
 	}
@@ -31,6 +38,12 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 	return 0;
 }
 
+#ifdef LIBAEON
+void aeon_delete_free_lists(struct super_block *sb)
+{
+	return;
+}
+#else
 void aeon_delete_free_lists(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -49,6 +62,7 @@ void aeon_delete_free_lists(struct super_block *sb)
 	kfree(sbi->free_lists);
 	sbi->free_lists = NULL;
 }
+#endif
 
 unsigned long aeon_count_free_blocks(struct super_block *sb)
 {
@@ -65,6 +79,15 @@ unsigned long aeon_count_free_blocks(struct super_block *sb)
 	return num_free_blocks;
 }
 
+#ifdef USE_LIBAEON
+static int aeon_insert_blocktree(struct tt_root *tree,
+				 struct aeon_range_node *new_node)
+{
+	int err;
+	err = aeon_pmem_insert_blocktree(&new_node->tt_node, tree);
+	return err;
+}
+#else
 static int aeon_insert_blocktree(struct rb_root *tree,
 				 struct aeon_range_node *new_node)
 {
@@ -76,6 +99,7 @@ static int aeon_insert_blocktree(struct rb_root *tree,
 
 	return ret;
 }
+#endif
 
 static void aeon_init_free_list(struct super_block *sb,
 				struct free_list *free_list, int index)
@@ -91,6 +115,43 @@ static void aeon_init_free_list(struct super_block *sb,
 	sbi->last_addr = free_list->block_end << AEON_SHIFT;
 }
 
+#ifdef USE_LIBAEON
+void aeon_init_blockmap(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct tt_root *tree;
+	struct free_list *free_list;
+	struct aeon_range_node *blknode;
+	int ret;
+	int i;
+
+	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = aeon_get_free_list(sb, i);
+		tree = &(free_list->tt_block_free_tree);
+		aeon_init_free_list(sb, free_list, i);
+
+		free_list->num_free_blocks = free_list->block_end -
+						free_list->block_start + 1;
+
+		blknode = aeon_alloc_block_node(sb);
+		if (i == 0)
+			blknode->range_low = free_list->block_start + 1;
+		else
+			blknode->range_low = free_list->block_start;
+		blknode->range_high = free_list->block_end;
+		ret = aeon_insert_blocktree(tree, blknode);
+		if (ret) {
+			aeon_err(sb, "%s failed\n", __func__);
+			aeon_free_block_node(blknode);
+			return;
+		}
+		free_list->first_node = blknode;
+		free_list->last_node = blknode;
+		free_list->num_blocknode = 1;
+	}
+}
+#else
 void aeon_init_blockmap(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -126,6 +187,7 @@ void aeon_init_blockmap(struct super_block *sb)
 		free_list->num_blocknode = 1;
 	}
 }
+#endif
 
 static inline
 int aeon_rbtree_compare_rangenode(struct aeon_range_node *curr,
@@ -193,6 +255,20 @@ int aeon_insert_range_node(struct rb_root *tree,
 	return 0;
 }
 
+#ifdef USE_LIBAEON
+bool aeon_find_pmem_range_node(struct tt_root *tree, unsigned long key,
+	enum node_type type, struct aeon_range_node **ret_node)
+{
+	struct tt_node *ret;
+	bool found;
+
+	found = tt_find(key, &ret, tree);
+	if (found)
+		*ret_node = container_of(ret, struct aeon_range_node, tt_node);
+
+	return found;
+}
+#endif
 bool aeon_find_range_node(struct rb_root *tree, unsigned long key,
 	enum node_type type, struct aeon_range_node **ret_node)
 {
@@ -250,6 +326,95 @@ static int not_enough_blocks(struct free_list *free_list,
 	return 0;
 }
 
+#ifdef USE_LIBAEON
+static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
+					   struct free_list *free_list,
+					   unsigned short btype,
+					   unsigned long num_blocks,
+					   unsigned long *new_blocknr)
+{
+	struct tt_root *tree;
+	struct aeon_range_node *curr;
+	struct aeon_range_node *next = NULL;
+	struct aeon_range_node *prev = NULL;
+	struct tt_node *temp;
+	struct tt_node *next_node;
+	struct tt_node *prev_node;
+	unsigned long curr_blocks;
+	bool found = 0;
+	unsigned long step = 0;
+
+	if (!free_list->first_node || free_list->num_free_blocks == 0) {
+		aeon_err(sb, "%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
+			 __func__, free_list->first_node,
+			 free_list->num_free_blocks);
+		return -ENOSPC;
+	}
+
+	tree = &(free_list->tt_block_free_tree);
+	temp = &(free_list->first_node->tt_node);
+
+	while (temp) {
+		step++;
+		curr = container_of(temp, struct aeon_range_node, tt_node);
+
+		curr_blocks = curr->range_high - curr->range_low + 1;
+
+		if (num_blocks >= curr_blocks) {
+			/* Superpage allocation must succeed */
+			if (btype > 0 && num_blocks > curr_blocks)
+				goto next;
+
+			/* Otherwise, allocate the whole blocknode */
+			if (curr == free_list->first_node) {
+				next_node = tt_next(temp);
+				if (next_node)
+					next = container_of(next_node, struct aeon_range_node, tt_node);
+				free_list->first_node = next;
+			}
+
+			if (curr == free_list->last_node) {
+				prev_node = tt_prev(temp);
+				if (prev_node)
+					prev = container_of(prev_node, struct aeon_range_node, tt_node);
+				free_list->last_node = prev;
+			}
+
+			tt_erase(&curr->tt_node, tree);
+			free_list->num_blocknode--;
+			num_blocks = curr_blocks;
+			*new_blocknr = curr->range_low;
+			aeon_free_block_node(curr);
+			found = 1;
+			break;
+		}
+
+		/* Allocate partial blocknode */
+		*new_blocknr = curr->range_low;
+		curr->range_low += num_blocks;
+		found = 1;
+		break;
+next:
+		temp = tt_next(temp);
+	}
+
+	if (free_list->num_free_blocks < num_blocks) {
+		aeon_dbg("%s: free list %d has %lu free blocks, but allocated %lu blocks?\n",
+			 __func__, free_list->index, free_list->num_free_blocks, num_blocks);
+		return -ENOSPC;
+	}
+
+	if (found)
+		free_list->num_free_blocks -= num_blocks;
+	else {
+		aeon_dbg("%s: Can't alloc.  found = %d", __func__, found);
+		return -ENOSPC;
+	}
+
+	return num_blocks;
+
+}
+#else
 /* Return how many blocks allocated */
 static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
 					   struct free_list *free_list,
@@ -338,6 +503,7 @@ next:
 	return num_blocks;
 
 }
+#endif
 
 /* Find out the free list with most free blocks */
 static int aeon_get_candidate_free_list(struct super_block *sb)
@@ -445,6 +611,49 @@ int aeon_new_data_blocks(struct super_block *sb,
 	return allocated;
 }
 
+#ifdef USE_LIBAEON
+static int aeon_find_free_slot(struct tt_root *tree, unsigned long range_low,
+			       unsigned long range_high,
+			       struct aeon_range_node **prev,
+			       struct aeon_range_node **next)
+{
+	struct aeon_range_node *ret_node = NULL;
+	struct tt_node *temp;
+	bool ret = false;
+
+	ret = aeon_find_pmem_range_node(tree, range_low, NODE_BLOCK, &ret_node);
+	if (ret) {
+		aeon_dbg("%s ERROR: %lu - %lu already in free list\n",
+			 __func__, range_low, range_high);
+		return -EINVAL;
+	}
+
+	if (!ret_node)
+		*prev = *next = NULL;
+	else if (ret_node->range_high < range_low) {
+		*prev = ret_node;
+		temp = tt_next(&ret_node->tt_node);
+		if (temp)
+			*next = container_of(temp, struct aeon_range_node, node);
+		else
+			*next = NULL;
+	} else if (ret_node->range_low > range_high) {
+		*next = ret_node;
+		temp = tt_prev(&ret_node->tt_node);
+		if (temp)
+			*prev = container_of(temp, struct aeon_range_node, node);
+		else
+			*prev = NULL;
+	} else {
+		aeon_dbg("%s ERROR: %lu - %lu overlaps with existing node %lu - %lu\n",
+			 __func__, range_low, range_high, ret_node->range_low,
+			ret_node->range_high);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#else
 static int aeon_find_free_slot(struct rb_root *tree, unsigned long range_low,
 			       unsigned long range_high,
 			       struct aeon_range_node **prev,
@@ -486,7 +695,115 @@ static int aeon_find_free_slot(struct rb_root *tree, unsigned long range_low,
 
 	return 0;
 }
+#endif
 
+#ifdef USE_LIBAEON
+int aeon_insert_blocks_into_free_list(struct super_block *sb,
+				      unsigned long blocknr,
+				      int num, unsigned short btype)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	struct tt_root *tree;
+	struct aeon_range_node *prev = NULL;
+	struct aeon_range_node *next = NULL;
+	struct aeon_range_node *curr_node;
+	struct aeon_region_table *art;
+	unsigned long block_low;
+	unsigned long block_high;
+	unsigned long num_blocks = 0;
+	int cpu_id;
+	int ret;
+	bool new_node_used = false;
+
+	if (num <= 0) {
+		aeon_err(sb, "less zero blocks can't be freed\n");
+		return -EINVAL;
+	}
+
+	curr_node = aeon_alloc_block_node(sb);
+	if (curr_node == NULL)
+		return -ENOMEM;
+
+	cpu_id = blocknr / sbi->per_list_blocks;
+	free_list = aeon_get_free_list(sb, cpu_id);
+	art = AEON_R_TABLE(&sbi->inode_maps[cpu_id]);
+	spin_lock(&free_list->s_lock);
+
+	tree = &(free_list->tt_block_free_tree);
+
+	num_blocks = aeon_get_numblocks(btype) * num;
+	block_low = blocknr;
+	block_high = blocknr + num_blocks - 1;
+
+	if (blocknr < free_list->block_start ||
+	    blocknr + num > free_list->block_end + 1) {
+		aeon_err(sb, "free blocks %lu to %lu, free list %d, start %lu, end %lu\n",
+				blocknr, blocknr + num - 1,
+				free_list->index,
+				free_list->block_start,
+				free_list->block_end);
+		ret = -EIO;
+		goto out;
+	}
+
+	ret = aeon_find_free_slot(tree, block_low, block_high, &prev, &next);
+	if (ret) {
+		aeon_err(sb, "find free slot fail: %d\n", ret);
+		goto out;
+	}
+
+	if (prev && next && (block_low == prev->range_high + 1) &&
+			(block_high + 1 == next->range_low)) {
+		tt_erase(&next->tt_node, tree);
+		free_list->num_blocknode--;
+		prev->range_high = next->range_high;
+		if (free_list->last_node == next)
+			free_list->last_node = prev;
+		aeon_free_block_node(next);
+		goto block_found;
+	}
+	if (prev && (block_low == prev->range_high + 1)) {
+		prev->range_high += num_blocks;
+		goto block_found;
+	}
+	if (next && (block_high + 1 == next->range_low)) {
+		next->range_low -= num_blocks;
+		goto block_found;
+	}
+
+	curr_node->range_low = block_low;
+	curr_node->range_high = block_high;
+	new_node_used = true;
+	ret = aeon_insert_blocktree(tree, curr_node);
+	if (ret) {
+		new_node_used = false;
+		goto out;
+	}
+
+	if (!prev)
+		free_list->first_node = curr_node;
+	if (!next)
+		free_list->last_node = curr_node;
+
+	free_list->num_blocknode++;
+
+block_found:
+	free_list->num_free_blocks += num_blocks;
+	art->num_free_blocks += cpu_to_le64(num_blocks);
+	art->alloc_data_count--;
+	art->alloc_data_pages -= cpu_to_le64(num_blocks);
+	art->freed_data_count++;
+	art->freed_data_pages += cpu_to_le64(num_blocks);
+
+out:
+	spin_unlock(&free_list->s_lock);
+	if (new_node_used == false)
+		aeon_free_block_node(curr_node);
+
+	return ret;
+}
+#else
 int aeon_insert_blocks_into_free_list(struct super_block *sb,
 				      unsigned long blocknr,
 				      int num, unsigned short btype)
@@ -592,6 +909,7 @@ out:
 
 	return ret;
 }
+#endif
 
 /**
  * aeon_dax_get_blocks - The function tries to lookup the requested blocks.

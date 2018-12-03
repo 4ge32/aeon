@@ -3,6 +3,9 @@
 
 #include "aeon_inode.h"
 
+/* rb tree for extent is experimetal */
+#define USE_RB
+
 static inline
 struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
 {

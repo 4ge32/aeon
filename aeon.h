@@ -72,9 +72,6 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 /* Flags that are appropriate for non-directories/regular files. */
 #define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
 
-/* rb tree for extent is experimetal */
-#define USE_RB
-
 extern int wprotect;
 
 struct imem_cache {

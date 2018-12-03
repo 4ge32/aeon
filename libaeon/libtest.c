@@ -144,8 +144,7 @@ loop:
 	_inorder(tree);
 
 	if (!_traverse_and_check_tree(sb, cpu_id, sorted, num))
-	//	return false;
-		aeon_dbg("GOO\n");
+		return false;
 
 	sorted[count] = target;
 	aeon_dbg("RE-INSERT: %d %d\n", sorted[count], count);

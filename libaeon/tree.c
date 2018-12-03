@@ -128,7 +128,6 @@ int tt_erase(struct tt_node *target, struct tt_root *tree)
 			temp = temp->tt_left;
 		}
 
-		//if (target->tt_left->parent != target)
 		temp->tt_left = target->tt_left;
 		if (target->tt_right->parent != target)
 			temp->tt_right = target->tt_right;
