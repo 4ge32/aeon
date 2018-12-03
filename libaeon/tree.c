@@ -30,6 +30,26 @@ struct tt_node *tt_next(const struct tt_node *node)
 	return parent;
 }
 
+struct tt_node *tt_prev(const struct tt_node *node)
+{
+	struct tt_node *parent;
+
+	if (!node)
+		return NULL;
+
+	if (node->tt_left) {
+		node = node->tt_left;
+		while (node->tt_right)
+			node = node->tt_right;
+		return (struct tt_node *)node;
+	}
+
+	while ((parent = tt_parent(node)) && node == parent->tt_left)
+		node = parent;
+
+	return parent;
+}
+
 struct tt_node *tt_first(const struct tt_root *tree)
 {
 	struct tt_node *node = tree->tt_node;

@@ -171,16 +171,64 @@ loop:
 	return true;
 }
 
+bool __test3(struct super_block *sb, const int cpu_id)
+{
+	struct aeon_region_table *art;
+	struct tt_root *tree;
+	struct tt_node *temp;
+	struct tt_node *last = NULL;
+	struct aeon_range_node *curr;
+	int count = 0;
+
+	art = aeon_get_rtable(sb, cpu_id);
+	tree = &art->block_free_tree;
+	temp = tt_first(tree);
+
+	while (temp) {
+		curr = container_of(temp, struct aeon_range_node, tt_node);
+		if (sorted[count] != temp->key || temp->key != curr->range_low) {
+			aeon_err(sb, "expected %lu, key %lu:%lu",
+				 sorted[count], temp->key, curr->range_low);
+			return false;
+		}
+		last = temp;
+		temp = tt_next(temp);
+		count++;
+	}
+
+	count--;
+	temp = last;
+	while (temp) {
+		curr = container_of(temp, struct aeon_range_node, tt_node);
+		if (sorted[count] != temp->key || temp->key != curr->range_low) {
+			aeon_err(sb, "expected %lu, key %lu:%lu",
+				 sorted[count], temp->key, curr->range_low);
+			return false;
+		}
+		temp = tt_prev(temp);
+		count--;
+	}
+
+	return true;
+}
+
 bool _test(struct super_block *sb)
 {
 	int cpu_id = 0;
 
 	/* simple insert and traverse test*/
+	aeon_info("test 1\n");
 	if (!__test1(sb, cpu_id))
 		return false;
+	aeon_info("test 2\n");
 	/* erase and insert test */
 	if (!__test2(sb, cpu_id))
 		return false;
+	/* next and prev test */
+	aeon_info("test 3\n");
+	if (!__test3(sb, cpu_id))
+		return false;
+	aeon_info("All OK\n");
 
 	return true;
 }
