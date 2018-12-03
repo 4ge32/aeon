@@ -772,11 +772,8 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			goto out;
 		break;
 	case S_IFLNK:
-		/* Log will be freed later */
-		//aeon_dbgv("%s: symlink ino %lu\n",
-		//		__func__, sih->ino);
-		//freed = aeon_delete_file_tree(sb, sih, 0, 0,
-		//				true, true);
+		aeon_dbg("Want to delete syn");
+		//err = aeon_delete_symblock();
 		break;
 	default:
 		aeon_dbg("%s: special ino %u\n",
@@ -928,6 +925,8 @@ expand:
 
 	old_num_blocks = old_size >> blkbits;
 	new_num_blocks = iblock - old_num_blocks;
+	if (!new_num_blocks)
+		new_num_blocks = 1;
 
 	allocated = aeon_new_data_blocks(sb, sih, &new_blocknr,
 					 iblock, new_num_blocks, ANY_CPU);

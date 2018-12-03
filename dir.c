@@ -238,10 +238,11 @@ static int aeon_init_dentry_map(struct super_block *sb,
 }
 
 static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pi,
-			    struct aeon_dentry_info *de_info, u32 ino)
+			    struct aeon_inode_info_header *sih, u32 ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_dentry *direntry;
+	struct aeon_dentry_info *de_info = sih->de_info;
 	struct aeon_dentry_map *de_map = &de_info->de_map;
 	unsigned long blocknr;
 	u64 de_addr = 0;
@@ -372,7 +373,7 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 		if (err)
 			goto out;
 
-		err = aeon_init_dentry(sb, pidir, sih->de_info, ino);
+		err = aeon_init_dentry(sb, pidir, sih, ino);
 		if (err)
 			goto out;
 	}
@@ -489,7 +490,9 @@ int aeon_empty_dir(struct inode *inode)
 	struct aeon_dentry_map *de_map;
 
 	de_map = aeon_get_dentry_map(sb, sih);
-	if (de_map)
+	if (!de_map)
+		return 0;
+	if (de_map->num_dentries == 2)
 		return 0;
 
 	return 1;
@@ -574,14 +577,16 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 
 	if (pos == 0)
 		temp = rb_first(&sih->rb_tree);
-	else if (pos == READDIR_END) {
-		dir_emit_dots(file, ctx);
+	else if (pos == READDIR_END)
 		return 0;
-	} else {
+	else {
 		found = aeon_find_range_node(&sih->rb_tree, pos, NODE_DIR, &curr);
 		if (found && pos == curr->hash)
 			temp = &curr->node;
 	}
+
+	if (!dir_emit_dots(file, ctx))
+		return -EINVAL;
 
 	while (temp) {
 		curr = container_of(temp, struct aeon_range_node, node);

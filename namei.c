@@ -246,6 +246,8 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (ino == 0)
 		goto out;
 
+	inc_nlink(dir);
+
 	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
 	if (de_addr < 0)
 		goto out;
@@ -258,6 +260,8 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 	d_instantiate(dentry, inode);
+
+	pidir->i_links_count = cpu_to_le64(inode->i_nlink);
 
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
