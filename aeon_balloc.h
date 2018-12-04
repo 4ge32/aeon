@@ -1,4 +1,4 @@
-#ifndef __AEON_BALLOC_H_
+#ifndef __AEON_BALLOC_H
 #define __AEON_BALLOC_H
 
 #define USE_LIBAEON
@@ -63,7 +63,7 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb,
 					 u64 *pi_addr, int cpuid);
 unsigned long aeon_get_new_extents_block(struct super_block *sb);
-u64 aeon_get_new_blk(struct super_block *sb);
+u64 aeon_get_new_blk(struct super_block *sb, int cpu_id);
 u64 aeon_get_xattr_blk(struct super_block *sb);
 
 #endif

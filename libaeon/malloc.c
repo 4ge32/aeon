@@ -25,12 +25,12 @@ static void pool_init(void *head)
 	int num;
 	int i;
 
-
 	num = page_size / AEON_OBJ_SIZE;
 	memset(head, 0, page_size);
 	for (i = 0; i < num; i++) {
 		curr = (u64)head + (i * AEON_OBJ_SIZE);
 		mcb = (struct mem_control_block *)curr;
+		mcb->is_used = 0;
 		mcb->head = (void *)curr;
 		if (i != num-1)
 			mcb->next = (void *)(curr + AEON_OBJ_SIZE);
@@ -42,12 +42,15 @@ static void pool_init(void *head)
 
 static
 void *pmem_malloc(struct super_block *sb,
-		  struct aeon_region_table *art, long bytes)
+		  int cpu_id, long bytes)
 {
+	struct aeon_region_table *art;
 	struct mem_control_block *mcb;
 	void *memory_location;
 	u64 current_location;
 	u64 addr;
+
+	art = aeon_get_rtable(sb, cpu_id);
 
 	spin_lock(&art->r_lock);
 
@@ -56,10 +59,16 @@ alloc:
 	addr = art->pmem_pool_addr + (u64)AEON_SB(sb)->virt_addr;
 	current_location = addr;
 	memory_location = 0;
+	/* FIXME:
+	 * Why is the first memory location already used?
+	 */
+	aeon_dbg("START: %llx\n", current_location);
 	do {
 		mcb = (struct mem_control_block *)current_location;
-		aeon_dbg("current 0x%llx\n", (u64)current_location);
+		aeon_dbg("%d\n", mcb->is_used);
+		aeon_dbg("%d\n", mcb->size);
 		if (!mcb->is_used && bytes == mcb->size) {
+			aeon_dbg("here:%llx", current_location);
 			mcb->is_used = 1;
 			memory_location = (void *)current_location;
 			break;
@@ -68,7 +77,7 @@ alloc:
 	} while (mcb->next);
 
 	if (!memory_location) {
-		u64 base_addr = aeon_get_new_blk(sb);
+		u64 base_addr = aeon_get_new_blk(sb, cpu_id);
 		u64 addr = (u64)AEON_SB(sb)->virt_addr + base_addr;
 
 		pool_init((void *)addr);
@@ -80,7 +89,6 @@ alloc:
 	}
 
 	memory_location += sizeof(struct mem_control_block);
-	//aeon_dbg("0x%llx", (u64)memory_location);
 
 	spin_unlock(&art->r_lock);
 
@@ -89,13 +97,10 @@ alloc:
 
 void *aeon_pmem_alloc_range_node(struct super_block *sb, int cpu_id)
 {
-	struct aeon_region_table *art;
-
 	if (cpu_id == ANY_CPU)
 		cpu_id = aeon_get_cpuid(sb);
-	art = aeon_get_rtable(sb, cpu_id);
 
-	return pmem_malloc(sb, art, AEON_RANGE_NODE_SIZE);
+	return pmem_malloc(sb, cpu_id, AEON_RANGE_NODE_SIZE);
 }
 
 void pmem_free(void *head)
@@ -113,7 +118,7 @@ u64 pmem_create_pool(struct super_block *sb, int cpu_id)
 	aeon_info("cpu_id %d's pool\n", cpu_id);
 
 	spin_lock_init(&art->r_lock);
-	addr = aeon_get_new_blk(sb);
+	addr = aeon_get_new_blk(sb, cpu_id);
 	pool_init((void *)(addr + (u64)AEON_SB(sb)->virt_addr));
 
 	return addr;

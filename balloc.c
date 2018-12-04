@@ -9,6 +9,7 @@
 #include "aeon_extents.h"
 #include "aeon_balloc.h"
 #ifdef USE_LIBAEON
+#include "libaeon/aeon_malloc.h"
 #include "libaeon/aeon_tree.h"
 #endif
 
@@ -119,22 +120,55 @@ static void aeon_init_free_list(struct super_block *sb,
 void aeon_init_blockmap(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map;
+	struct aeon_region_table *art;
 	struct tt_root *tree;
 	struct free_list *free_list;
 	struct aeon_range_node *blknode;
 	int ret;
 	int i;
+	u64 addr;
 
 	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = aeon_get_free_list(sb, i);
-		tree = &(free_list->tt_block_free_tree);
 		aeon_init_free_list(sb, free_list, i);
 
 		free_list->num_free_blocks = free_list->block_end -
 						free_list->block_start + 1;
+	}
 
-		blknode = aeon_alloc_block_node(sb);
+	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
+		free_list = aeon_get_free_list(sb, i);
+		inode_map = &sbi->inode_maps[i];
+		if (i == 0)
+			addr = ((free_list->block_start + 1) << AEON_SHIFT);
+		else
+			addr = free_list->block_start << AEON_SHIFT;
+		inode_map->i_table_addr = (void *)addr;
+		art = aeon_get_rtable(sb, i);
+		free_list->num_free_blocks = le64_to_cpu(art->num_free_blocks);
+	}
+
+	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
+		return;
+	}
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = aeon_get_free_list(sb, i);
+		tree = &(free_list->tt_block_free_tree);
+		inode_map = &sbi->inode_maps[i];
+		if (i == 0)
+			addr = ((free_list->block_start + 1) << AEON_SHIFT);
+		else
+			addr = free_list->block_start << AEON_SHIFT;
+		inode_map->i_table_addr = (void *)((u64)sbi->virt_addr + addr);
+
+		art = aeon_get_rtable(sb, i);
+		if (sbi->s_mount_opt & AEON_MOUNT_FORMAT)
+			art->pmem_pool_addr = pmem_create_pool(sb, i);
+
+		blknode = aeon_pmem_alloc_range_node(sb, i);
 		if (i == 0)
 			blknode->range_low = free_list->block_start + 1;
 		else
@@ -1055,14 +1089,40 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 {
 	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
 	struct free_list *free_list = aeon_get_free_list(sbi->sb, cpu_id);
+#ifdef USE_LIBAEON
+	struct tt_root *tree;
+	struct tt_node *temp;
+#else
 	struct rb_root *tree;
 	struct rb_node *temp;
+	u64 addr = (u64)sbi->virt_addr + AEON_SB_SIZE + AEON_INODE_SIZE;
+	__le64 *table_blocknr;
+#endif
 	struct aeon_range_node *node;
 	unsigned long blocknr = 0;
-	u64 addr = (u64)sbi->virt_addr + AEON_SB_SIZE + AEON_INODE_SIZE;
 	u64 temp_addr;
-	__le64 *table_blocknr;
 
+#ifdef USE_LIBAEON
+	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT))
+		return;
+
+	spin_lock(&free_list->s_lock);
+
+	tree = &(free_list->tt_block_free_tree);
+	temp = &(free_list->first_node->tt_node);
+	node = container_of(temp, struct aeon_range_node, tt_node);
+
+	blocknr = node->range_low;
+	temp_addr = (blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
+	memset((void *)temp_addr, 0, 4096 * AEON_PAGES_FOR_INODE);
+	node->range_low += AEON_PAGES_FOR_INODE;
+
+	free_list->num_free_blocks -= AEON_PAGES_FOR_INODE;
+
+	spin_unlock(&free_list->s_lock);
+
+	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
+#else
 	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
 		struct aeon_region_table *art;
 
@@ -1096,7 +1156,7 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	inode_map->i_table_addr = (void *)((*table_blocknr << AEON_SHIFT) +
 					   (u64)sbi->virt_addr);
 	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
-
+#endif
 }
 
 void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
@@ -1151,17 +1211,18 @@ unsigned long aeon_get_new_extents_block(struct super_block *sb)
 	return blocknr;
 }
 
-u64 aeon_get_new_blk(struct super_block *sb)
+u64 aeon_get_new_blk(struct super_block *sb, int cpu_id)
 {
-	unsigned long allocated;
-	unsigned long blocknr = 0;
-	int num_blocks = 1;
+	struct free_list *free_list;
+	unsigned long blocknr;
 
-	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
-	if (allocated <= 0) {
-		aeon_err(sb, "failed to get new exttens block\n");
-		return -ENOSPC;
-	}
+	free_list = aeon_get_free_list(sb, cpu_id);
+	if (cpu_id == 0)
+		blocknr = free_list->block_start + 1;
+	else
+		blocknr = free_list->block_start;
+
+	free_list->block_start++;
 
 	return (blocknr << AEON_SHIFT);
 }
