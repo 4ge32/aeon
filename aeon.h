@@ -72,29 +72,9 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 /* Flags that are appropriate for non-directories/regular files. */
 #define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
 
+#include "aeon_tree.h"
+
 extern int wprotect;
-
-struct imem_cache {
-	u32	ino;
-	u64	addr;
-	int	independent;
-	struct	imem_cache *head;
-	struct	list_head imem_list;
-};
-
-struct i_valid_list {
-	u32	parent_ino;
-	u64	addr;
-	struct	i_valid_child_list *ivcl;
-	struct	list_head i_valid_list;
-};
-
-struct i_valid_child_list {
-	u32	ino;
-	u64	addr;
-	u32	parent_ino;
-	struct	list_head i_valid_child_list;
-};
 
 struct obj_queue {
 	struct aeon_inode *pi;
@@ -133,26 +113,34 @@ struct aeon_range_node {
 	u32 csum;
 };
 
+struct aeon_region_table {
+	spinlock_t r_lock;
+
+	struct tt_root block_free_tree;
+
+	u64	pmem_pool_addr;
+
+	__le64 freed;
+	__le32 i_num_allocated_pages;
+	__le32 i_range_high;
+	__le32 b_range_low;
+	__le64 allocated;	/* allocated entire inodes */
+	__le16 i_allocated;	/* allocated inodes in current pages */
+	__le32 i_head_ino;
+	__le64 i_blocknr;	/* it can be deleted */
+	__le64 this_block;	/* this table blocknr */
+
+	__le64 num_free_blocks;
+	__le64 alloc_data_count;
+	__le64 alloc_data_pages;
+	__le64 freed_data_count;
+	__le64 freed_data_pages;
+} __attribute((__packed__));
+
+
+#include "aeon_super.h"
 #include "aeon_inode.h"
-
-struct aeon_dentry_invalid {
-	struct list_head invalid_list;
-	u64 d_addr;
-};
-
-struct aeon_dentry_map {
-	unsigned long  block_dentry[MAX_ENTRY];
-	unsigned long  next_map;
-	unsigned long  num_dentries;
-	unsigned int  num_latest_dentry;
-	unsigned int  num_internal_dentries;
-};
-
-struct aeon_dentry_info {
-	struct mutex dentry_mutex;
-	struct aeon_dentry_invalid *di;
-	struct aeon_dentry_map de_map;
-};
+#include "aeon_dir.h"
 
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 					 unsigned int size)
@@ -164,18 +152,6 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	return ret;
 }
 
-// BKDR String Hash Function
-static inline unsigned long BKDRHash(const char *str, int length)
-{
-	unsigned int seed = 131; // 31 131 1313 13131 131313 etc..
-	unsigned long hash = 0;
-	int i;
-
-	for (i = 0; i < length; i++)
-		hash = hash * seed + (*str++);
-
-	return hash;
-}
 
 static inline unsigned int
 aeon_get_numblocks(unsigned short btype)
@@ -183,7 +159,6 @@ aeon_get_numblocks(unsigned short btype)
 	return 1;
 }
 
-#include "aeon_super.h"
 
 static inline struct aeon_region_table *AEON_R_TABLE(struct inode_map *inode_map)
 {
@@ -199,81 +174,6 @@ struct aeon_region_table *aeon_get_rtable(struct super_block *sb, int cpu_id)
 	return (struct aeon_region_table *)(inode_map->i_table_addr);
 }
 
-static inline
-struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb,
-					    struct aeon_inode_info_header *sih)
-{
-	if (!sih->de_info)
-		return NULL;
-
-	return &sih->de_info->de_map;
-
-}
-
-/* checksum */
-#define VALID	1
-#define INVALID 0
-
-static inline int is_persisted_dentry(struct aeon_dentry *de)
-{
-	__le32 temp;
-
-	temp = cpu_to_le32(crc32_le(SEED,
-				    (unsigned char *)de,
-				    AEON_DENTRY_CSIZE));
-	if (temp != de->csum)
-		return INVALID;
-
-	return VALID;
-}
-
-static inline void aeon_update_dentry_csum(struct aeon_dentry *de)
-{
-	de->csum = cpu_to_le32(crc32_le(SEED,
-			       (unsigned char *)de,
-			       AEON_DENTRY_CSIZE));
-}
-
-static inline int is_persisted_inode(struct aeon_inode *pi)
-{
-	__le32 temp;
-
-	temp = cpu_to_le32(crc32_le(SEED,
-				    (unsigned char *)pi,
-				    AEON_INODE_CSIZE));
-	if (temp != pi->csum)
-		return INVALID;
-
-	return VALID;
-}
-
-static inline void aeon_update_inode_csum(struct aeon_inode *pi)
-{
-	pi->csum = cpu_to_le32(crc32_le(SEED,
-					(unsigned char *)pi,
-					AEON_INODE_CSIZE));
-}
-
-static inline int aeon_super_block_persisted(struct aeon_super_block *aeon_sb)
-{
-	__le32 temp;
-
-	temp = cpu_to_le32(crc32_le(SEED,
-				    (unsigned char *)aeon_sb,
-				    AEON_INODE_CSIZE));
-	if (temp != aeon_sb->s_csum)
-		return INVALID;
-
-	return VALID;
-}
-
-static inline void aeon_update_super_block_csum(struct aeon_super_block *aeon_sb)
-{
-	aeon_sb->s_csum = cpu_to_le32(crc32_le(SEED,
-					       (unsigned char *)aeon_sb,
-					       AEON_INODE_CSIZE));
-}
-
 #include "mprotect.h"
 
 /* operations */
@@ -286,33 +186,6 @@ extern const struct file_operations aeon_dax_file_operations;
 extern const struct file_operations aeon_dir_operations;
 extern const struct iomap_ops aeon_iomap_ops;
 extern const struct address_space_operations aeon_dax_aops;
-
-/* dir.c */
-int aeon_insert_dir_tree(struct super_block *sb,
-			 struct aeon_inode_info_header *sih,
-			 const char *name, int namelen,
-			 struct aeon_dentry *direntry);
-u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
-		    u64 pi_addr, int inc_link);
-int aeon_remove_dentry(struct dentry *dentry, int dec_link,
-		       struct aeon_inode *update, struct aeon_dentry *de);
-int aeon_get_dentry_address(struct super_block *sb,
-			    struct aeon_inode *pi, u64 *de_addr);
-struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
-				     struct aeon_inode *pi,
-				     struct inode *inode, const char *name,
-				     unsigned long name_len);
-int aeon_delete_dir_tree(struct super_block *sb,
-			 struct aeon_inode_info_header *sih);
-struct aeon_dentry *aeon_dotdot(struct super_block *sb,
-				struct dentry *dentry);
-void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
-		   struct inode *inode, int update_times);
-int aeon_empty_dir(struct inode *inode);
-int aeon_free_cached_dentry_blocks(struct super_block *sb,
-				   struct aeon_inode_info_header *sih);
-void aeon_free_invalid_dentry_list(struct super_block *sb,
-				   struct aeon_inode_info_header *sih);
 
 /* rebuild.c */
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,

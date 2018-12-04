@@ -132,9 +132,31 @@ static inline u64 aeon_get_block_off(struct super_block *sb,
 	return (u64)blocknr << AEON_SHIFT;
 }
 
-static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi) {
+static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi)
+{
 	return (u64)sbi->virt_addr;
 }
+
+static inline int aeon_super_block_persisted(struct aeon_super_block *aeon_sb)
+{
+	__le32 temp;
+
+	temp = cpu_to_le32(crc32_le(SEED,
+				    (unsigned char *)aeon_sb,
+				    AEON_INODE_CSIZE));
+	if (temp != aeon_sb->s_csum)
+		return 0;
+
+	return 1;
+}
+
+static inline void aeon_update_super_block_csum(struct aeon_super_block *aeon_sb)
+{
+	aeon_sb->s_csum = cpu_to_le32(crc32_le(SEED,
+					       (unsigned char *)aeon_sb,
+					       AEON_INODE_CSIZE));
+}
+
 
 struct aeon_range_node *aeon_alloc_inode_node(struct super_block *);
 void aeon_free_inode_node(struct aeon_range_node *node);

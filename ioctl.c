@@ -3,6 +3,7 @@
 #include <linux/uaccess.h>
 
 #include "aeon.h"
+#include "aeon_dir.h"
 #include "libaeon/aeon_libtest.h"
 
 enum failure_type {

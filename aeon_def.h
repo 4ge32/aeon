@@ -4,7 +4,7 @@
 #include <linux/types.h>
 #include <linux/magic.h>
 
-#define AEON_MAGIC 0xEFF10
+#define AEON_MAGIC		0xEFF10
 
 /* manual */
 #define AEON_I_SHIFT            8
@@ -48,49 +48,5 @@
 
 /* AEON supported data blocks */
 #define AEON_BLOCK_TYPE_4K     0
-
-
-#include <linux/uaccess.h>
-#include "aeon_tree.h"
-struct aeon_region_table {
-	spinlock_t r_lock;
-
-	struct tt_root block_free_tree;
-
-	u64	pmem_pool_addr;
-
-	__le64 freed;
-	__le32 i_num_allocated_pages;
-	__le32 i_range_high;
-	__le32 b_range_low;
-	__le64 allocated;	/* allocated entire inodes */
-	__le16 i_allocated;	/* allocated inodes in current pages */
-	__le32 i_head_ino;
-	__le64 i_blocknr;	/* it can be deleted */
-	__le64 this_block;	/* this table blocknr */
-
-	__le64 num_free_blocks;
-	__le64 alloc_data_count;
-	__le64 alloc_data_pages;
-	__le64 freed_data_count;
-	__le64 freed_data_pages;
-} __attribute((__packed__));
-
-struct aeon_dentry {
-	u8	name_len;		/* length of the dentry name */
-	u8	valid;			/* Invalid now? */
-	u8	persisted;		/* fully persisted? */
-
-	__le32	ino;			/* inode no pointed to by this entry */
-	__le64	d_pinode_addr;
-	__le64	d_inode_addr;
-	__le64	d_dentry_addr;
-
-	/* 128 bytes */
-	char	name[AEON_NAME_LEN+1];  /* File name */
-	/* padding */
-	char	pad[92];
-	__le32	csum;			/* entry checksum */
-} __attribute((__packed__));
 
 #endif

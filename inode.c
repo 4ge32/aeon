@@ -11,6 +11,7 @@
 #include "aeon_super.h"
 #include "aeon_balloc.h"
 #include "aeon_extents.h"
+#include "aeon_dir.h"
 
 #define AEON_BLOCK_TYPE_MAX 1
 unsigned int blk_type_to_shift[AEON_BLOCK_TYPE_MAX] = {12};

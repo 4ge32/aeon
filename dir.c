@@ -4,6 +4,7 @@
 #include "aeon.h"
 #include "aeon_super.h"
 #include "aeon_balloc.h"
+#include "aeon_dir.h"
 
 
 int aeon_insert_dir_tree(struct super_block *sb,

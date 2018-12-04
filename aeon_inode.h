@@ -7,6 +7,28 @@
 #define PI_MAX_INTERNAL_EXTENT 5
 #define PI_MAX_EXTERNAL_EXTENT 3
 
+struct imem_cache {
+	u32	ino;
+	u64	addr;
+	int	independent;
+	struct	imem_cache *head;
+	struct	list_head imem_list;
+};
+
+struct i_valid_list {
+	u32	parent_ino;
+	u64	addr;
+	struct	i_valid_child_list *ivcl;
+	struct	list_head i_valid_list;
+};
+
+struct i_valid_child_list {
+	u32	ino;
+	u64	addr;
+	u32	parent_ino;
+	struct	list_head i_valid_child_list;
+};
+
 struct aeon_extent_header {
 	__le16  eh_entries;
 	__le16  eh_depth;
@@ -167,6 +189,26 @@ struct aeon_inode *aeon_get_parent_inode(struct super_block *sb,
 	addr = (u64)sbi->virt_addr + le64_to_cpu(pi->i_pinode_addr);
 
 	return (struct aeon_inode *)addr;
+}
+
+static inline int is_persisted_inode(struct aeon_inode *pi)
+{
+	__le32 temp;
+
+	temp = cpu_to_le32(crc32_le(SEED,
+				    (unsigned char *)pi,
+				    AEON_INODE_CSIZE));
+	if (temp != pi->csum)
+		return 0;
+
+	return 1;
+}
+
+static inline void aeon_update_inode_csum(struct aeon_inode *pi)
+{
+	pi->csum = cpu_to_le32(crc32_le(SEED,
+					(unsigned char *)pi,
+					AEON_INODE_CSIZE));
 }
 
 

@@ -3,6 +3,7 @@
 
 #include "aeon.h"
 #include "aeon_balloc.h"
+#include "aeon_dir.h"
 
 
 static struct dentry *aeon_debugfs_root;

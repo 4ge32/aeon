@@ -3,6 +3,7 @@
 #include <linux/random.h>
 
 #include "aeon.h"
+#include "aeon_dir.h"
 
 #define FULL_PERSIST            14
 #define P_INODE_PERSIST         8

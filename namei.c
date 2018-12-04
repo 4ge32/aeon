@@ -3,6 +3,7 @@
 #include <linux/slab.h>
 
 #include "aeon.h"
+#include "aeon_dir.h"
 
 
 static int aeon_create(struct inode *dir, struct dentry *dentry,
