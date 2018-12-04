@@ -259,6 +259,7 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pi,
 	strncpy(direntry->name, ".\0", 2);
 	direntry->name_len = 2;
 	direntry->ino = cpu_to_le32(pi->aeon_ino);
+	direntry->d_pinode_addr = cpu_to_le64(pi->i_pinode_addr);
 	direntry->d_inode_addr = cpu_to_le64(pi_addr);
 	direntry->d_dentry_addr = cpu_to_le64(de_addr_base);
 	direntry->valid = 1;
