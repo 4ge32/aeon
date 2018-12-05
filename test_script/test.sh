@@ -165,6 +165,11 @@ libaeon ()
   _do_test 1 libaeon
 }
 
+compression ()
+{
+  _do_test 1 compression
+}
+
 source ./list_test.sh
 echo "===== TEST START ====="
 
@@ -195,6 +200,9 @@ case "$1" in
     ;;
   libaeon)
     libaeon
+    ;;
+  compression)
+    compression
     ;;
   all)
     mmap

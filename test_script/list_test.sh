@@ -688,3 +688,18 @@ test-libaeon-1 ()
 
   clean
 }
+
+test-compression-1 ()
+{
+  init
+
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
+  touch $DIR/fake
+  ./$TEST_AEON 5 1 $DIR/fake
+  res=$?
+
+  clean
+}

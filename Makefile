@@ -4,6 +4,7 @@
 
 CONFIG_AEON_FS_XATTR=y
 CONFIG_AEON_FS_SECURITY=y
+CONFIG_AEON_FS_COMPRESSION=y
 
 ifdef CONFIG_AEON_FS_XATTR
 ccflags-y += -DCONFIG_AEON_FS_XATTR
@@ -27,6 +28,7 @@ aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \
 
 aeon-$(CONFIG_AEON_FS_XATTR) += xattr.o xattr_user.o xattr_trusted.o
 aeon-$(CONFIG_AEON_FS_SECURITY) += xattr_security.o
+aeon-$(CONFIG_AEON_FS_COMPRESSION) += compression.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd`

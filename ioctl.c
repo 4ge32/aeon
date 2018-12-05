@@ -5,6 +5,7 @@
 #include "aeon.h"
 #include "aeon_dir.h"
 #include "libaeon/aeon_libtest.h"
+#include "aeon_compression.h"
 
 enum failure_type {
 	CREATE = 1,
@@ -250,6 +251,10 @@ setversion_out:
 		}
 		return 0;
 	}
+	case AEON_IOC_TEST_COMPRESSION:
+		aeon_info("comression test\n");
+		//try_api();
+		return 0;
 	default:
 		return -ENOTTY;
 	}

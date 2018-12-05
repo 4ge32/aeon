@@ -10,12 +10,14 @@
 #define AEON_IOC_DENTRY_ATTACK		_IOWR('f', 6, long)
 #define AEON_IOC_CHILD_ID_ATTACK	_IOWR('f', 7, long)
 #define AEON_IOC_TEST_LIBAEON		_IOWR('f', 8, long)
+#define AEON_IOC_TEST_COMPRESSION	_IOWR('f', 9, long)
 
 enum test_type {
 	DENTRY = 1,
 	INODE,
 	BOTH_OF_CHILD,
 	LIBAEON,
+	COMPRESSION,
 };
 
 enum failure_type {
@@ -61,6 +63,10 @@ int main(int argc, char *argv[])
 		break;
 	case LIBAEON:
 		test_type = AEON_IOC_TEST_LIBAEON;
+		break;
+	case COMPRESSION:
+		test_type = AEON_IOC_TEST_COMPRESSION;
+		break;
 	}
 
 	if ((fd = open(path, O_RDWR)) < 0) {
