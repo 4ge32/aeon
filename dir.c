@@ -6,6 +6,7 @@
 #include "aeon_balloc.h"
 #include "aeon_dir.h"
 
+#define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 
 int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
@@ -610,7 +611,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 		}
 		child_pi = (struct aeon_inode *)pi_addr;
 		if (!dir_emit(ctx, entry->name, entry->name_len,
-			      ino, le16_to_cpu(child_pi->i_mode))) {
+			      ino, IF2DT(le16_to_cpu(child_pi->i_mode)))) {
 			aeon_dbg("%s: pos %lu\n", __func__, pos);
 			return 0;
 		}
