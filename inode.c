@@ -165,7 +165,6 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	p_addr_offset = (u64)pidir - (u64)sbi->virt_addr;
 
 	aeon_memunlock_inode(sb, pi);
-	aeon_memlock_inode(sb, pi);
 
 	pi->deleted = 0;
 	pi->i_new = 1;
@@ -193,6 +192,7 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->valid = 1;
 
 	aeon_update_inode_csum(pi);
+
 	aeon_memlock_inode(sb, pi);
 }
 
