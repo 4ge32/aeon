@@ -33,4 +33,6 @@ struct aeon_extent *aeon_search_extent(struct super_block *sb,
 				       unsigned long iblock);
 int aeon_update_extent(struct super_block *sb, struct inode *inode,
 		       unsigned blocknr, unsigned long offset, int num_blocks);
+int aeon_rebuild_rb_extenttree(struct super_block *sb,
+			       struct inode *inode, int entries);
 #endif

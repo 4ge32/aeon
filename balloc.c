@@ -992,6 +992,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 
 	aeh = aeon_get_extent_header(pi);
 	if (!pi->i_exblocks) {
+		pi->i_new = 0;
 		pi->i_exblocks++;
 		aeon_init_extent_header(aeh);
 	}

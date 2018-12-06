@@ -442,6 +442,28 @@ test-write-1 ()
   clean
 }
 
+test-write-2 ()
+{
+  init
+
+  FILE=list_test.sh
+  TARGET=target
+  cp $FILE $DIR/
+  cp $FILE $TMP/
+  touch $DIR/$TARGET
+  touch $TMP/$TARGET
+  for i in `seq 1 10`
+  do
+    cat $DIR/$FILE $DIR/$FILE >> $DIR/$TARGET
+    cat $TMP/$FILE $TMP/$FILE >> $TMP/$TARGET
+  done
+  ./run.sh rm
+  diff $DIR/$TARGET $TMP/$TARGET
+  res=$?
+
+  clean
+}
+
 helper_recover_test ()
 {
   if [ ! -e $TEST_AEON ]; then

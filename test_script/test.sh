@@ -138,21 +138,7 @@ mmap ()
 
 write ()
 {
-  N=1
-  func="write"
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-$func-$num"
-    test-$func-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 2 write
 }
 
 recover ()

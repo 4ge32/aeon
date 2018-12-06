@@ -189,6 +189,8 @@ extern const struct iomap_ops aeon_iomap_ops;
 extern const struct address_space_operations aeon_dax_aops;
 
 /* rebuild.c */
+int aeon_rebuild_extenttree(struct super_block *sb,
+			    struct aeon_inode *pi, struct inode *inode);
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 				u64 pi_addr, struct inode *inode);
 void aeon_rebuild_inode_cache(struct super_block *sb);

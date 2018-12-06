@@ -4,6 +4,7 @@
 
 #include "aeon.h"
 #include "aeon_dir.h"
+#include "aeon_extents.h"
 
 #define FULL_PERSIST            14
 #define P_INODE_PERSIST         8
@@ -14,6 +15,19 @@
 #define P_AND_C_INODE_PERSIST   (PARENT_PERSIST | C_INODE_PERSIST)
 #define P_AND_C_DENTRY_PERSIST  (PARENT_PERSIST | C_DENTRY_PERSIST)
 #define NOT_FOUND               0
+
+int aeon_rebuild_extenttree(struct super_block *sb,
+			    struct aeon_inode *pi, struct inode *inode)
+{
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	int entries = le16_to_cpu(aeh->eh_entries);
+
+	aeon_info("Rebuild file (inode %u)", le32_to_cpu(pi->aeon_ino));
+	if (entries < PI_MAX_EXTERNAL_EXTENT + 1)
+		return 0;
+
+	return aeon_rebuild_rb_extenttree(sb, inode, entries);
+}
 
 static void add_block_entry(struct aeon_dentry_map *de_map,
 			    u64 blocknr, bool *first)

@@ -97,6 +97,7 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(external_entries << AEON_E_SHIFT);
 
+	aeon_dbg("! blocknr %lu off %d\n", blocknr, external_entries);
 	return (struct aeon_extent *)addr;
 }
 
@@ -200,7 +201,7 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 {
 	struct aeon_range_node *node = NULL;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-	int ret;
+	int err;
 	int i;
 
 	for (i = 0; i < PI_MAX_INTERNAL_EXTENT; i++) {
@@ -211,10 +212,10 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 		node->length = le16_to_cpu(pi->ae[i].ex_length);
 		node->extent = &pi->ae[i];
 
-		ret = do_aeon_insert_extenttree(&sih->rb_tree, node);
-		if (ret) {
+		err = do_aeon_insert_extenttree(&sih->rb_tree, node);
+		if (err) {
 			aeon_free_extent_node(node);
-			return ret;
+			return err;
 		}
 	}
 
@@ -442,6 +443,56 @@ aeon_cutoff_extenttree(struct super_block *sb,
 		index++;
 		remaining--;
 	}
+
+	return 0;
+}
+
+int
+aeon_rebuild_rb_extenttree(struct super_block *sb,
+			   struct inode *inode, int entries)
+{
+	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	int err;
+	int i;
+
+	err = aeon_build_new_rb_extent_tree(sb, sih);
+	if (err) {
+		aeon_err(sb, "%s - rebuild rb_extent_tree\n", __func__);
+		return err;
+	}
+
+	/* Insert remaining extetns into a tree */
+	read_lock(&sih->i_meta_lock);
+	for (i = PI_MAX_INTERNAL_EXTENT; i < entries; i++) {
+		struct aeon_range_node *node;
+		struct aeon_extent *ae;
+		u64 addr;
+
+		addr = aeon_pull_extent_addr(sb, sih, i);
+		if (!addr) {
+			read_unlock(&sih->i_meta_lock);
+			return -ENOENT;
+		}
+		ae = (struct aeon_extent *)addr;
+
+		node = aeon_alloc_extent_node(sb);
+		if (!node) {
+			read_unlock(&sih->i_meta_lock);
+			return -ENOMEM;
+		}
+		node->offset = le32_to_cpu(ae->ex_offset);
+		node->length = le16_to_cpu(ae->ex_length);
+		node->extent = ae;
+
+		err = do_aeon_insert_extenttree(&sih->rb_tree, node);
+		if (err) {
+			aeon_err(sb, "%s - insert_extenttree\n", __func__);
+			aeon_free_extent_node(node);
+			read_unlock(&sih->i_meta_lock);
+			return err;
+		}
+	}
+	read_unlock(&sih->i_meta_lock);
 
 	return 0;
 }

@@ -479,6 +479,13 @@ static int aeon_rebuild_inode(struct super_block *sb, struct inode *inode,
 		goto end;
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFREG:
+		err = aeon_rebuild_extenttree(sb, pi, inode);
+		if (err) {
+			aeon_err(sb, "Can't rebuild extent tree\n");
+			return err;
+		}
+		break;
 	case S_IFDIR:
 		err = aeon_rebuild_dir_inode_tree(sb, pi, pi_addr, inode);
 		if (err) {
