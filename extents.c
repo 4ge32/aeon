@@ -97,7 +97,6 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(external_entries << AEON_E_SHIFT);
 
-	aeon_dbg("! blocknr %lu off %d\n", blocknr, external_entries);
 	return (struct aeon_extent *)addr;
 }
 

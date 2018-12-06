@@ -12,13 +12,14 @@ FAILED ()
 
 _do_test ()
 {
-  N=$1
-  for num in `seq 1 $N`
+  S=$1
+  N=$2
+  for num in `seq $S $N`
   do
     res=1
     ./run.sh
     echo -n "test-$2-$num"
-    test-$2-$num
+    test-$3-$num
     if [ "$res" = "0" ]; then
       OK
     else
@@ -138,17 +139,17 @@ mmap ()
 
 write ()
 {
-  _do_test 2 write
+  _do_test 1 2 write
 }
 
 recover ()
 {
-  _do_test 13 recover
+  _do_test 1 13 recover
 }
 
 libaeon ()
 {
-  _do_test 1 libaeon
+  _do_test 1 1 libaeon
 }
 
 compression ()

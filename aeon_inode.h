@@ -43,7 +43,6 @@ struct aeon_extent {
 	__le32  ex_offset;
 } __attribute((__packed__));
 
-
 enum aeon_new_inode_type {
 	TYPE_CREATE = 0,
 	TYPE_MKNOD,

@@ -975,11 +975,9 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 
 		offset = le32_to_cpu(ae->ex_offset);
 		*bno = le64_to_cpu(ae->ex_block);
-		length = le16_to_cpu(ae->ex_length);
+		length = le16_to_cpu(ae->ex_length) - (iblock -offset);
 		*bno += (iblock - offset);
 
-		if (length > max_blocks)
-			length = max_blocks;
 		return length;
 	}
 
