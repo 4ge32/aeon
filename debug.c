@@ -301,7 +301,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 		}
 
 		blocknr = le64_to_cpu(de_map->block_dentry[global]);
-		de = (struct aeon_dentry *)(sbi->virt_addr +
+		de = (struct aeon_dentry *)((u64)sbi->virt_addr +
 					   (blocknr << AEON_SHIFT) +
 					   (internal << AEON_D_SHIFT));
 		if (!de->valid) {

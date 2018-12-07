@@ -3,7 +3,7 @@
 
 struct aeon_dentry_invalid {
 	struct list_head invalid_list;
-	u64 d_addr;
+	struct aeon_dentry *d_addr;
 };
 
 struct aeon_dentry_map {
@@ -13,7 +13,6 @@ struct aeon_dentry_map {
 	unsigned int  num_latest_dentry;
 	unsigned int  num_internal_dentries;
 };
-
 
 /*
  * Structure of an private dentry info on dram
@@ -32,15 +31,19 @@ struct aeon_dentry {
 	u8	valid;			/* Invalid now? */
 	u8	persisted;		/* fully persisted? */
 
-	__le32	ino;			/* inode no pointed to by this entry */
+	__le32	ino;
 	__le64	d_pinode_addr;
 	__le64	d_inode_addr;
 	__le64	d_dentry_addr;
 
+	__le64	d_prev_dentry_block;
+	__le64	d_this_dentry_block;
+	__le64	d_next_dentry_block;
+
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN+1];  /* File name */
 	/* padding */
-	char	pad[92];
+	char	pad[68];
 	__le32	csum;			/* entry checksum */
 } __attribute((__packed__));
 

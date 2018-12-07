@@ -402,26 +402,27 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	u64 de_addr = 0;
 	u32 parent_ino;
 	bool first = true;
-	int err;
+	int err = -ENOMEM;
 	int p_state = NOT_FOUND;
 	int c_state = NOT_FOUND;
+	int i;
+	int num_candidate_dentries = 2;
+	u64 next_block;
+	u64 i_dentry_tb;
 
 	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
 	if (!de_info)
 		return -ENOMEM;
 	adi = kzalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
-	if (!adi) {
-		kfree(de_info);
-		de_info = NULL;
-		return -ENOMEM;
-	}
+	if (!adi)
+		goto out;
 
 	de_info->di = adi;
 	sih->de_info = de_info;
 	de_map = &de_info->de_map;
-	de_map->num_dentries = 2;
+	de_map->num_dentries = 0;
 	de_map->num_latest_dentry = 0;
-	de_map->num_internal_dentries = 2;
+	de_map->num_internal_dentries = 0;
 	INIT_LIST_HEAD(&de_info->di->invalid_list);
 
 	parent_ino = le32_to_cpu(pi->aeon_ino);
@@ -441,14 +442,13 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	de_info = NULL;
 	adi = NULL;
 	mutex_unlock(&de_info->dentry_mutex);
-	return -ENOENT;
+	err = -ENOENT;
+	goto out1;
 
 found:
 	aeon_dbg("Rebuild directory %u\n", parent_ino);
-	if (is_persisted_inode(pi)) {
-		aeon_dbg("YEA!\n");
+	if (is_persisted_inode(pi))
 		p_state |= P_INODE_PERSIST;
-	}
 
 	err = aeon_check_parent_dir_state(p_state);
 	if (err)
@@ -490,8 +490,48 @@ found:
 			return err;
 
 		d_blocknr = le64_to_cpu(child_pi->i_dentry_addr) >> AEON_SHIFT;
-		add_block_entry(de_map, d_blocknr, &first);
-		update_dentry_map(de_map);
+
+		num_candidate_dentries++;
+	}
+
+	i_dentry_tb = le64_to_cpu(pi->i_dentry_table_block);
+	//aeon_dbg("can %d\n", num_candidate_dentries);
+	while (num_candidate_dentries > 0) {
+		if (!i_dentry_tb)
+			break;
+		add_block_entry(de_map, i_dentry_tb, &first);
+		for (i = 0; i < AEON_INTERNAL_ENTRY; i++) {
+			struct aeon_dentry_invalid *adi;
+
+			d = (struct aeon_dentry *)((u64)sbi->virt_addr +
+						   (i_dentry_tb << AEON_SHIFT) +
+						   (i << AEON_D_SHIFT));
+			if (i == 0)
+				next_block = d->d_next_dentry_block;
+			if (!d->valid) {
+				adi = kmalloc(sizeof(struct aeon_dentry_invalid),
+					      GFP_KERNEL);
+				if (!adi) {
+					aeon_err(sb,
+						 "%s: Can't get memory...\n",
+						 __func__);
+					return -ENOMEM;
+				}
+				adi->d_addr = d;
+				list_add_tail(&adi->invalid_list,
+					      &de_info->di->invalid_list);
+				goto next;
+			}
+
+			//aeon_dbg("!!! %s\n", d->name);
+			num_candidate_dentries--;
+next:
+			update_dentry_map(de_map);
+			if (num_candidate_dentries == 0)
+				break;
+		}
+		i_dentry_tb = next_block;
+		//aeon_dbg("next %llu\n", i_dentry_tb);
 	}
 
 	err = aeon_check_pidir(pi, de_map, p_state);
@@ -510,6 +550,14 @@ found:
 	mutex_unlock(&de_info->dentry_mutex);
 
 	return 0;
+out1:
+	kfree(de_info->di);
+	de_info->di = NULL;
+out:
+	kfree(de_info);
+	de_info = NULL;
+
+	return err;
 }
 
 static unsigned int imem_cache_rebuild(struct aeon_sb_info *sbi,

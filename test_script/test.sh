@@ -154,7 +154,12 @@ libaeon ()
 
 compression ()
 {
-  _do_test 1 compression
+  _do_test 1 1 compression
+}
+
+other ()
+{
+  _do_test 1 1 other
 }
 
 source ./list_test.sh
@@ -191,6 +196,9 @@ case "$1" in
   compression)
     compression
     ;;
+  other)
+    other
+    ;;
   all)
     mmap
     write
@@ -200,6 +208,7 @@ case "$1" in
     rename
     create
     recover
+    other
     ;;
   *)
     echo "remoe rename create all"

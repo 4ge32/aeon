@@ -725,3 +725,27 @@ test-compression-1 ()
 
   clean
 }
+
+test-other-1 ()
+{
+  init
+
+  touch $DIR/abc
+  touch $DIR/bcd
+  touch $TMP/good
+  touch $TMP/bcd
+  rm $DIR/abc
+  ./run.sh rm
+  touch $DIR/good
+  diff $TMP $DIR
+  res=$?
+
+  clean
+}
+
+test-other-2 ()
+{
+  init
+
+  clean
+}

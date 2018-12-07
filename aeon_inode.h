@@ -83,7 +83,7 @@ struct aeon_inode {
 	__le64	i_inode_addr;	 /* inode itself address offset */
 
 	__le64	i_next_inode_block;
-	u8      i_internal_allocated;
+	__le64	i_dentry_table_block;
 
 	__le64  i_block;         /* exist extent or point extent block */
 	__le64	i_blocks;        /* block counts */
@@ -97,7 +97,6 @@ struct aeon_inode {
 	struct aeon_extent ae[PI_MAX_INTERNAL_EXTENT];
 	__le16 i_exblocks;
 
-	char	pad[7];
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
 

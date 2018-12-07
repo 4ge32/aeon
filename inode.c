@@ -177,7 +177,6 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->parent_ino = cpu_to_le32(pidir->aeon_ino);
 	pi->i_block = 0;
 	pi->i_blocks = 0;
-	pi->i_internal_allocated = 0;
 	pi->i_pinode_addr = cpu_to_le64(p_addr_offset);
 	pi->i_inode_addr = cpu_to_le64(i_addr_offset);
 	pi->i_dentry_addr = cpu_to_le64(d_addr_offset);
