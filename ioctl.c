@@ -3,6 +3,7 @@
 #include <linux/uaccess.h>
 
 #include "aeon.h"
+#include "aeon_super.h"
 #include "aeon_dir.h"
 #include "libaeon/aeon_libtest.h"
 #include "aeon_compression.h"
@@ -147,6 +148,7 @@ setversion_out:
 			return -EFAULT;
 		}
 
+		fs_persisted = 0;
 		return 0;
 	}
 	case AEON_IOC_DENTRY_ATTACK: {
@@ -172,6 +174,7 @@ setversion_out:
 
 		aeon_dbg("Destroy inode (ino %u) illegaly\n",
 			 le32_to_cpu(pi->aeon_ino));
+		fs_persisted = 0;
 		return 0;
 	}
 	case AEON_IOC_CHILD_ID_ATTACK: {
@@ -240,6 +243,8 @@ setversion_out:
 		default:
 			return -EFAULT;
 		}
+
+		fs_persisted = 0;
 
 		return 0;
 	}

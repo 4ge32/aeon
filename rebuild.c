@@ -3,6 +3,7 @@
 #include <linux/random.h>
 
 #include "aeon.h"
+#include "aeon_super.h"
 #include "aeon_dir.h"
 #include "aeon_extents.h"
 
@@ -15,6 +16,8 @@
 #define P_AND_C_INODE_PERSIST   (PARENT_PERSIST | C_INODE_PERSIST)
 #define P_AND_C_DENTRY_PERSIST  (PARENT_PERSIST | C_DENTRY_PERSIST)
 #define NOT_FOUND               0
+
+int fs_persisted = 1;
 
 int aeon_rebuild_extenttree(struct super_block *sb,
 			    struct aeon_inode *pi, struct inode *inode)
@@ -150,6 +153,9 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 					struct aeon_dentry **c_de, int err)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	if (fs_persisted)
+		return 0;
 
 	if (err == CHILD_PERSIST) {
 		struct obj_queue *oq;
@@ -483,8 +489,8 @@ found:
 				continue;
 		}
 
-		aeon_dbg("d->name %s d->name_len %d dino %u iino %u\n",
-			 d->name, d->name_len, le32_to_cpu(d->ino), le32_to_cpu(child_pi->aeon_ino));
+		//aeon_dbg("d->name %s d->name_len %d dino %u iino %u\n",
+		//	 d->name, d->name_len, le32_to_cpu(d->ino), le32_to_cpu(child_pi->aeon_ino));
 		err = aeon_insert_dir_tree(sb, sih, d->name, d->name_len, d);
 		if (err)
 			return err;

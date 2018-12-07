@@ -1,8 +1,11 @@
 #ifndef __AEON_SUPER_H
 #define __AEON_SUPER_H
 
+extern int fs_persisted;
+
 struct aeon_super_block {
 	spinlock_t s_lock;
+	u8     s_wakeup;
 
 	__le16 s_map_id;	   /* for allocating inodes in round-robin order */
 	__le16 s_cpus;		   /* number of cpus */
@@ -17,7 +20,7 @@ struct aeon_super_block {
 	__le64 s_num_inodes;
 	__le64 s_num_free_blocks;
 
-	char   pad[452];
+	char   pad[444];
 	__le32 s_csum;              /* checksum of this sb */
 } __attribute((__packed__));
 
@@ -155,6 +158,29 @@ static inline void aeon_update_super_block_csum(struct aeon_super_block *aeon_sb
 	aeon_sb->s_csum = cpu_to_le32(crc32_le(SEED,
 					       (unsigned char *)aeon_sb,
 					       AEON_INODE_CSIZE));
+}
+
+static inline void aeon_wakeup(struct super_block *sb)
+{
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+
+	aeon_sb->s_wakeup = 1;
+}
+
+static inline void aeon_sleep(struct super_block *sb)
+{
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+
+	aeon_sb->s_wakeup = 0;
+}
+
+static inline int is_shutdown_ok(struct super_block *sb)
+{
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+
+	if (aeon_sb->s_wakeup)
+		return 0;
+	return 1;
 }
 
 

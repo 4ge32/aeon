@@ -545,7 +545,7 @@ int aeon_free_cached_dentry_blocks(struct super_block *sb,
 	for (global = 1; global <= de_map->num_latest_dentry; global++) {
 		free = true;
 		blocknr = de_map->block_dentry[global];
-		aeon_dbg("blocknr %lu\n", blocknr);
+		//aeon_dbg("blocknr %lu\n", blocknr);
 		for (internal = 0; internal < AEON_INTERNAL_ENTRY; internal++) {
 			de = (struct aeon_dentry *)(sbi->virt_addr +
 						    (blocknr << AEON_SHIFT) +

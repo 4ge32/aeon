@@ -18,7 +18,7 @@ _do_test ()
   do
     res=1
     ./run.sh
-    echo -n "test-$2-$num"
+    echo -n "test-$3-$num"
     test-$3-$num
     if [ "$res" = "0" ]; then
       OK
@@ -159,7 +159,7 @@ compression ()
 
 other ()
 {
-  _do_test 1 1 other
+  _do_test 1 2 other
 }
 
 source ./list_test.sh

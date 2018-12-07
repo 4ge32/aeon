@@ -82,8 +82,8 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	curr = container_of(temp, struct aeon_range_node, node);
 	si->f_range_low = curr->range_low;
 	si->f_range_high = curr->range_high;
-	aeon_dbg("R:%lu\n", curr->range_low);
-	aeon_dbg("R*%lu\n", curr->range_high);
+	//aeon_dbg("R:%lu\n", curr->range_low);
+	//aeon_dbg("R*%lu\n", curr->range_high);
 	temp = &(free_list->last_node->node);
 	curr = container_of(temp, struct aeon_range_node, node);
 	si->l_range_low = curr->range_low;
@@ -279,6 +279,8 @@ static int stat_den_show(struct seq_file *s, void *v)
 
 	si = list_first_entry(&aeon_stat_list, struct aeon_stat_info, stat_list);
 	sbi = si->sbi;
+	seq_printf(s, "head: 0x%llx\n", (u64)sbi->virt_addr);
+
 	pi = aeon_get_reserved_inode(sbi->sb, AEON_ROOT_INO);
 	de_map = aeon_get_dentry_map(sbi->sb, &sbi->si->header);
 	if (!de_map)
@@ -312,6 +314,7 @@ static int stat_den_show(struct seq_file *s, void *v)
 			continue;
 		}
 
+
 		seq_printf(s, "O %8u : %8u : %8lu : %8u : %15s : ",
 			   internal, global, blocknr,
 			   le32_to_cpu(de->ino), de->name);
@@ -333,18 +336,20 @@ static int stat_den_show(struct seq_file *s, void *v)
 		pi = (struct aeon_inode *)pi_addr;
 		switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 		case S_IFREG:
-			seq_printf(s, "%8s\n", "REGULAR");
+			seq_printf(s, "%8s  ", "REGULAR");
 			break;
 		case S_IFDIR:
-			seq_printf(s, "%8s\n", "DIRECTORY");
+			seq_printf(s, "%8s  ", "DIRECTORY");
 			break;
 		case S_IFLNK:
-			seq_printf(s, "%8s\n", "SYMLINK");
+			seq_printf(s, "%8s ", "SYMLINK");
 			break;
 		default:
-			seq_printf(s, "%8s\n", "SPECIAL");
+			seq_printf(s, "%8s  ", "SPECIAL");
 			break;
 		}
+
+		seq_printf(s, "%llx\n", pi_addr);
 
 next:
 

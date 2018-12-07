@@ -747,5 +747,34 @@ test-other-2 ()
 {
   init
 
+  for i in `seq 1 100`
+  do
+    touch $DIR/$i
+    touch $TMP/$i
+  done
+  for i in `seq 4 6`
+  do
+    rm $DIR/$i
+    rm $TMP/$i
+  done
+  for i in `seq 40 57`
+  do
+    rm $DIR/$i
+    rm $TMP/$i
+  done
+  for i in `seq 78 94`
+  do
+    rm $DIR/$i
+    rm $TMP/$i
+  done
+  ./run.sh rm
+  for i in `seq 1 20`
+  do
+    touch $DIR/NEW$i
+    touch $TMP/NEW$i
+  done
+  diff $TMP $DIR
+  res=$?
+
   clean
 }

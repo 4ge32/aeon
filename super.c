@@ -85,6 +85,7 @@ static void aeon_put_super(struct super_block *sb)
 
 	kfree(sbi);
 
+	aeon_sleep(sb);
 	aeon_dbg("Unmount filesystem\n");
 }
 
@@ -276,6 +277,7 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
+	aeon_info("head addr 0x%llx\n", (u64)virt_addr);
 
 	return 0;
 }
@@ -311,6 +313,9 @@ static int aeon_super_block_check(struct super_block *sb)
 		aeon_err(sb, "not matching the number of cpu cores");
 		goto err;
 	}
+
+	if (!is_shutdown_ok(sb))
+		fs_persisted = 0;
 
 	return 1;
 err:
@@ -415,6 +420,9 @@ static void aeon_init_super_block(struct super_block *sb, unsigned long size)
 	aeon_sb->s_num_inodes = 1;
 	aeon_sb->s_csum = SEED;
 
+	aeon_wakeup(sb);
+	aeon_update_super_block_csum(aeon_sb);
+
 	aeon_memlock_super(sb);
 }
 
@@ -502,8 +510,6 @@ static struct aeon_inode *aeon_init(struct super_block *sb, unsigned long size)
 		aeon_init_super_block(sb, size);
 		aeon_init_root_inode(sb, root_i);
 	} else {
-		if (unlikely(root_i->i_new == 1))
-			root_i->i_new = 0;
 		if (!aeon_super_block_check(sb))
 			return NULL;
 	}

@@ -379,13 +379,15 @@ err:
 u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode_map *inode_map;
 	int cpu_id;
 	int ret;
 	u32 ino = 0;
 	u32 free_ino = 0;
 
-	cpu_id = aeon_get_cpuid(sb);
+	cpu_id = aeon_sb->s_map_id;
+	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
 	inode_map = &sbi->inode_maps[cpu_id];
 
 	mutex_lock(&inode_map->inode_table_mutex);
@@ -770,13 +772,17 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
 		err = aeon_delete_extenttree(sb, sih);
-		if (err)
+		if (err) {
+			aeon_err(sb, "regular\n");
 			goto out;
+		}
 		break;
 	case S_IFDIR:
 		err = aeon_delete_dir_tree(sb, sih);
-		if (err)
+		if (err) {
+			aeon_err(sb, "directory\n");
 			goto out;
+		}
 		break;
 	case S_IFLNK:
 		aeon_dbg("Want to delete syn");
