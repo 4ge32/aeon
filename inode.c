@@ -786,8 +786,11 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		}
 		break;
 	case S_IFLNK:
-		aeon_dbg("Want to delete syn");
-		//err = aeon_delete_symblock();
+		err = aeon_delete_symblock(sb, sih);
+		if (err) {
+			aeon_err(sb, "symlink\n");
+			goto out;
+		}
 		break;
 	default:
 		aeon_dbg("%s: special ino %u\n",

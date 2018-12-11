@@ -196,6 +196,8 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 void aeon_rebuild_inode_cache(struct super_block *sb);
 
 /* symlink.c */
+int aeon_delete_symblock(struct super_block *sb,
+			 struct aeon_inode_info_header *sih);
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 		       const char *symname, int len);
 

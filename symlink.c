@@ -4,6 +4,22 @@
 #include "aeon.h"
 #include "aeon_balloc.h"
 
+int aeon_delete_symblock(struct super_block *sb,
+			 struct aeon_inode_info_header *sih)
+{
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	unsigned long blocknr;
+	int err;
+
+	blocknr = le64_to_cpu(pi->sym_block);
+	err = aeon_insert_blocks_into_free_list(sb, blocknr, 1, 0);
+	if (err) {
+		aeon_err(sb, "%s: free symlonk pmem resource\n", __func__);
+		return err;
+	}
+
+	return 0;
+}
 
 int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 		       const char *symname, int len)
