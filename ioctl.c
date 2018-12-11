@@ -19,6 +19,12 @@ enum failure_type {
 	CREATE_ID4,
 	RENAME_ID1,
 	RENAME_ID2,
+	MKDIR_1,
+	MKDIR_2,
+	MKDIR_3,
+	MKDIR_4,
+	MKDIR_5,
+	MKDIR_6,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -215,7 +221,7 @@ setversion_out:
 		case CREATE_ID4: {
 			struct aeon_inode *pidir;
 
-			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
 			pidir->csum = 91;
 			break;
 		}
@@ -223,7 +229,7 @@ setversion_out:
 			/* links count is not added */
 			struct aeon_inode *pidir;
 
-			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
 			pidir->i_links_count--;
 			pidir->csum = 91;
 			aeon_dbg("ino %u\n", le32_to_cpu(pidir->aeon_ino));
@@ -233,11 +239,51 @@ setversion_out:
 			/* links count is not substracted */
 			struct aeon_inode *pidir;
 
-			pidir = aeon_get_parent_inode(sb, &AEON_I(inode)->header);
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
 			pidir->i_links_count++;
 			pidir->csum = 91;
-			aeon_dbg("ino %u\n", le32_to_cpu(pidir->aeon_ino));
-			aeon_dbg("LAST!!\n");
+			break;
+		}
+		case MKDIR_1: {
+			/* Blocks dropped: C_inode
+			 * Error: Parent - bad dir entry
+			 *        Child  - Orphan block
+			 */
+			memset(pi, 0, sizeof(*pi));
+			break;
+		}
+		case MKDIR_2: {
+			/* Blocks dropped: C_dir
+			 * Error: Child - bad dir entry
+			 */
+			memset(de, 0, sizeof(*de));
+			aeon_dbg("LAST!\n");
+			break;
+		}
+		case MKDIR_3: {
+			/* Blocks dropped: P_dir
+			 * Error: Child - Orphan inode
+			 *        Child - Bad dir entry
+			 */
+			struct aeon_inode *pidir;
+
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
+			pidir->i_dentry_table_block = 0;
+			break;
+		}
+		case MKDIR_4: {
+			/* Blocks dropped: C_inode
+			 *                 C_dir
+			 * Error: Parent - Bad dir entry
+			 *        Child  - Bad dir entry
+			 *
+			 */
+			break;
+		}
+		case MKDIR_5: {
+			break;
+		}
+		case MKDIR_6: {
 			break;
 		}
 		default:

@@ -12,6 +12,12 @@ struct aeon_dentry_map {
 	unsigned long  num_dentries;
 	unsigned int  num_latest_dentry;
 	unsigned int  num_internal_dentries;
+	bool first;
+};
+
+struct aeon_dentry_candidate {
+	struct list_head list;
+	struct aeon_dentry *d;
 };
 
 /*
@@ -21,6 +27,7 @@ struct aeon_dentry_info {
 	struct mutex dentry_mutex;
 	struct aeon_dentry_invalid *di;
 	struct aeon_dentry_map de_map;
+	struct aeon_dentry_candidate *adc;
 };
 
 /*
@@ -91,6 +98,16 @@ struct aeon_dentry_map *aeon_get_dentry_map(struct super_block *sb,
 
 	return &sih->de_info->de_map;
 
+}
+
+static inline
+u64 aeon_get_dentry_tb_head(struct super_block *sb, struct aeon_inode *pidir)
+{
+	u64 ret = le64_to_cpu(pidir->i_dentry_table_block);
+	if (ret < 0 || AEON_SB(sb)->num_blocks <= ret)
+		/* There is no possibility that an dentry table block would be zero */
+		return 0;
+	return ret;
 }
 
 

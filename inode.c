@@ -333,6 +333,7 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 				addr = im->addr;
 				list_del(&im->imem_list);
 				kfree(im);
+				im = NULL;
 				goto found;
 			}
 		}

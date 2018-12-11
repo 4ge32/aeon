@@ -32,14 +32,13 @@ int aeon_rebuild_extenttree(struct super_block *sb,
 	return aeon_rebuild_rb_extenttree(sb, inode, entries);
 }
 
-static void add_block_entry(struct aeon_dentry_map *de_map,
-			    u64 blocknr, bool *first)
+static void add_block_entry(struct aeon_dentry_map *de_map, u64 blocknr)
 {
 	int i;
 
-	if (first && *first) {
+	if (de_map->first) {
 		de_map->block_dentry[0] = blocknr;
-		*first = false;
+		de_map->first = false;
 		return;
 	}
 
@@ -269,63 +268,144 @@ static int insert_existing_list(struct aeon_sb_info *sbi,
 	return 0;
 }
 
-//static int insert_inode_to_validlist(struct super_block *sb, u64 addr,
-//				     u32 ino, u32 parent_ino)
-//{
-//	struct aeon_sb_info *sbi = AEON_SB(sb);
-//	struct i_valid_list *ivl;
-//	struct i_valid_child_list *ivcl_init;
-//	struct i_valid_child_list *ivcl;
-//	int res;
-//
-//	ivcl = kmalloc(sizeof(struct i_valid_child_list), GFP_KERNEL);
-//	if (!ivcl)
-//		return -ENOMEM;
-//
-//	mutex_lock(&sbi->s_lock);
-//
-//	ivcl->addr = addr;
-//	ivcl->ino = ino;
-//	ivcl->parent_ino = parent_ino;
-//	res = insert_existing_list(sbi, ivcl);
-//	if (res) {
-//		mutex_unlock(&sbi->s_lock);
-//		return 0;
-//	}
-//
-//	ivl = kmalloc(sizeof(struct i_valid_list), GFP_KERNEL);
-//	if (!ivl) {
-//		kfree(ivcl);
-//		ivcl = NULL;
-//		mutex_unlock(&sbi->s_lock);
-//		return -ENOMEM;
-//	}
-//
-//	ivcl_init = kmalloc(sizeof(struct i_valid_child_list), GFP_KERNEL);
-//	if (!ivcl_init) {
-//		kfree(ivcl);
-//		kfree(ivl);
-//		ivcl = NULL;
-//		ivl = NULL;
-//		mutex_unlock(&sbi->s_lock);
-//		return -ENOMEM;
-//	}
-//
-//	ivl->ivcl = ivcl_init;
-//	INIT_LIST_HEAD(&ivl->ivcl->i_valid_child_list);
-//
-//	ivl->parent_ino = parent_ino;
-//
-//	list_add_tail(&ivcl->i_valid_child_list, &ivl->ivcl->i_valid_child_list);
-//	list_add_tail(&ivl->i_valid_list, &sbi->ivl->i_valid_list);
-//
-//	mutex_unlock(&sbi->s_lock);
-//	return 0;
-//}
+static int
+aeon_iterate_candidate(struct aeon_dentry *de, struct aeon_dentry_info *de_info)
+{
+	struct aeon_dentry_candidate *ca;
+	struct aeon_dentry_candidate *dend = NULL;
+	int found = 0;
+
+	list_for_each_entry_safe(ca, dend, &de_info->adc->list, list) {
+		if (ca->d == de) {
+			list_del(&ca->list);
+			kfree((void *)ca);
+			found = 1;
+			goto out;
+		}
+	}
+
+out:
+	return found;
+}
+
+static int
+do_insert_to_validlist(struct super_block *sb, u64 addr,
+		       u32 ino, u32 parent_ino, struct i_valid_list *ivl)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct i_valid_child_list *ivcl;
+	int res;
+
+	ivcl = kmalloc(sizeof(struct i_valid_child_list), GFP_KERNEL);
+	if (!ivcl)
+		return -ENOMEM;
+
+	mutex_lock(&sbi->s_lock);
+
+	ivcl->addr = addr;
+	ivcl->ino = ino;
+	ivcl->parent_ino = parent_ino;
+	res = insert_existing_list(sbi, ivcl);
+	if (res) {
+		mutex_unlock(&sbi->s_lock);
+		return 0;
+	}
+	list_add_tail(&ivcl->i_valid_child_list, &ivl->ivcl->i_valid_child_list);
+
+	mutex_unlock(&sbi->s_lock);
+	return 0;
+}
+
+static void
+init_lost_inode(struct super_block *sb, struct aeon_inode *pi, u32 ino,
+		u32 d_addr_base, u32 p_addr_base, u32 i_addr_base)
+{
+	aeon_memunlock_inode(sb, pi);
+
+	if (!pi->i_mode)
+		pi->i_mode = cpu_to_le16(0700);
+	pi->aeon_ino = cpu_to_le32(ino);
+	pi->i_pinode_addr = cpu_to_le64(p_addr_base);
+	pi->i_inode_addr = cpu_to_le64(i_addr_base);
+	pi->i_dentry_addr = cpu_to_le64(d_addr_base);
+
+	pi->persisted = 1;
+	pi->valid = 1;
+
+	aeon_update_inode_csum(pi);
+
+	aeon_memlock_inode(sb, pi);
+}
+
+static int
+insert_inode_to_validlist(struct super_block *sb, struct aeon_inode *pidir,
+			  struct aeon_dentry *negative_dentry,
+			  struct i_valid_list *ivl)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_inode *pi;
+	struct inode_map *inode_map;
+	struct imem_cache *im;
+	int ino = le32_to_cpu(negative_dentry->ino);
+	int cpu_id;
+	int err;
+	u64 addr = 0;
+	u64 d_addr_base;
+	u64 p_addr_base;
+	u64 i_addr_base;
+
+	cpu_id = ino % sbi->cpus;
+	if (cpu_id >= sbi->cpus)
+		cpu_id -= sbi->cpus;
+
+	inode_map = &sbi->inode_maps[cpu_id];
+
+	mutex_lock(&inode_map->inode_table_mutex);
+
+	list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
+		if (im->ino == ino) {
+			addr = im->addr;
+			list_del(&im->imem_list);
+			kfree((void *)im);
+			im = NULL;
+			goto out;
+		}
+	}
+out:
+	mutex_unlock(&inode_map->inode_table_mutex);
+
+	if (!addr)
+		return -ENOENT;
+
+	pi = (struct aeon_inode *)addr;
+	if (pi->deleted) {
+		negative_dentry->valid = 0;
+		return -ENOENT;
+	}
+
+	err = do_insert_to_validlist(sb, addr, ino,
+				     le32_to_cpu(pidir->aeon_ino), ivl);
+	if (err) {
+		aeon_err(sb, "%s:%d\n", __func__, __LINE__);
+		return err;
+	}
+
+	d_addr_base = (u64)negative_dentry - (u64)sbi->virt_addr;
+	p_addr_base = (u64)pidir - (u64)sbi->virt_addr;
+	i_addr_base = addr - (u64)sbi->virt_addr;
+	negative_dentry->d_dentry_addr = d_addr_base;
+	negative_dentry->d_pinode_addr = p_addr_base;
+	negative_dentry->d_inode_addr = i_addr_base;
+
+	init_lost_inode(sb, (struct aeon_inode *)addr, ino, d_addr_base,
+			p_addr_base, i_addr_base);
+
+	return 0;
+}
 
 static int aeon_recover_child_again(struct super_block *sb,
 				    struct aeon_inode *pi, struct inode *inode,
-				    struct aeon_dentry_map *de_map, bool first)
+				    struct aeon_dentry_map *de_map)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
@@ -369,7 +449,8 @@ static int aeon_recover_child_again(struct super_block *sb,
 		de = oq->de;
 
 		aeon_dbg("d->name %s d->name_len %d dino %u iino %u\n",
-			 de->name, de->name_len, le32_to_cpu(de->ino), le32_to_cpu(pi->aeon_ino));
+			 de->name, de->name_len, le32_to_cpu(de->ino),
+			 le32_to_cpu(pi->aeon_ino));
 		err = aeon_insert_dir_tree(sb, sih, de->name, de->name_len, de);
 		if (err) {
 			aeon_err(sb, "%s: insert_dir_tree\n", __func__);
@@ -377,7 +458,7 @@ static int aeon_recover_child_again(struct super_block *sb,
 		}
 
 		blocknr = le64_to_cpu(pi->i_dentry_addr) >> AEON_SHIFT;
-		add_block_entry(de_map, blocknr, &first);
+		add_block_entry(de_map, blocknr);
 		update_dentry_map(de_map);
 
 		lost--;
@@ -391,30 +472,196 @@ static int aeon_recover_child_again(struct super_block *sb,
 	return 0;
 }
 
+static int
+aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
+			   struct aeon_dentry *parent_de,
+			   struct i_valid_list *ivl,
+			   struct aeon_dentry_info *de_info, int *p_state)
+{
+	struct aeon_dentry_candidate *adc;
+	struct aeon_inode *pi;
+	struct aeon_dentry *d = NULL;
+	struct i_valid_child_list *ivcl;
+	u64 de_addr = 0;
+	int c_state = NOT_FOUND;
+	int ret = 0;
+	int err;
+
+
+	adc = kzalloc(sizeof(struct aeon_dentry_candidate), GFP_KERNEL);
+	if (!adc)
+		return -ENOMEM;
+	de_info->adc = adc;
+	INIT_LIST_HEAD(&de_info->adc->list);
+
+	if (is_persisted_inode(pidir))
+		*p_state |= P_INODE_PERSIST;
+
+	err = aeon_check_parent_dir_state(*p_state);
+	if (err)
+		aeon_dbg("FUTURE %d\n", err);
+
+	aeon_dbg("CANDIDATE\n");
+	list_for_each_entry(ivcl, &ivl->ivcl->i_valid_child_list,
+			    i_valid_child_list) {
+		c_state = *p_state;
+
+		pi = (struct aeon_inode *)ivcl->addr;
+		if (is_persisted_inode(pi)) {
+			//aeon_dbg("pass1\n");
+			c_state |= C_INODE_PERSIST;
+		}
+
+		err = aeon_get_dentry_address(sb, pi, &de_addr);
+		if (!err || err == -EINVAL) {
+			d = (struct aeon_dentry *)de_addr;
+			if (is_persisted_dentry(d)) {
+				//aeon_dbg("pass2\n");
+				c_state |= C_DENTRY_PERSIST;
+			}
+		}
+
+		err = aeon_check_mdata(*p_state, c_state);
+		if (err) {
+			aeon_dbg("child state %d\n", err);
+			err = aeon_recover_child(sb, pidir, parent_de,
+						 &pi, &d, err);
+			if (err)
+				/* Discard an inode object or restore it later */
+				continue;
+		}
+
+		adc = kzalloc(sizeof(struct aeon_dentry_candidate), GFP_KERNEL);
+		if (!adc)
+			return -ENOMEM;
+
+		adc->d = d;
+		aeon_dbg("d->name %s d->name_len %d dino %u\n",
+			 d->name, d->name_len, le32_to_cpu(d->ino));
+		list_add_tail(&adc->list, &de_info->adc->list);
+		ret++;
+	}
+
+	if (list_empty(&de_info->adc->list)) {
+		kfree((void *)de_info->adc);
+		de_info->adc = NULL;
+	}
+
+
+	return ret;
+}
+
+static int
+do_aeon_rebuild_dirtree(struct super_block *sb,
+			struct aeon_inode_info_header *sih,
+			int num_candidate_dentries,
+			struct i_valid_list *ivl)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_inode *pidir = aeon_get_inode(sb, sih);
+	struct aeon_dentry *d;
+	struct aeon_dentry_info *de_info = sih->de_info;
+	struct aeon_dentry_map *de_map = aeon_get_dentry_map(sb, sih);
+	u64 i_dentry_tb;
+	u64 next_block;
+	int i;
+	int err;
+
+	i_dentry_tb = aeon_get_dentry_tb_head(sb, pidir);
+	if (!i_dentry_tb) {
+		/* TODO: What should i do?
+		 */
+	}
+
+	/* Skip dot and dotdot direntry */
+	d = (struct aeon_dentry *)((u64)sbi->virt_addr +
+				   (i_dentry_tb << AEON_SHIFT));
+	next_block = le64_to_cpu(d->d_next_dentry_block);
+
+	//aeon_dbg("num_candidate_dentries %d\n", num_candidate_dentries);
+
+	i = 2;
+	while (num_candidate_dentries > 0) {
+		if (!i_dentry_tb)
+			break;
+		add_block_entry(de_map, i_dentry_tb);
+		for (; i < AEON_INTERNAL_ENTRY; i++) {
+			struct aeon_dentry_invalid *adi;
+			int found;
+
+			d = (struct aeon_dentry *)((u64)sbi->virt_addr +
+						   (i_dentry_tb << AEON_SHIFT) +
+						   (i << AEON_D_SHIFT));
+			if (i == 0)
+				next_block = d->d_next_dentry_block;
+			if (!d->valid) {
+				adi = kmalloc(sizeof(struct aeon_dentry_invalid),
+					      GFP_KERNEL);
+				if (!adi) {
+					aeon_err(sb,
+						 "%s: Can't get memory...\n",
+						 __func__);
+					return -ENOMEM;
+				}
+				adi->d_addr = d;
+				list_add_tail(&adi->invalid_list,
+					      &de_info->di->invalid_list);
+				goto next;
+			}
+
+			found = aeon_iterate_candidate(d, de_info);
+			if (!found) {
+				aeon_info("Get an orphan inode %u\n",
+					  le32_to_cpu(d->ino));
+				err = insert_inode_to_validlist(sb, pidir,
+								d, ivl);
+				if (err == -ENOENT) {
+					aeon_info("Discard %u\n",
+						  le32_to_cpu(d->ino));
+					goto next;
+				} else if (err) {
+					aeon_err(sb, "%s:%d\n",
+						 __func__, __LINE__);
+					return err;
+				}
+			}
+
+			aeon_dbg("d->name %s d->name_len %d dino %u\n",
+				 d->name, d->name_len, le32_to_cpu(d->ino));
+			err = aeon_insert_dir_tree(sb, sih,
+						   d->name, d->name_len, d);
+			if (err) {
+				aeon_err(sb, "%s: insert_dir_tree\n", __func__);
+				return err;
+			}
+
+			num_candidate_dentries--;
+next:
+			update_dentry_map(de_map);
+			if (num_candidate_dentries == 0)
+				break;
+		}
+		i_dentry_tb = next_block;
+		i = 0;
+	}
+
+	return 0;
+}
+
 int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 				u64 pi_addr, struct inode *inode)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_dentry_info *de_info;
-	struct aeon_dentry_invalid *adi;
 	struct aeon_dentry_map *de_map;
 	struct aeon_dentry *parent_de;
-	struct aeon_dentry *d = NULL;
-	struct aeon_inode *child_pi;
+	struct aeon_dentry_invalid *adi;
 	struct i_valid_list *ivl;
-	struct i_valid_child_list *ivcl;
-	u64 d_blocknr;
-	u64 de_addr = 0;
 	u32 parent_ino;
-	bool first = true;
 	int err = -ENOMEM;
+	int ca = 0; /* the number of candidate dentries */
 	int p_state = NOT_FOUND;
-	int c_state = NOT_FOUND;
-	int i;
-	int num_candidate_dentries = 2;
-	u64 next_block;
-	u64 i_dentry_tb;
 
 	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
 	if (!de_info)
@@ -426,9 +673,10 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	de_info->di = adi;
 	sih->de_info = de_info;
 	de_map = &de_info->de_map;
-	de_map->num_dentries = 0;
+	de_map->num_dentries = 2;
 	de_map->num_latest_dentry = 0;
-	de_map->num_internal_dentries = 0;
+	de_map->num_internal_dentries = 2;
+	de_map->first = true;
 	INIT_LIST_HEAD(&de_info->di->invalid_list);
 
 	parent_ino = le32_to_cpu(pi->aeon_ino);
@@ -452,109 +700,32 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	goto out1;
 
 found:
-	aeon_dbg("Rebuild directory %u\n", parent_ino);
-	if (is_persisted_inode(pi))
-		p_state |= P_INODE_PERSIST;
+	aeon_dbg("Rebuild & check directory %u\n", parent_ino);
 
-	err = aeon_check_parent_dir_state(p_state);
+	ca = aeon_check_and_recover_dir(sb, pi, parent_de, ivl,
+					de_info, &p_state);
+	if (ca < 0)
+		goto out1;
+
+	aeon_dbg("OBJECTS\n");
+	err = do_aeon_rebuild_dirtree(sb, sih, ca, ivl);
 	if (err)
-		aeon_dbg("future %d\n", err);
-
-	list_for_each_entry(ivcl, &ivl->ivcl->i_valid_child_list,
-			    i_valid_child_list) {
-		c_state = p_state;
-
-		child_pi = (struct aeon_inode *)ivcl->addr;
-		if (is_persisted_inode(child_pi)) {
-			//aeon_dbg("pass1\n");
-			c_state |= C_INODE_PERSIST;
-		}
-
-		err = aeon_get_dentry_address(sb, child_pi, &de_addr);
-		if (!err || err == -EINVAL) {
-			d = (struct aeon_dentry *)de_addr;
-			if (is_persisted_dentry(d)) {
-				//aeon_dbg("pass2\n");
-				c_state |= C_DENTRY_PERSIST;
-			}
-		}
-
-		err = aeon_check_mdata(p_state, c_state);
-		if (err) {
-			aeon_dbg("child state %d\n", err);
-			err = aeon_recover_child(sb, pi, parent_de,
-						 &child_pi, &d, err);
-			if (err)
-				/* Discard an inode object or restore it later */
-				continue;
-		}
-
-		//aeon_dbg("d->name %s d->name_len %d dino %u iino %u\n",
-		//	 d->name, d->name_len, le32_to_cpu(d->ino), le32_to_cpu(child_pi->aeon_ino));
-		err = aeon_insert_dir_tree(sb, sih, d->name, d->name_len, d);
-		if (err)
-			return err;
-
-		d_blocknr = le64_to_cpu(child_pi->i_dentry_addr) >> AEON_SHIFT;
-
-		num_candidate_dentries++;
-	}
-
-	i_dentry_tb = le64_to_cpu(pi->i_dentry_table_block);
-	//aeon_dbg("can %d\n", num_candidate_dentries);
-	while (num_candidate_dentries > 0) {
-		if (!i_dentry_tb)
-			break;
-		add_block_entry(de_map, i_dentry_tb, &first);
-		for (i = 0; i < AEON_INTERNAL_ENTRY; i++) {
-			struct aeon_dentry_invalid *adi;
-
-			d = (struct aeon_dentry *)((u64)sbi->virt_addr +
-						   (i_dentry_tb << AEON_SHIFT) +
-						   (i << AEON_D_SHIFT));
-			if (i == 0)
-				next_block = d->d_next_dentry_block;
-			if (!d->valid) {
-				adi = kmalloc(sizeof(struct aeon_dentry_invalid),
-					      GFP_KERNEL);
-				if (!adi) {
-					aeon_err(sb,
-						 "%s: Can't get memory...\n",
-						 __func__);
-					return -ENOMEM;
-				}
-				adi->d_addr = d;
-				list_add_tail(&adi->invalid_list,
-					      &de_info->di->invalid_list);
-				goto next;
-			}
-
-			//aeon_dbg("!!! %s\n", d->name);
-			num_candidate_dentries--;
-next:
-			update_dentry_map(de_map);
-			if (num_candidate_dentries == 0)
-				break;
-		}
-		i_dentry_tb = next_block;
-		//aeon_dbg("next %llu\n", i_dentry_tb);
-	}
+		goto out1;
 
 	err = aeon_check_pidir(pi, de_map, p_state);
 	if (err) {
 		aeon_info("link count %llu, num entries %lu\n",
-			 le64_to_cpu(pi->i_links_count), de_map->num_dentries);
-		aeon_recover_child_again(sb, pi, inode, de_map, first);
+			  le64_to_cpu(pi->i_links_count), de_map->num_dentries);
+		aeon_recover_child_again(sb, pi, inode, de_map);
 		pi->i_links_count = cpu_to_le64(de_map->num_dentries);
 		aeon_info("Recover: link count %llu, num entries %lu\n",
-			 le64_to_cpu(pi->i_links_count), de_map->num_dentries);
+			  le64_to_cpu(pi->i_links_count), de_map->num_dentries);
 	}
 
 	if (de_map->num_internal_dentries == 0)
 		de_map->num_internal_dentries = AEON_INTERNAL_ENTRY;
 
 	mutex_unlock(&de_info->dentry_mutex);
-
 	return 0;
 out1:
 	kfree(de_info->di);

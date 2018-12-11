@@ -500,6 +500,7 @@ helper_recover_test_im ()
   done
   ./$TEST_AEON $1 $2 $DIR/$TARGET
   ./run.sh rm
+  #ls $DIR
   touch $TMP/MARS
   touch $DIR/MARS
   #ls $TMP
@@ -692,6 +693,45 @@ test-recover-13 ()
   ./run.sh rm
   diff $TMP $DIR
   res=$?
+
+  clean
+}
+
+test-recover-14 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  helper_recover_test_im 3 11
+
+  clean
+}
+
+test-recover-15 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm R-17 dram pmem"
+
+  helper_recover_test_im 3 12
+
+  clean
+}
+
+test-recover-16 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test_im 3 13
 
   clean
 }

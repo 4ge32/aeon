@@ -176,8 +176,8 @@ struct aeon_inode *aeon_get_inode(struct super_block *sb,
  * file system test so far.
  */
 static inline
-struct aeon_inode *aeon_get_parent_inode(struct super_block *sb,
-					 struct aeon_inode_info_header *sih)
+struct aeon_inode *aeon_get_pinode(struct super_block *sb,
+				   struct aeon_inode_info_header *sih)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi;

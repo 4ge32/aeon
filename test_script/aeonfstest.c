@@ -31,6 +31,12 @@ enum failure_type {
 	CREATE_ID4,
 	RENAME_ID1,
 	RENAME_ID2,
+	MKDIR_1 = 11,
+	MKDIR_2,
+	MKDIR_3,
+	MKDIR_4,
+	MKDIR_5,
+	MKDIR_6,
 };
 
 int main(int argc, char *argv[])
