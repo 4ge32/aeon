@@ -637,7 +637,6 @@ int aeon_free_dram_resource(struct super_block *sb,
 	    !(S_ISDIR(le16_to_cpu(pi->i_mode))))
 		return 0;
 
-	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 	if (S_ISDIR(le16_to_cpu(pi->i_mode))) {
 		int err;
 

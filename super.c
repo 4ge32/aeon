@@ -73,7 +73,7 @@ static void aeon_put_super(struct super_block *sb)
 		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
 			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
-		aeon_free_inode_node(inode_map->first_inode_range);
+		aeon_destroy_range_node_tree(sb, &inode_map->inode_inuse_tree);
 	}
 
 	if (sbi->virt_addr) {
@@ -137,6 +137,7 @@ out:
 	}
 
 	truncate_inode_pages(&inode->i_data, 0);
+	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
 
 	clear_inode(inode);
 }
