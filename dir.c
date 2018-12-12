@@ -74,8 +74,10 @@ int aeon_get_dentry_address(struct super_block *sb,
 
 	addr = le64_to_cpu(pi->i_dentry_addr);
 	if (addr <= 0 || addr > sbi->last_addr) {
-		aeon_err(sb, "out of bounds i_blocknr 0x%llx last 0x%llx\n",
-			 addr, sbi->last_addr);
+		aeon_err(sb, "out of bounds: addr 0x%llx last 0x%llx"
+			 " from pi %llx, ino %u\n",
+			 addr, sbi->last_addr, (u64)pi,
+			 le32_to_cpu(pi->aeon_ino));
 		return -ENOENT;
 	}
 
@@ -503,10 +505,24 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(dir->i_sb, sih);
 
-	pi = aeon_get_inode(dir->i_sb, sih);
-
 	de->ino = pi->aeon_ino;
 	de->d_inode_addr = cpu_to_le64(sih->pi_addr - (u64)sbi->virt_addr);
+	aeon_update_dentry_csum(de);
+	pi->i_dentry_addr = cpu_to_le64((u64)de - (u64)sbi->virt_addr);
+	aeon_update_inode_csum(pi);
+}
+
+void _aeon_set_link(struct aeon_dentry *de, struct aeon_inode *pi,
+		    struct inode *new_dir)
+{
+	struct aeon_inode *pidir;
+
+	pidir = aeon_get_inode(new_dir->i_sb, &AEON_I(new_dir)->header);
+
+	pi->parent_ino = pidir->aeon_ino;
+	aeon_update_inode_csum(pi);
+	de->d_pinode_addr = pidir->i_inode_addr;
+	aeon_update_dentry_csum(de);
 }
 
 int aeon_empty_dir(struct inode *inode)
@@ -518,11 +534,11 @@ int aeon_empty_dir(struct inode *inode)
 
 	de_map = aeon_get_dentry_map(sb, sih);
 	if (!de_map)
-		return 0;
+		return 1;
 	if (de_map->num_dentries == 2)
-		return 0;
+		return 1;
 
-	return 1;
+	return 0;
 }
 
 int aeon_free_cached_dentry_blocks(struct super_block *sb,

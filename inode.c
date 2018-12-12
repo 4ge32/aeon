@@ -225,7 +225,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_mode = mode;
 	inode->i_ino = ino;
 	aeon_init_inode_flags(inode);
-	//aeon_dbg("%s: allocating inode %llu @ 0x%llx\n", __func__, ino, pi_addr);
+	//aeon_dbg("%s: allocating inode %u @ 0x%llx\n", __func__, ino, pi_addr);
 
 	switch (type) {
 	case TYPE_CREATE:
@@ -424,6 +424,9 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u32 ino)
 	struct i_valid_child_list *ddend;
 	u64 pi_addr = 0;
 
+	/* TODO:
+	 */
+	spin_lock(&sbi->s_ivl_lock);
 	list_for_each_entry_safe(meta, mdend,
 				 &sbi->ivl->i_valid_list, i_valid_list) {
 		list_for_each_entry_safe(data, ddend,
@@ -439,15 +442,16 @@ static inline u64 aeon_get_created_inode_addr(struct super_block *sb, u32 ino)
 				}
 				goto found;
 			}
-
 		}
 	}
 
 	aeon_err(sb, "not found corresponding inode\n");
 	aeon_dbg("%s: %u\n", __func__, ino);
+	spin_unlock(&sbi->s_ivl_lock);
 	BUG();
 
 found:
+	spin_unlock(&sbi->s_ivl_lock);
 	return pi_addr;
 }
 
@@ -792,8 +796,8 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		}
 		break;
 	default:
-		aeon_dbg("%s: special ino %u\n",
-			 __func__, le32_to_cpu(pi->aeon_ino));
+		//aeon_dbg("%s: special ino %u\n",
+		//	 __func__, le32_to_cpu(pi->aeon_ino));
 		break;
 	}
 

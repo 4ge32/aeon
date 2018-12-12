@@ -335,6 +335,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		       struct inode *new_dir, struct dentry *new_dentry,
 		       unsigned int flags)
 {
+	struct aeon_sb_info *sbi = AEON_SB(old_dir->i_sb);
 	struct inode *old_inode = d_inode(old_dentry);
 	struct inode *new_inode = d_inode(new_dentry);
 	struct super_block *sb = old_dir->i_sb;
@@ -394,7 +395,8 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		if (de_addr < 0)
 			goto out_dir;
 
-		pi->i_dentry_addr = cpu_to_le64(de_addr);
+		pi->i_dentry_addr = cpu_to_le64(de_addr) - (u64)sbi->virt_addr;
+		aeon_update_inode_csum(pi);
 
 		if (dir_de)
 			inc_nlink(new_dir);
@@ -405,7 +407,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	if (dir_de) {
 		if (old_dir != new_dir)
-			aeon_set_link(old_inode, dir_de, new_dir, 0);
+			aeon_set_pdir_link(dir_de, pi, new_dir);
 		drop_nlink(old_dir);
 		update = aeon_get_inode(old_dir->i_sb,
 					&AEON_I(old_dir)->header);

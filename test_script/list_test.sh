@@ -89,6 +89,21 @@ test-rename-5 ()
   clean
 }
 
+test-rename-6 ()
+{
+  init
+
+  mkdir $DIR/test
+  mkdir $DIR/next
+  mkdir -p $TMP/test/next
+  mv $DIR/next $DIR/test
+  ./run.sh rm
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
 test-create-1 ()
 {
   init

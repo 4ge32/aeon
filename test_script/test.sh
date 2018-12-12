@@ -31,20 +31,7 @@ _do_test ()
 
 rename ()
 {
-  N=5
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-rename-$num"
-    test-rename-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 1 6 rename
 }
 
 remove ()

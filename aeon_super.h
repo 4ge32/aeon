@@ -70,6 +70,9 @@ struct aeon_sb_info {
 	/* used in mount time */
 	struct i_valid_list *ivl;
 
+	/* protects i_valid_list */
+	spinlock_t s_ivl_lock;
+
 	/* store root inode info */
 	struct aeon_inode_info *si;
 

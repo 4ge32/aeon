@@ -600,6 +600,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	mutex_init(&sbi->s_lock);
+	spin_lock_init(&sbi->s_ivl_lock);
 
 	if (aeon_alloc_block_free_lists(sb)) {
 		ret = -ENOMEM;
