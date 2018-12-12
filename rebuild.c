@@ -206,8 +206,6 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 			aeon_rebuild_inode(tmp, *c_de, p_pi);
 			*c_pi = (struct aeon_inode *)tmp;
 		}
-
-		return 0;
 	} else if (err == P_AND_C_INODE_PERSIST) {
 		struct aeon_dentry *tmp;
 		unsigned long ino;
@@ -494,8 +492,10 @@ aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 	de_info->adc = adc;
 	INIT_LIST_HEAD(&de_info->adc->list);
 
-	if (is_persisted_inode(pidir))
+	if (is_persisted_inode(pidir)) {
+		aeon_dbg("pass\n");
 		*p_state |= P_INODE_PERSIST;
+	}
 
 	err = aeon_check_parent_dir_state(*p_state);
 	if (err)
@@ -613,6 +613,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 			if (!found) {
 				aeon_info("Get an orphan inode %u\n",
 					  le32_to_cpu(d->ino));
+				aeon_dbg("! %s\n", d->name);
 				err = insert_inode_to_validlist(sb, pidir,
 								d, ivl);
 				if (err == -ENOENT) {
@@ -636,8 +637,9 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 			}
 
 			num_candidate_dentries--;
-next:
 			update_dentry_map(de_map);
+next:
+			de_map->num_internal_dentries++;
 			if (num_candidate_dentries == 0)
 				break;
 		}

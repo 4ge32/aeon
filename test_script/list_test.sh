@@ -729,9 +729,48 @@ test-recover-16 ()
 
   TARGET="dark"
   OBJ="nvdimm dark dram pmem"
-  RES="nvdimm dark dram pmem"
+  RES="nvdimm R-17 dram pmem"
 
   helper_recover_test_im 3 13
+
+  clean
+}
+
+test-recover-17 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dram pmem"
+
+  helper_recover_test_im 3 14
+
+  clean
+}
+
+test-recover-18 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test_im 3 15
+
+  clean
+}
+
+test-recover-19 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm R-17 dram pmem"
+
+  helper_recover_test_im 3 16
 
   clean
 }

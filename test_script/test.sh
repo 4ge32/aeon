@@ -121,20 +121,7 @@ attr ()
 
 mmap ()
 {
-  N=1
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-mmap-$num"
-    test-mmap-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 1 1 mmap
 }
 
 write ()
@@ -144,7 +131,7 @@ write ()
 
 recover ()
 {
-  _do_test 1 15 recover
+  _do_test 1 19 recover
 }
 
 libaeon ()

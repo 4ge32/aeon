@@ -19,7 +19,7 @@ enum failure_type {
 	CREATE_ID4,
 	RENAME_ID1,
 	RENAME_ID2,
-	MKDIR_1,
+	MKDIR_1 = 11,
 	MKDIR_2,
 	MKDIR_3,
 	MKDIR_4,
@@ -244,10 +244,18 @@ setversion_out:
 			pidir->csum = 91;
 			break;
 		}
+		/* MKDIR operation involves adding a directory entry to the
+		 * parent directory, updating the new child inode.
+		 * In AEON, Creating a new directory block for the child inode
+		 * happen when the first time of creating directory entry.
+		 */
 		case MKDIR_1: {
 			/* Blocks dropped: C_inode
 			 * Error: Parent - bad dir entry
 			 *        Child  - Orphan block
+			 * Key for Actiopn:
+			 * Block/inode reclaimed on scan
+			 * Child - Error on inode access
 			 */
 			memset(pi, 0, sizeof(*pi));
 			break;
@@ -255,20 +263,28 @@ setversion_out:
 		case MKDIR_2: {
 			/* Blocks dropped: C_dir
 			 * Error: Child - bad dir entry
+			 * Key for Action:
+			 * Child - Error on data access
 			 */
 			memset(de, 0, sizeof(*de));
-			aeon_dbg("LAST!\n");
 			break;
 		}
 		case MKDIR_3: {
 			/* Blocks dropped: P_dir
 			 * Error: Child - Orphan inode
 			 *        Child - Bad dir entry
+			 * Key for Action:
+			 * Block/inode reclaimed on scan
 			 */
+			/* Note that P_dir and C_dir have the same structure
+			 * in same address.
+			 */
+			//Is three cases needed?
 			struct aeon_inode *pidir;
-
 			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
-			pidir->i_dentry_table_block = 0;
+			pidir->i_links_count--;
+			aeon_update_inode_csum(pidir);
+			memset(de, 0, sizeof(*de));
 			break;
 		}
 		case MKDIR_4: {
@@ -276,14 +292,33 @@ setversion_out:
 			 *                 C_dir
 			 * Error: Parent - Bad dir entry
 			 *        Child  - Bad dir entry
-			 *
+			 * Key for Action:
+			 * Error on inode access
 			 */
+			pi->i_dentry_addr = 0;
+			memset(de, 0, sizeof(*de));
 			break;
 		}
 		case MKDIR_5: {
+			/* Blocks dropped: C_inode
+			 *                 P_dir
+			 * Error: Child - Orphan block
+			 * Key for Action:
+			 * Block/inode reclaimed on scan
+			 */
+			struct aeon_inode *pidir;
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
+			pidir->i_links_count--;
+			aeon_update_inode_csum(pidir);
+			pi->csum = 0;
 			break;
 		}
 		case MKDIR_6: {
+			/* Blocks dropped: C_dir
+			 *                 P_dir
+			 * Error: Child - Orphan inode
+			 */
+			memset(de, 0, sizeof(*de));
 			break;
 		}
 		default:
