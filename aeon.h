@@ -213,4 +213,16 @@ void aeon_destroy_stats(struct aeon_sb_info *sbi);
 int __init aeon_create_root_stats(void);
 void aeon_destroy_root_stats(void);
 
+/* compression.c */
+#ifdef CONFIG_AEON_FS_COMPRESSION
+extern void __init aeon_init_compress(void);
+extern void __cold aeon_exit_compress(void);
+#else
+static inline void __init aeon_init_compress(void)
+{
+}
+static inline void __cold aeon_exit_compress(void)
+{
+}
+#endif
 #endif

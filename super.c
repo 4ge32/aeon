@@ -735,30 +735,34 @@ static int __init init_aeon_fs(void)
 
 	aeon_info("---HELLO AEON---\n");
 
-	err = init_inodecache();
-	if (err)
-		goto out;
+	aeon_init_compress();
 
-	err = init_rangenode_cache();
+	err = init_inodecache();
 	if (err)
 		goto out1;
 
-	err = register_filesystem(&aeon_fs_type);
+	err = init_rangenode_cache();
 	if (err)
 		goto out2;
 
-	err = aeon_create_root_stats();
+	err = register_filesystem(&aeon_fs_type);
 	if (err)
 		goto out3;
 
+	err = aeon_create_root_stats();
+	if (err)
+		goto out4;
+
 	return 0;
-out3:
+out4:
 	unregister_filesystem(&aeon_fs_type);
-out2:
+out3:
 	destroy_rangenode_cache();
-out1:
+out2:
 	destroy_inodecache();
-out:
+out1:
+	aeon_exit_compress();
+
 	return err;
 }
 
@@ -769,6 +773,7 @@ static void __exit exit_aeon_fs(void)
 	destroy_inodecache();
 	destroy_rangenode_cache();
 	aeon_destroy_root_stats();
+	aeon_exit_compress();
 }
 
 MODULE_AUTHOR("Fumiya Shigemitsu");

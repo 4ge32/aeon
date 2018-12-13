@@ -9,8 +9,13 @@ CONFIG_AEON_FS_SECURITY=y
 ifdef CONFIG_AEON_FS_XATTR
 ccflags-y += -DCONFIG_AEON_FS_XATTR
 endif
+
 ifdef CONFIG_AEON_FS_SECURITY
 ccflags-y += -DCONFIG_AEON_FS_SECURITY
+endif
+
+ifdef CONFIG_AEON_FS_COMPRESSION
+ccflags-y += -DCONFIG_AEON_FS_COMPRESSION
 endif
 
 ccflags-y += -I$(src)/libaeon

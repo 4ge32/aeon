@@ -2,6 +2,8 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <linux/sched/mm.h>
+#include <linux/ratelimit.h>
 
 #include "aeon.h"
 #include "aeon_compression.h"
@@ -249,7 +251,302 @@ out:
 	return ret;
 }
 
+static int zstd_decompress(struct list_head *ws, unsigned char *data_in,
+			   struct page *dest_page, unsigned long start_byte,
+			   size_t srclen, size_t destlen)
+{
+	struct workspace *workspace = list_entry(ws, struct workspace, list);
+	ZSTD_DStream *stream;
+	int ret = 0;
+	size_t ret2;
+	unsigned long total_out = 0;
+	unsigned long pg_offset = 0;
+	char *kaddr;
+
+	stream = ZSTD_initDStream(ZSTD_AEON_MAX_INPUT,
+				  workspace->mem, workspace->size);
+	if (!stream) {
+		aeon_warn("ZSTD_initDStream failed\n");
+		ret = -EIO;
+		goto finish;
+	}
+
+	destlen = min_t(size_t, destlen, PAGE_SIZE);
+
+	workspace->in_buf.src = data_in;
+	workspace->in_buf.pos = 0;
+	workspace->in_buf.size = srclen;
+
+	workspace->out_buf.dst = workspace->buf;
+	workspace->out_buf.pos = 0;
+	workspace->out_buf.size = PAGE_SIZE;
+
+	ret2 = 1;
+	while (pg_offset < destlen &&
+	       workspace->in_buf.pos < workspace->in_buf.size) {
+		unsigned long buf_start;
+		unsigned long buf_offset;
+		unsigned long bytes;
+
+		/* Check if the frame is over and we still need more input */
+		if (ret2 == 0) {
+			aeon_dbg("ZSTD_decompressStream ended early\n");
+			ret = -EIO;
+			goto finish;
+		}
+
+		ret2 = ZSTD_decompressStream(stream, &workspace->out_buf,
+					     &workspace->in_buf);
+		if (ZSTD_isError(ret2)) {
+			aeon_dbg();
+			ret = -EIO;
+			goto finish;
+		}
+
+		buf_start = total_out;
+		total_out += workspace->out_buf.pos;
+		workspace->out_buf.pos = 0;
+
+		if (total_out <= start_byte)
+			continue;
+
+		if (total_out > start_byte && buf_start < start_byte)
+			buf_offset = start_byte -buf_start;
+		else
+			buf_offset = 0;
+
+		bytes = min_t(unsigned long, destlen - pg_offset,
+			      workspace->out_buf.size - buf_offset);
+
+		/* this is the point which can be changed
+		 * when using pmem.
+		 * */
+		kaddr = kmap_atomic(dest_page);
+		memcpy(kaddr + pg_offset,
+		       workspace->out_buf.dst + buf_offset, bytes);
+		kunmap_atomic(kaddr);
+
+		pg_offset += bytes;
+	}
+	ret = 0;
+
+finish:
+	if (pg_offset < destlen) {
+		/* Also here */
+		kaddr = kmap_atomic(dest_page);
+		memset(kaddr + pg_offset, 0, destlen - pg_offset);
+		kunmap_atomic(kaddr);
+	}
+	return ret;
+}
+
 const struct aeon_compress_op aeon_zstd_compress = {
 	.alloc_workspace	= zstd_alloc_workspace,
 	.compress_pages		= zstd_compress_pages,
+	.decompress		= zstd_decompress,
 };
+
+enum aeon_compression_type {
+	AEON_COMPRESS_NONE = 0,
+	AEON_COMPRESS_ZSTD,
+	AEON_COMPRESS_TYPES,
+};
+
+
+struct workspace_list {
+	struct list_head idle_ws;
+	spinlock_t ws_lock;
+	int free_ws;
+	atomic_t total_ws;
+	wait_queue_head_t ws_wait;
+};
+
+static struct workspace_list aeon_comp_ws[AEON_COMPRESS_TYPES];
+
+static const struct aeon_compress_op * const aeon_compress_op[] = {
+	&aeon_zstd_compress,
+};
+
+void __init aeon_init_compress(void)
+{
+	struct list_head *workspace;
+	int i;
+
+	for (i = 0; i < AEON_COMPRESS_TYPES; i++) {
+		INIT_LIST_HEAD(&aeon_comp_ws[i].idle_ws);
+		spin_lock_init(&aeon_comp_ws[i].ws_lock);
+		atomic_set(&aeon_comp_ws[i].total_ws, 0);
+		init_waitqueue_head(&aeon_comp_ws[i].ws_wait);
+
+		workspace = aeon_compress_op[i]->alloc_workspace();
+		if (IS_ERR(workspace))
+			aeon_warn("cannot preallocate compression workspace\n");
+		else {
+			atomic_set(&aeon_comp_ws[i].total_ws, 1);
+			aeon_comp_ws[i].free_ws = 1;
+			list_add(workspace, &aeon_comp_ws[i].idle_ws);
+		}
+	}
+}
+
+/**
+ * This finds an available workspace or allocates a new one.
+ * If it is not possible to alllocate a new one, waits until there's one.
+ * Preallocation makes a forward progress guarantees and we do not return
+ * errors.
+ */
+static struct list_head *find_workspace(int type)
+{
+	struct list_head *workspace;
+	unsigned nofs_flag;
+	int cpus = num_online_cpus();
+	int idx = type - 1;
+	struct list_head *idle_ws;
+	spinlock_t *ws_lock;
+	atomic_t *total_ws;
+	wait_queue_head_t *ws_wait;
+	int *free_ws;
+
+	idle_ws  = &aeon_comp_ws[idx].idle_ws;
+	ws_lock  = &aeon_comp_ws[idx].ws_lock;
+	total_ws = &aeon_comp_ws[idx].total_ws;
+	ws_wait  = &aeon_comp_ws[idx].ws_wait;
+	free_ws  = &aeon_comp_ws[idx].free_ws;
+again:
+	spin_lock(ws_lock);
+	if (!list_empty(idle_ws)) {
+		workspace = idle_ws->next;
+		list_del(workspace);
+		(*free_ws)--;
+		spin_unlock(ws_lock);
+		return workspace;
+	}
+
+	if (atomic_read(total_ws) > cpus) {
+		DEFINE_WAIT(wait);
+
+		spin_unlock(ws_lock);
+		prepare_to_wait(ws_wait, &wait, TASK_UNINTERRUPTIBLE);
+		if (atomic_read(total_ws) > cpus && !*free_ws)
+			schedule();
+		finish_wait(ws_wait, &wait);
+		goto again;
+	}
+	atomic_inc(total_ws);
+	spin_unlock(ws_lock);
+
+	nofs_flag = memalloc_nofs_save();
+	workspace = aeon_compress_op[idx]->alloc_workspace();
+	memalloc_nofs_restore(nofs_flag);
+
+	if (IS_ERR(workspace)) {
+		atomic_dec(total_ws);
+		wake_up(ws_wait);
+
+		if (atomic_read(total_ws) == 0) {
+			static DEFINE_RATELIMIT_STATE(_rs,
+					/* once per minute */ 60 * HZ,
+					/* no burst */ 1);
+
+			if (__ratelimit(&_rs))
+				pr_warn("BTRFS: no compression workspaces, low memory, retrying\n");
+		}
+		goto again;
+	}
+
+	return workspace;
+}
+
+static void free_workspace(int type, struct list_head *workspace)
+{
+	struct list_head *idle_ws;
+	spinlock_t *ws_lock;
+	atomic_t *total_ws;
+	wait_queue_head_t *ws_wait;
+	int *free_ws;
+	int idx = type - 1;
+
+	idle_ws  = &aeon_comp_ws[idx].idle_ws;
+	ws_lock  = &aeon_comp_ws[idx].ws_lock;
+	total_ws = &aeon_comp_ws[idx].total_ws;
+	ws_wait  = &aeon_comp_ws[idx].ws_wait;
+	free_ws  = &aeon_comp_ws[idx].free_ws;
+
+	spin_lock(ws_lock);
+	if (*free_ws <= num_online_cpus()) {
+		list_add(workspace, idle_ws);
+		(*free_ws)++;
+		spin_unlock(ws_lock);
+		goto wake;
+	}
+	spin_unlock(ws_lock);
+
+	aeon_compress_op[idx]->free_workspace(workspace);
+	atomic_dec(total_ws);
+wake:
+	if (wq_has_sleeper(ws_wait))
+		wake_up(ws_wait);
+}
+
+static void free_workspaces(void)
+{
+	struct list_head *workspace;
+	int i;
+
+	for (i = 0; i < AEON_COMPRESS_TYPES; i++) {
+		while (!list_empty(&aeon_comp_ws[i].idle_ws)) {
+			workspace = aeon_comp_ws[i].idle_ws.next;
+			list_del(workspace);
+			aeon_compress_op[i]->free_workspace(workspace);
+			atomic_dec(&aeon_comp_ws[i].total_ws);
+		}
+	}
+}
+
+void __cold aeon_exit_compress(void)
+{
+	free_workspaces();
+}
+
+static const char* const aeon_compress_types[] = { "zstd" };
+
+/**
+ * Given an address space and start and length, compress the bytes into @pages
+ * that are allocated on demand.
+ *
+ * @type_level is encoded algorithm and level, where level 0 means whatever
+ * default the algorithm chooses and is opaque here;
+ * - compression algo are 0-3
+ * - the level are bits 4-7
+ *
+ * @out_pages is an in/out parameter, holds maximum number of pages to allocate
+ * and returns number of actually allocated pages
+ *
+ * @total_in is used to return the number of bytes actually read. It may be
+ * smaller than the input length if we had to exit early because we ran out of
+ * room in the pages array or because we cross the max_out threshold.
+ *
+ * @total_out is an in/out parameter, must be set to the input length and will
+ * be also used to return the total number of compressed bytes
+ *
+ * @max_out tells us the max number of bytes that we're allowed to
+ * stuff into pages
+ */
+int aeon_compress_pages(unsigned int type_level, struct address_space *mapping,
+			u64 start, struct page **pages,
+			unsigned long *out_pages,
+			unsigned long *total_in,
+			unsigned long *total_out)
+{
+	struct list_head *workspace;
+	int ret;
+	int type = type_level & 0xF;
+
+	workspace = find_workspace(type);
+	ret = aeon_compress_op[type-1]->compress_pages(workspace, mapping,
+						       start, pages,
+						       out_pages,
+						       total_in, total_out);
+	free_workspace(type, workspace);
+	return ret;
+}
