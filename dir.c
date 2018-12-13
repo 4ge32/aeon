@@ -512,7 +512,7 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	aeon_update_inode_csum(pi);
 }
 
-void _aeon_set_link(struct aeon_dentry *de, struct aeon_inode *pi,
+void aeon_set_pdir_link(struct aeon_dentry *de, struct aeon_inode *pi,
 		    struct inode *new_dir)
 {
 	struct aeon_inode *pidir;
