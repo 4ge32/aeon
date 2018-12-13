@@ -118,7 +118,7 @@ write ()
 
 recover ()
 {
-  _do_test 1 19 recover
+  _do_test 1 21 recover
 }
 
 libaeon ()

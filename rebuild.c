@@ -243,7 +243,9 @@ static int aeon_check_pidir(struct aeon_inode *pi,
 				int state)
 {
 	if (state == PARENT_PERSIST) {
-		de_map->num_dentries = le64_to_cpu(pi->i_links_count);
+		aeon_dbgv("Update links %llu to %lu\n",
+			  le64_to_cpu(pi->i_links_count), de_map->num_dentries);
+		pi->i_links_count = cpu_to_le64(de_map->num_dentries);
 		return 0;
 	}
 
@@ -702,18 +704,19 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	goto out1;
 
 found:
-	aeon_dbg("Rebuild & check directory %u\n", parent_ino);
+	aeon_dbgv("Rebuild & check directory %u\n", parent_ino);
 
 	ca = aeon_check_and_recover_dir(sb, pi, parent_de, ivl,
 					de_info, &p_state);
 	if (ca < 0)
 		goto out1;
 
-	aeon_dbg("OBJECTS\n");
+	aeon_dbgv("OBJECTS\n");
 	err = do_aeon_rebuild_dirtree(sb, sih, ca, ivl);
 	if (err)
 		goto out1;
 
+	aeon_dbgv("CHECK PIDIR\n");
 	err = aeon_check_pidir(pi, de_map, p_state);
 	if (err) {
 		aeon_info("link count %llu, num entries %lu\n",

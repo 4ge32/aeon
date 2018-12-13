@@ -17,7 +17,12 @@ remount_run() {
   sudo mount -t $FS -o $R_OPT $DEV $MOUNT_POINT
 }
 
-debug_run() {
+xfs () {
+  nvdimm_set
+  sudo insmod $FS.ko
+}
+
+debug_run () {
   sudo insmod $FS.ko
   sudo mount -t $FS -o init,dax,dbgmask=16 $DEV $MOUNT_POINT
 }
@@ -55,6 +60,9 @@ case "$1" in
     ;;
   set)
     nvdimm_set
+    ;;
+  xfs)
+    xfs
     ;;
   rm)
     remount_run

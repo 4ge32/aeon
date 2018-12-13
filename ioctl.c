@@ -25,6 +25,8 @@ enum failure_type {
 	MKDIR_4,
 	MKDIR_5,
 	MKDIR_6,
+	LINK_1,
+	LINK_2,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -317,8 +319,30 @@ setversion_out:
 			/* Blocks dropped: C_dir
 			 *                 P_dir
 			 * Error: Child - Orphan inode
+			 * Key for Action:
+			 * Block/inode reclaimed on scan
 			 */
 			memset(de, 0, sizeof(*de));
+			break;
+		}
+		case LINK_1: {
+			/* Blocks dropped: C_inode
+			 * Error: Child - Wrong hard link count
+			 * Key for Action:
+			 * Error on access via new path
+			 */
+			memset(pi, 0, sizeof(*pi));
+			break;
+		}
+		case LINK_2: {
+			/* Blocks dropped: P_dir
+			 * Error: Child - Orphan inode
+			 * Key for Action:
+			 * Block/inode reclaimed on scan
+			 */
+			struct aeon_inode *pidir;
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
+			pidir->i_links_count--;
 			break;
 		}
 		default:

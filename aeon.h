@@ -12,11 +12,18 @@
 #endif
 
 extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
-/* #define aeon_dbg(s, args...)         pr_debug(s, ## args) */
 #define aeon_dbg(s, args ...)           pr_info(s, ## args)
 #define aeon_err(sb, s, args ...)       aeon_err_msg(sb, s, ## args)
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
 #define aeon_info(s, args ...)          pr_info(s, ## args)
+
+
+//#define CONFIG_AEON_DEBUG_MODE
+#ifdef CONFIG_AEON_DEBUG_MODE
+#define aeon_dbgv(s, args ...)		pr_info(s, ## args)
+#else
+#define aeon_dbgv(s, args ...)		do { } while (0)
+#endif
 
 #define	READDIR_END		(ULONG_MAX)
 #define	ANY_CPU			(65536)

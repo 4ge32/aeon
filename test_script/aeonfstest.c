@@ -37,6 +37,8 @@ enum failure_type {
 	MKDIR_4,
 	MKDIR_5,
 	MKDIR_6,
+	LINK_1,
+	LINK_2,
 };
 
 int main(int argc, char *argv[])
