@@ -26,8 +26,8 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 	if (ino == 0)
 		goto out;
 
-	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
-	if (de_addr < 0)
+	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	if (err)
 		goto out;
 
 	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, de_addr, ino,
@@ -87,7 +87,7 @@ static int aeon_link(struct dentry *dest_dentry,
 	struct qstr *name = &dest_dentry->d_name;
 	struct aeon_dentry *de;
 	int err = -ENOENT;
-	u64 de_addr;
+	u64 de_addr = 0;
 
 	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
 	if (!pidir)
@@ -105,8 +105,8 @@ static int aeon_link(struct dentry *dest_dentry,
 	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
 
-	de_addr = aeon_add_dentry(dentry, dest_inode->i_ino, (u64)pi, 0);
-	if (de_addr >= 0) {
+	err = aeon_add_dentry(dentry, dest_inode->i_ino, (u64)pi, &de_addr);
+	if (!err) {
 		d_instantiate(dentry, dest_inode);
 
 		aeon_sb->s_num_inodes--;
@@ -207,8 +207,8 @@ static int aeon_symlink(struct inode *dir,
 		goto err;
 	}
 
-	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
-	if (de_addr < 0)
+	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	if (err)
 		goto err;
 
 	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, de_addr, ino,
@@ -256,8 +256,8 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	inc_nlink(dir);
 
-	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
-	if (de_addr < 0)
+	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	if (err)
 		goto out;
 
 	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, de_addr, ino,
@@ -362,7 +362,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct aeon_inode *update;
 	struct qstr *old_name = &old_dentry->d_name;
 	struct qstr *new_name = &new_dentry->d_name;
-	u64 de_addr;
 	int err;
 
 	if (old_dentry->d_fsdata) {
@@ -407,10 +406,12 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 					&AEON_I(new_inode)->header);
 		update->i_links_count = cpu_to_le64(new_inode->i_nlink);
 	} else {
-		de_addr = aeon_add_dentry(new_dentry,
-					  le32_to_cpu(old_inode->i_ino),
-					  (u64)pi, 0);
-		if (de_addr < 0)
+		u64 de_addr = 0;
+
+		err = aeon_add_dentry(new_dentry,
+				      le32_to_cpu(old_inode->i_ino),
+				      (u64)pi, &de_addr);
+		if (err)
 			goto out_dir;
 
 		pi->i_dentry_addr = cpu_to_le64(de_addr) - (u64)sbi->virt_addr;
@@ -458,8 +459,8 @@ static int aeon_mknod(struct inode *dir, struct dentry *dentry,
 	if (ino == 0)
 		goto out;
 
-	de_addr = aeon_add_dentry(dentry, ino, pi_addr, 0);
-	if (de_addr < 0)
+	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	if (err)
 		goto out;
 
 	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, de_addr, ino,

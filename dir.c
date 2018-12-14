@@ -323,9 +323,14 @@ static int aeon_get_dentry_space(struct super_block *sb,
 	if(!isInvalidSpace(de_info)) {
 		if (de_map->num_internal_dentries == AEON_INTERNAL_ENTRY) {
 			u64 blocknr = 0;
+
+			if (de_map->num_latest_dentry >= MAX_ENTRY-1)
+				return -EMLINK;
+
 			*direntry = aeon_alloc_new_dentry_block(sb, &blocknr);
 			if (IS_ERR(*direntry))
 				return -ENOSPC;
+
 			aeon_register_dentry_to_map(sb, de_map, blocknr);
 		} else {
 			*direntry = aeon_get_internal_dentry(sb, de_map);
@@ -363,22 +368,14 @@ void aeon_fill_dentry_data(struct super_block *sb, struct aeon_dentry *de,
 	aeon_update_dentry_csum(de);
 }
 
-static void aeon_release_dram_dentry_resource(struct aeon_inode_info_header *sih)
-{
-	kfree(sih->de_info->di);
-	kfree(sih->de_info);
-	sih->de_info->di = NULL;
-	sih->de_info = NULL;
-}
-
 static void aeon_release_dentry_block(struct aeon_dentry *de)
 {
 	de->valid = 0;
 	aeon_update_dentry_csum(de);
 }
 
-u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
-		    u64 pi_addr, int inc_link)
+int aeon_add_dentry(struct dentry *dentry, u32 ino,
+		    u64 pi_addr, u64 *de_addr)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
@@ -406,8 +403,11 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 	}
 
 	err = aeon_get_dentry_space(sb, sih->de_info, &new_direntry);
-	if (err)
-		goto out1;
+	if (err) {
+		aeon_err(sb, "%s: get_dentry_space() - err %d",
+			 __func__, err);
+		goto out;
+	}
 
 	aeon_fill_dentry_data(sb, new_direntry, ino, pi_addr,
 			      (u64)pidir, name, namelen);
@@ -415,19 +415,18 @@ u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
 
 	err = aeon_insert_dir_tree(sb, sih, name, namelen, new_direntry);
 	if (err)
-		goto out2;
+		goto out;
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 	pidir->i_links_count++;
 	aeon_update_inode_csum(pidir);
 
-	return (u64)new_direntry;
-out2:
-	aeon_release_dentry_block(new_direntry);
+	*de_addr = (u64)new_direntry;
+	return 0;
 out1:
-	aeon_release_dram_dentry_resource(sih);
+	aeon_release_dentry_block(new_direntry);
 out:
-	aeon_err(sb, "%s failed\n", __func__);
+	aeon_err(sb, "%s failed: err %d\n", __func__, err);
 	return err;
 }
 

@@ -557,6 +557,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	aeon_dbg("extentheader %lu\n", sizeof(struct aeon_extent_header));
 	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
 	aeon_dbg("range node   %lu\n", sizeof(struct aeon_range_node));
+	aeon_dbg("dentry info  %lu\n", sizeof(struct aeon_dentry_info));
 
 	if (num_online_cpus() == 1)
 		return -EINVAL;

@@ -1,6 +1,17 @@
 #ifndef __AEON_DENTRY_H
 #define __AEON_DENTRY_H
 
+#define AEON_NAME_LEN		128
+#define AEON_DENTRY_SIZE        (1 << AEON_D_SHIFT)
+#define AEON_DENTRY_CSIZE       ((1 << AEON_D_SHIFT) - CHECKSUM_SIZE)
+#define AEON_INTERNAL_ENTRY     ((AEON_DEF_BLOCK_SIZE_4K / AEON_DENTRY_SIZE) * \
+							 AEON_PAGES_FOR_DENTRY)
+#define MAX_ENTRY               502
+#define MAX_DENTRY              ((MAX_ENTRY << AEON_D_SHIFT ) + \
+		                ((MAX_ENTRY - 1 ) << AEON_D_SHIFT))
+#define AEON_DENTRY_MAP_SIZE	AEON_DEF_BLOCK_SIZE_4K
+#define AEON_DENTRY_MAP_CSIZE	(AEON_DENTRY_MAP_SIZE - CHECKSUM_SIZE)
+
 struct aeon_dentry_invalid {
 	struct list_head invalid_list;
 	struct aeon_dentry *d_addr;
@@ -115,8 +126,8 @@ int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
 			 const char *name, int namelen,
 			 struct aeon_dentry *direntry);
-u64 aeon_add_dentry(struct dentry *dentry, u32 ino,
-		    u64 pi_addr, int inc_link);
+int aeon_add_dentry(struct dentry *dentry, u32 ino,
+		    u64 pi_addr, u64 *de_addr);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
 int aeon_get_dentry_address(struct super_block *sb,

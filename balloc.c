@@ -351,9 +351,9 @@ static int not_enough_blocks(struct free_list *free_list,
 	struct aeon_range_node *last = free_list->last_node;
 
 	if (free_list->num_free_blocks < num_blocks || !first || !last) {
-		aeon_dbg("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
-			 __func__, free_list->num_free_blocks, num_blocks,
-			 first, last);
+		aeon_dbgv("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
+			  __func__, free_list->num_free_blocks, num_blocks,
+			  first, last);
 		return 1;
 	}
 
@@ -582,12 +582,14 @@ retry:
 	spin_lock(&free_list->s_lock);
 
 	if (not_enough_blocks(free_list, num_blocks)) {
-		aeon_dbg("%s: cpu %d, free_blocks %lu, required %lu, blocknode %lu\n",
-			 __func__, cpuid, free_list->num_free_blocks,
-			 num_blocks, free_list->num_blocknode);
+		aeon_dbgv("%s: cpu %d, free_blocks %lu, required %lu, blocknode %lu\n",
+			  __func__, cpuid, free_list->num_free_blocks,
+			  num_blocks, free_list->num_blocknode);
 
-		if (retried >= 2)
+		if (retried >= sbi->cpus-1) {
+			dump_stack();
 			goto alloc;
+		}
 
 		spin_unlock(&free_list->s_lock);
 		cpuid = aeon_get_candidate_free_list(sb);

@@ -2,6 +2,7 @@
 
 FS="aeon"
 DEV=/dev/pmem0
+DEV2=/dev/pmem1
 MOUNT_POINT=/mnt
 OPT=init,dax,wprotect,user_xattr
 R_OPT=dax,wprotect,user_xattr
@@ -18,8 +19,14 @@ remount_run() {
 }
 
 xfs () {
+  sudo rmmod $FS
   nvdimm_set
+  nvdimm_set2
   sudo insmod $FS.ko
+  sudo mount -t $FS -o $OPT $DEV $MOUNT_POINT
+  sudo umount $MOUNT_POINT
+  sudo mount -t $FS -o $OPT $DEV2 $MOUNT_POINT
+  sudo umount $MOUNT_POINT
 }
 
 debug_run () {
@@ -40,6 +47,10 @@ clean () {
 
 nvdimm_set () {
    sudo ndctl create-namespace -e "namespace0.0" -m memory -f
+}
+
+nvdimm_set2 () {
+   sudo ndctl create-namespace -e "namespace1.0" -m memory -f
 }
 
 show_info () {
