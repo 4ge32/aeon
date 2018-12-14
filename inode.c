@@ -120,6 +120,7 @@ u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry)
 	if (direntry == NULL)
 		return 0;
 
+	aeon_dbgv("%s: %s", __func__, direntry->name);
 	return direntry->ino;
 }
 
@@ -599,7 +600,7 @@ struct inode *aeon_iget(struct super_block *sb, u32 ino)
 
 	pi_addr = aeon_get_inode_addr_on_pmem(sb, ino);
 
-	//aeon_dbgv("%s: nvmm 0x%llx\n", __func__, pi_addr);
+	aeon_dbgv("%s: nvmm 0x%llx\n", __func__, pi_addr);
 
 	if (pi_addr == 0) {
 		aeon_err(sb, "%s: failed to get pi_addr for inode %lu\n", __func__, ino);

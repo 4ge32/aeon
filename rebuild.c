@@ -495,7 +495,7 @@ aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 	INIT_LIST_HEAD(&de_info->adc->list);
 
 	if (is_persisted_inode(pidir)) {
-		aeon_dbg("pass\n");
+		aeon_dbgv("pass\n");
 		*p_state |= P_INODE_PERSIST;
 	}
 
@@ -503,14 +503,14 @@ aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 	if (err)
 		aeon_dbg("FUTURE %d\n", err);
 
-	aeon_dbg("CANDIDATE\n");
+	aeon_dbgv("CANDIDATE\n");
 	list_for_each_entry(ivcl, &ivl->ivcl->i_valid_child_list,
 			    i_valid_child_list) {
 		c_state = *p_state;
 
 		pi = (struct aeon_inode *)ivcl->addr;
 		if (is_persisted_inode(pi)) {
-			//aeon_dbg("pass1\n");
+			aeon_dbgv("pass1\n");
 			c_state |= C_INODE_PERSIST;
 		}
 
@@ -518,7 +518,7 @@ aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 		if (!err || err == -EINVAL) {
 			d = (struct aeon_dentry *)de_addr;
 			if (is_persisted_dentry(d)) {
-				//aeon_dbg("pass2\n");
+				aeon_dbgv("pass2\n");
 				c_state |= C_DENTRY_PERSIST;
 			}
 		}
@@ -538,8 +538,8 @@ aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 			return -ENOMEM;
 
 		adc->d = d;
-		aeon_dbg("d->name %s d->name_len %d dino %u\n",
-			 d->name, d->name_len, le32_to_cpu(d->ino));
+		aeon_dbgv("d->name %s d->name_len %d dino %u\n",
+			  d->name, d->name_len, le32_to_cpu(d->ino));
 		list_add_tail(&adc->list, &de_info->adc->list);
 		ret++;
 	}
@@ -629,8 +629,8 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 				}
 			}
 
-			aeon_dbg("d->name %s d->name_len %d dino %u\n",
-				 d->name, d->name_len, le32_to_cpu(d->ino));
+			aeon_dbgv("d->name %s d->name_len %d dino %u\n",
+				  d->name, d->name_len, le32_to_cpu(d->ino));
 			err = aeon_insert_dir_tree(sb, sih,
 						   d->name, d->name_len, d);
 			if (err) {

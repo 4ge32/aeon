@@ -37,6 +37,9 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 
 	d_instantiate(dentry, inode);
 
+	aeon_dbgv("CREATE %u %s 0x%llx 0x%llx\n",
+		  ino, dentry->d_name.name, (u64)dir, (u64)inode);
+
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
 
@@ -56,7 +59,8 @@ static struct dentry *aeon_lookup(struct inode *dir,
 
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
 	if (ino) {
-		//aeon_dbg("%s: %u %s\n", __func__, ino, dentry->d_name.name);
+		aeon_dbgv("%s: %u %s 0x%llx\n",
+			  __func__, ino, dentry->d_name.name, (u64)dir);
 		inode = aeon_iget(dir->i_sb, ino);
 		if (inode == ERR_PTR(-ESTALE) || inode == ERR_PTR(-ENOMEM)
 		    || inode == ERR_PTR(-EACCES)) {
@@ -139,6 +143,9 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 	if (!pi)
 		goto out;
+
+	aeon_dbgv("UNLIN  %lu %s 0x%llx 0x%llx\n",
+		  inode->i_ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
 	if (dentry->d_fsdata) {
 		remove_entry = (struct aeon_dentry *)dentry->d_fsdata;
@@ -262,6 +269,9 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	d_instantiate(dentry, inode);
 
+	aeon_dbgv("MKDIR  %u %s 0x%llx 0x%llx\n",
+		  ino, dentry->d_name.name, (u64)dir, (u64)inode);
+
 	pidir->i_links_count = cpu_to_le64(inode->i_nlink);
 
 	aeon_sb->s_num_inodes++;
@@ -297,14 +307,18 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!pi)
 		goto out;
 
+	aeon_dbgv("RMDIR  %lu %s 0x%llx 0x%llx\n",
+		  inode->i_ino, dentry->d_name.name, (u64)dir, (u64)inode);
+
+	if (!aeon_empty_dir(inode))
+		return -ENOTEMPTY;
+
 	if (dentry->d_fsdata) {
 		remove_entry = (struct aeon_dentry *)dentry->d_fsdata;
 		dentry->d_fsdata = NULL;
 	} else {
 		struct qstr *name = &dentry->d_name;
 
-		if (!aeon_empty_dir(inode))
-			return -ENOTEMPTY;
 		remove_entry = aeon_find_dentry(sb, NULL, dir,
 						name->name, name->len);
 	}
@@ -369,6 +383,10 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto out_dir;
 	}
 
+	aeon_dbgv("RENAME %lu %s to %s",
+		  old_inode->i_ino,
+		  old_dentry->d_name.name, new_dentry->d_name.name);
+
 	if (new_inode) {
 		err = -ENOTEMPTY;
 		if (dir_de && !aeon_empty_dir(new_inode))
@@ -415,7 +433,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	return 0;
-
 out_dir:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;

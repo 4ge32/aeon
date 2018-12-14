@@ -505,8 +505,10 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(dir->i_sb, sih);
 
+	dir->i_ino = le32_to_cpu(pi->aeon_ino);
 	de->ino = pi->aeon_ino;
 	de->d_inode_addr = cpu_to_le64(sih->pi_addr - (u64)sbi->virt_addr);
+	de->d_pinode_addr = (u64)pi - (u64)sbi->virt_addr;
 	aeon_update_dentry_csum(de);
 	pi->i_dentry_addr = cpu_to_le64((u64)de - (u64)sbi->virt_addr);
 	aeon_update_inode_csum(pi);
