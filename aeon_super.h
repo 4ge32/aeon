@@ -1,6 +1,11 @@
 #ifndef __AEON_SUPER_H
 #define __AEON_SUPER_H
 
+#include "aeon.h"
+
+#define AEON_SB_SIZE            512
+#define AEON_SB_CSIZE           (512 - CHECKSUM_SIZE)
+
 extern int fs_persisted;
 
 struct aeon_super_block {
@@ -149,7 +154,7 @@ static inline int aeon_super_block_persisted(struct aeon_super_block *aeon_sb)
 
 	temp = cpu_to_le32(crc32_le(SEED,
 				    (unsigned char *)aeon_sb,
-				    AEON_INODE_CSIZE));
+				    AEON_SB_CSIZE));
 	if (temp != aeon_sb->s_csum)
 		return 0;
 
@@ -160,7 +165,7 @@ static inline void aeon_update_super_block_csum(struct aeon_super_block *aeon_sb
 {
 	aeon_sb->s_csum = cpu_to_le32(crc32_le(SEED,
 					       (unsigned char *)aeon_sb,
-					       AEON_INODE_CSIZE));
+					       AEON_SB_CSIZE));
 }
 
 static inline void aeon_wakeup(struct super_block *sb)

@@ -3,6 +3,12 @@
 
 #include "aeon_inode.h"
 
+#define AEON_E_SHIFT		4
+#define AEON_EXTENT_SIZE	((1 << AEON_E_SHIFT))
+#define AEON_EXTENT_HEADER_SIZE 32
+#define AEON_EXTENT_PER_PAGE	(AEON_DEF_BLOCK_SIZE_4K / AEON_EXTENT_SIZE)
+
+
 /* rb tree for extent is experimetal */
 #define USE_RB
 

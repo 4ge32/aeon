@@ -13,6 +13,7 @@
 #include "aeon.h"
 #include "aeon_super.h"
 #include "aeon_balloc.h"
+#include "aeon_extents.h"
 #include "xattr.h"
 #include "libaeon/aeon_malloc.h"
 

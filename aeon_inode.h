@@ -1,6 +1,11 @@
 #ifndef __AEON_INODE_H
 #define __AEON_INODE_H
 
+#define AEON_INODE_SIZE         (1 << AEON_I_SHIFT)
+#define AEON_INODE_CSIZE        (AEON_INODE_SIZE - CHECKSUM_SIZE)
+#define AEON_I_NUM_PER_PAGE     ((AEON_DEF_BLOCK_SIZE_4K / AEON_INODE_SIZE) * \
+						AEON_PAGES_FOR_INODE)
+
 /*
  * extent tree's header referred from inode
  */

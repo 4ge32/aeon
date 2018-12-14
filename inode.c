@@ -797,8 +797,8 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 		}
 		break;
 	default:
-		//aeon_dbg("%s: special ino %u\n",
-		//	 __func__, le32_to_cpu(pi->aeon_ino));
+		aeon_dbgv("%s: special ino %u\n",
+			  __func__, le32_to_cpu(pi->aeon_ino));
 		break;
 	}
 
