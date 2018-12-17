@@ -25,8 +25,8 @@ int aeon_rebuild_extenttree(struct super_block *sb,
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	int entries = le16_to_cpu(aeh->eh_entries);
 
-	aeon_info("Rebuild file (inode %u)", le32_to_cpu(pi->aeon_ino));
-	if (entries < PI_MAX_EXTERNAL_EXTENT + 1)
+	aeon_dbgv("Rebuild file (inode %u)", le32_to_cpu(pi->aeon_ino));
+	if (entries < PI_MAX_INTERNAL_EXTENT + 1)
 		return 0;
 
 	return aeon_rebuild_rb_extenttree(sb, inode, entries);
