@@ -22,7 +22,7 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 
 	sbi->free_lists = kcalloc(sbi->cpus,
 				  sizeof(struct free_list), GFP_KERNEL);
-	if(!sbi->free_lists)
+	if (!sbi->free_lists)
 		return -ENOMEM;
 
 	for (i = 0; i < sbi->cpus; i++) {
@@ -977,7 +977,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 
 		offset = le32_to_cpu(ae->ex_offset);
 		*bno = le64_to_cpu(ae->ex_block);
-		length = le16_to_cpu(ae->ex_length) - (iblock -offset);
+		length = le16_to_cpu(ae->ex_length) - (iblock - offset);
 		*bno += (iblock - offset);
 
 		return length;

@@ -2,9 +2,12 @@
 #include <linux/dax.h>
 #include <linux/iomap.h>
 #include <linux/uio.h>
+#include <linux/buffer_head.h>
+#include <linux/blkdev.h>
 
 #include "aeon.h"
 #include "aeon_balloc.h"
+#include "aeon_extents.h"
 
 
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
@@ -37,38 +40,12 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 	return vfs_setpos(file, offset, maxbytes);
 }
 
-/* TODO:
- * after surpassing max entrirs.
- */
-//static struct aeon_extent *aeon_search_extent(struct aeon_inode *pi,
-//					      unsigned long offset)
-//{
-//	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
-//	struct aeon_extent *ae;
-//	int entries;
-//	int i;
-//
-//
-//	entries = le16_to_cpu(aeh->eh_entries);
-//	for (i = 0; i < entries; i++) {
-//		ae = &pi->ae[i];
-//			aeon_dbg("%d\n", le16_to_cpu(ae->ex_offset));
-//		if (le16_to_cpu(ae->ex_offset) >= offset) {
-//			return ae;
-//		}
-//	}
-//
-//	return NULL;
-//}
-//
-//static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
+//static ssize_t do_dax_mapping_read(struct inode *inode, char __user *buf,
 //				   size_t len, loff_t *ppos)
 //{
-//	struct inode *inode = filp->f_mapping->host;
 //	struct super_block *sb = inode->i_sb;
 //	struct aeon_inode_info *si = AEON_I(inode);
 //	struct aeon_inode_info_header *sih = &si->header;
-//	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 //	struct aeon_extent *ae;
 //	pgoff_t index;
 //	pgoff_t end_index;
@@ -97,12 +74,13 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	if (len <= 0)
 //		goto out;
 //
+//	aeon_dbgv("-----------------IN------------------\n");
 //	end_index = (isize - 1) >> PAGE_SHIFT;
-//
 //	do {
 //		unsigned long nr = 0;
 //		unsigned long left;
 //		unsigned long nvmm;
+//		unsigned long ex_offset;
 //		void *dax_mem = NULL;
 //		int pages;
 //		ssize_t copying;
@@ -116,64 +94,68 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //
 //		}
 //
-//		aeon_dbg("ST---------------------\n");
-//		aeon_dbg("isize     %lld\n", isize);
-//		aeon_dbg("len       %ld\n", len);
-//		aeon_dbg("nr        %lu\n", nr);
-//		aeon_dbg("offset    %lu\n", offset);
-//		aeon_dbg("index     %lu\n", index);
-//		aeon_dbg("end index %lu\n", end_index);
+//		aeon_dbgv("START----------\n");
+//		aeon_dbgv("isize     %lld\n", isize);
+//		aeon_dbgv("len       %lu\n", len);
+//		aeon_dbgv("nr        %lu\n", nr);
+//		aeon_dbgv("offset    %lu\n", offset);
+//		aeon_dbgv("index     %lu\n", index);
+//		aeon_dbgv("end index %lu\n", end_index);
 //
-//		ae = aeon_search_extent(pi, offset >> PAGE_SHIFT);
+//		ae = aeon_search_extent(sb, sih, index);
 //		if (!ae) {
 //			aeon_err(sb, "can't find target data\n");
 //			return 0;
 //		}
-//		aeon_dbg("extent of %d\n", le16_to_cpu(ae->ex_offset));
 //
-//		nvmm = le64_to_cpu(ae->ex_block) << AEON_SHIFT;
-//		dax_mem = aeon_get_block(sb, nvmm);
-//		pages = le16_to_cpu(ae->ex_length);
-//		aeon_dbg("block	    %llu\n", le64_to_cpu(ae->ex_block));
-//		aeon_dbg("nvmm	    %lu\n", nvmm);
-//		aeon_dbg("pages	    %d\n", pages);
+//		ex_offset = le16_to_cpu(ae->ex_offset);
+//		aeon_dbg("extent    0x%llx\n", (u64)ae);
+//		aeon_dbg("extent of %ld\n", ex_offset);
 //
-//		copying = le16_to_cpu(ae->ex_length) << AEON_SHIFT;
-//		if (len < copying)
-//			nr = len;
+//		nvmm = le64_to_cpu(ae->ex_block);
+//		pages = le16_to_cpu(ae->ex_length) - (index - ex_offset);
+//		nvmm += (index - ex_offset);
+//		dax_mem = aeon_get_block(sb, nvmm << AEON_SHIFT);
+//
+//		aeon_dbgv("block    %llu\n", le64_to_cpu(ae->ex_block));
+//		aeon_dbgv("nvmm     0x%lx\n", nvmm);
+//		aeon_dbgv("pages    %d\n", pages);
+//
+//		copying = pages << PAGE_SHIFT;
+//		if (len < copying + copied)
+//			nr = len - copied;
 //		else
 //			nr = copying;
 //
-//		aeon_dbg("READ----------------------------\n");
-//		aeon_dbg("len %lu\n", len);
-//		aeon_dbg("copied %lu\n", copied);
-//		aeon_dbg("dax_mem 0x%lx\n", (unsigned long)dax_mem);
-//		aeon_dbg("offset %ld\n", offset);
-//		aeon_dbg("nr %ld\n", nr);
-//		aeon_dbg("copying %ld\n", copying);
+//		aeon_dbgv("READ-----------\n");
+//		aeon_dbgv("len      %lu\n", len);
+//		aeon_dbgv("copied   %lu\n", copied);
+//		aeon_dbgv("offset   %ld\n", offset);
+//		aeon_dbgv("copying  %ld\n", copying);
+//		aeon_dbgv("nr       %ld\n", nr);
+//		aeon_dbgv("nr       %ld\n", nr >> PAGE_SHIFT);
+//		aeon_dbgv("dax_mem  0x%lx\n", (unsigned long)dax_mem);
 //
-//		left = copy_to_user(buf + copied, dax_mem + offset, nr);
+//		left = copy_to_user(buf + copied, dax_mem, nr);
 //		copied += (nr - left);
-//		if (copied % PAGE_SIZE)
-//			offset = 0;
-//		else
-//			offset += (nr - left);
-//		index += offset >> PAGE_SHIFT;
+//		offset += (nr - left);
+//		index += (offset >> PAGE_SHIFT);
+//		aeon_dbgv("DONE-----------\n");
+//		aeon_dbgv("len      %lu\n", len);
+//		aeon_dbgv("left     %lu\n", left);
+//		aeon_dbgv("copied   %lu\n", copied);
+//		aeon_dbgv("offset   %ld\n", offset);
 //		offset &= ~PAGE_MASK;
-//		aeon_dbg("complete------------------\n");
-//		aeon_dbg("left %lu\n", left);
-//		aeon_dbg("copied %lu\n", copied);
-//		aeon_dbg("dax_mem 0x%lx\n", (unsigned long)dax_mem);
-//		aeon_dbg("offset %ld\n", offset);
-//		aeon_dbg("nr %ld\n", nr);
+//		aeon_dbgv("offset   %ld\n", offset);
+//		aeon_dbgv("index    %lu\n", index);
+//		aeon_dbgv("REMAIN   %lu\n", len - copied);
+//		aeon_dbgv("dax_mem  0x%lx\n", (unsigned long)dax_mem);
 //	} while (copied < len);
 //
 //out:
 //	*ppos = pos + copied;
-//	if (filp)
-//		file_accessed(filp);
 //
-//	//aeon_dbg("copied return %lu\n", copied);
+//	aeon_dbg("copied return     %lu\n", copied);
 //	return copied ? copied : err;
 //}
 //
@@ -184,12 +166,17 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	ssize_t ret;
 //
 //	inode_lock_shared(inode);
-//	ret = do_dax_mapping_read(filp, buf, len, ppos);
+//
+//	ret = do_dax_mapping_read(inode, buf, len, ppos);
+//
+//	if (filp)
+//		file_accessed(filp);
+//
 //	inode_unlock_shared(inode);
 //
 //	return ret;
 //}
-
+//
 //static ssize_t aeon_write(struct file *filp, const char __user *buf,
 //			  size_t len, loff_t *ppos)
 //{
@@ -199,7 +186,6 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	struct aeon_inode_info_header *sih = &si->header;
 //	struct super_block *sb = inode->i_sb;
 //	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-//	struct aeon_extent *ae;
 //	unsigned long total_blocks;
 //	unsigned long blocknr;
 //	unsigned long num_blocks;
@@ -212,7 +198,7 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	u64 file_size;
 //	u32 time;
 //	loff_t pos;
-//	ssize_t ret;
+//	ssize_t ret = -1;
 //	ssize_t written = 0;
 //	ssize_t offset;
 //	size_t count;
@@ -220,8 +206,6 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	size_t copied;
 //	long status = 0;
 //	int allocated;
-//	int found = 1;
-//	int entry;
 //
 //	aeon_dbg("WRITE-----------------------------\n");
 //
@@ -243,10 +227,10 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
 //	total_blocks = num_blocks;
 //
-//	aeon_dbg("len %lu\n", len);
-//	aeon_dbg("offset %lu\n", offset);
-//	aeon_dbg("num_blocks %lu\n", num_blocks);
-//	aeon_dbg("total_blocks %lu\n", total_blocks);
+//	aeon_dbgv("len          %lu\n", len);
+//	aeon_dbgv("offset       %lu\n", offset);
+//	aeon_dbgv("num_blocks   %lu\n", num_blocks);
+//	aeon_dbgv("total_blocks %lu\n", total_blocks);
 //
 //	ret = file_remove_privs(filp);
 //	if (ret)
@@ -256,26 +240,29 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //	time = current_time(inode).tv_sec;
 //
 //	while (num_blocks > 0) {
+//		struct aeon_extent_header *aeh;
+//		struct aeon_extent *ae;
+//		int err;
+//
 //		start_blk = pos >> sb->s_blocksize_bits;
 //
-//		aeon_dbg("offset %lu\n", offset);
-//		aeon_dbg("pos %lld\n", pos);
-//		aeon_dbg("start_blk %lu\n", start_blk);
-//		aeon_dbg("start_blk %u\n", inode->i_blkbits);
+//		aeon_dbgv("offset       %lu\n", offset);
+//		aeon_dbgv("pos          %lld\n", pos);
+//		aeon_dbgv("start_blk    %lu\n", start_blk);
 //
-//		entry = le16_to_cpu(pi->aeh.eh_entries);
-//		if (entry == 0)
-//			found = 0;
-//		if (start_blk >= entry)
-//			found = 0;
-//		if (found) {
-//			ae = &pi->ae[start_blk];
-//			aeon_dbg("FOUND\n");
+//		ae = aeon_search_extent(sb, sih, );
+//		if (ae) {
+//			aeon_dbgv("FOUND\n");
 //			blocknr = le64_to_cpu(ae->ex_block);
 //			allocated = le16_to_cpu(ae->ex_length);
 //		} else {
-//			ae = &pi->ae[start_blk];
-//			aeon_dbg("ALLOCATED\n");
+//			aeon_dbgv("ALLOCATED\n");
+//			aeh = aeon_get_extent_header(pi);
+//			if (!pi->i_exblocks) {
+//				pi->i_new = 0;
+//				pi->i_exblocks++;
+//				aeon_init_extent_header(aeh);
+//			}
 //			allocated = aeon_new_data_blocks(sb, sih, &new_d_blocknr,
 //							 start_blk, num_blocks, ANY_CPU);
 //			if (allocated <= 0) {
@@ -284,29 +271,37 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //				goto out;
 //			}
 //
-//			new_blocks += allocated;
-//			ae->ex_block = cpu_to_le64(new_d_blocknr);
-//			ae->ex_length = cpu_to_le16(allocated);
-//			pi->aeh.eh_entries++;
+//			err = aeon_update_extent(sb, inode, new_d_blocknr,
+//						 offset, allocated);
+//			if (err) {
+//				aeon_err(sb, "failed to update extent\n");
+//				goto out;
+//			}
+//
 //			blocknr = new_d_blocknr;
 //
-//			aeon_dbg("new_blocks %lu \n", new_blocks);
+//			clean_bdev_aliases(sb->s_bdev, blocknr, allocated);
+//			err = sb_issue_zeroout(sb, blocknr, allocated, GFP_NOFS);
+//			if (err) {
+//				aeon_err(sb, "%s: sb_issue_zero_out\n", __func__);
+//				goto out;
+//			}
+//
 //		}
 //
-//		aeon_dbg("allocated %d\n", allocated);
-//		aeon_dbg("blocknr %lu\n", blocknr);
+//		aeon_dbgv("allocated    %d\n", allocated);
+//		aeon_dbgv("blocknr      %lu\n", blocknr);
 //
 //		bytes = (sb->s_blocksize) * allocated - offset;
 //		if (bytes > count)
 //			bytes = count;
 //
 //		blk_off = blocknr << AEON_SHIFT;
-//		aeon_dbg("bytes %lu\n", bytes);
-//		aeon_dbg("blk_off %llu\n", blk_off);
+//		aeon_dbgv("bytes        %lu\n", bytes);
 //
 //		kmem = aeon_get_block(sb, blk_off);
 //
-//		aeon_dbg("kmem 0x%lx\n", (unsigned long)kmem);
+//		aeon_dbgv("kmem         0x%lx\n", (unsigned long)kmem);
 //		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
 //							buf, bytes);
 //		if (pos + copied > inode->i_size)
@@ -314,7 +309,7 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //		else
 //			file_size = cpu_to_le64(inode->i_size);
 //
-//		aeon_dbg("copied %lu\n", copied);
+//		aeon_dbgv("copied       %lu\n", copied);
 //		if (copied > 0) {
 //			status = copied;
 //			written += copied;
@@ -489,7 +484,7 @@ static int aeon_open(struct inode *inode, struct file *file)
 const struct file_operations aeon_dax_file_operations = {
 	.llseek		= aeon_llseek,
 	//.read		= aeon_read,
-	//.write	= aeon_write,
+	//.write          = aeon_write,
 	.read_iter	= aeon_file_read_iter,
 	.write_iter	= aeon_file_write_iter,
 	.mmap           = aeon_mmap,
