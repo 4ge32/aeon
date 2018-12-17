@@ -27,6 +27,9 @@ enum failure_type {
 	MKDIR_6,
 	LINK_1,
 	LINK_2,
+	UNLINK_1,
+	UNLINK_1_1,
+	UNLINK_2 = 21,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -343,6 +346,33 @@ setversion_out:
 			struct aeon_inode *pidir;
 			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
 			pidir->i_links_count--;
+			break;
+		}
+		case UNLINK_1: {
+			/* Blocks dropped: C_inode
+			 * Error: Child - Wrong hard link count
+			 * Key for Action:
+			 * Child - Error on access via old path
+			 */
+			struct aeon_inode *pidir;
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
+			pidir->i_links_count++;
+			break;
+		}
+		case UNLINK_1_1: {
+			struct aeon_inode *pidir;
+			pidir = aeon_get_pinode(sb, &AEON_I(inode)->header);
+			pidir->i_links_count++;
+			aeon_update_inode_csum(pidir);
+			break;
+		}
+		case UNLINK_2: {
+			/* Block dropped: O_dir (Old file/parent directory block)
+			 * Error: Parent - Bad dir entry
+			 * Key for Action:
+			 * Child - Error on inode access
+			 */
+			memset(de, 0, sizeof(*de));
 			break;
 		}
 		default:

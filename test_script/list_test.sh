@@ -816,6 +816,45 @@ test-recover-21 ()
   clean
 }
 
+test-recover-22 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test_im 3 19
+
+  clean
+}
+
+test-recover-23 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm dark dram pmem"
+
+  helper_recover_test_im 3 20
+
+  clean
+}
+
+test-recover-24 ()
+{
+  init
+
+  TARGET="dark"
+  OBJ="nvdimm dark dram pmem"
+  RES="nvdimm R-17 dram pmem"
+
+  helper_recover_test_im 3 21
+
+  clean
+}
+
 test-libaeon-1 ()
 {
   init

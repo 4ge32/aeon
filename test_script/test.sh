@@ -18,8 +18,8 @@ _do_test ()
   do
     res=1
     ./run.sh
-    echo -n "test-$3-$num"
-    test-$3-$num
+    echo -n "test-${FUNCNAME[1]}-$num"
+    test-${FUNCNAME[1]}-$num
     if [ "$res" = "0" ]; then
       OK
     else
@@ -31,109 +31,57 @@ _do_test ()
 
 rename ()
 {
-  _do_test 1 6 rename
+  _do_test 1 6
 }
 
 remove ()
 {
-  N=4
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-remove-$num"
-    test-remove-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 1 4
 }
 
 create ()
 {
-  N=4
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-create-$num"
-    test-create-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 1 4
 }
 
-hard_and_sym_link ()
+link ()
 {
-  N=3
-  for num in `seq 2 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-link-$num"
-    test-link-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 1 3
 }
 
 attr ()
 {
-  N=4
-  for num in `seq 1 $N`
-  do
-    res=1
-    ./run.sh
-    echo -n "test-attr-$num"
-    test-attr-$num
-    if [ "$res" = "0" ]; then
-      OK
-    else
-      FAILED
-    fi
-    ./run.sh clean
-  done
+  _do_test 1 4
 }
 
 mmap ()
 {
-  _do_test 1 1 mmap
+  _do_test 1 1
 }
 
 write ()
 {
-  _do_test 1 2 write
+  _do_test 1 2
 }
 
 recover ()
 {
-  _do_test 1 21 recover
+  _do_test 1 24
 }
 
 libaeon ()
 {
-  _do_test 1 1 libaeon
+  _do_test 1 1
 }
 
 compression ()
 {
-  _do_test 1 1 compression
+  _do_test 1 1
 }
 
 other ()
 {
-  _do_test 1 2 other
+  _do_test 1 2
 }
 
 source ./list_test.sh
@@ -150,7 +98,7 @@ case "$1" in
     create
     ;;
   link)
-    hard_and_sym_link
+    link
     ;;
   attr)
     attr
@@ -177,7 +125,7 @@ case "$1" in
     mmap
     write
     attr
-    hard_and_sym_link
+    link
     remove
     rename
     create
