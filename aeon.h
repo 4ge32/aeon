@@ -1,3 +1,22 @@
+/*
+ *
+ * BRIEF DESCRIPTION
+ *
+ * Definitions for the AEON filesystem.
+ *
+ * Copyright 2018 Fumiya Shigemitsu <shfy1014@gmail.com>
+ * Copyright 2015-2016 Regents of the University of California,
+ * UCSD Non-Volatile Systems Lab, Andiry Xu <jix024@cs.ucsd.edu>
+ * Copyright 2012-2013 Intel Corporation
+ * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
+ * Copyright 2003 Sony Corporation
+ * Copyright 2003 Matsushita Electric Industrial Co., Ltd.
+ * 2003-2004 (c) MontaVista Software, Inc. , Steve Longerbeam
+ *
+ * This file is licensed under the terms of the GNU General Public
+ * License version 2. This program is licensed "as is" without any
+ * warranty of any kind, whether express or implied.
+ */
 #ifndef __AEON_H
 #define __AEON_H
 
@@ -204,6 +223,59 @@ struct aeon_region_table *aeon_get_rtable(struct super_block *sb, int cpu_id)
 	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
 
 	return (struct aeon_region_table *)(inode_map->i_table_addr);
+}
+
+/* ======================= Write ordering ========================= */
+
+#define CACHELINE_SIZE  (64)
+#define CACHELINE_MASK  (~(CACHELINE_SIZE - 1))
+#define CACHELINE_ALIGN(addr) (((addr)+CACHELINE_SIZE-1) & CACHELINE_MASK)
+
+extern int support_clwb;
+
+static inline bool arch_has_clwb(void)
+{
+	return static_cpu_has(X86_FEATURE_CLWB);
+}
+
+#define _mm_clflush(addr)\
+	asm volatile("clflush %0" : "+m" (*(volatile char *)(addr)))
+#define _mm_clflushopt(addr)\
+	asm volatile(".byte 0x66; clflush %0" : "+m" \
+		     (*(volatile char *)(addr)))
+#define _mm_clwb(addr)\
+	asm volatile(".byte 0x66; xsaveopt %0" : "+m" \
+		     (*(volatile char *)(addr)))
+
+static inline void PERSISTENT_BARRIER(void)
+{
+	asm volatile ("sfence\n" : : );
+}
+
+static inline void aeon_flush_buffer(void *buf, uint32_t len, bool fence)
+{
+	uint32_t i;
+
+	len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
+	if (support_clwb) {
+		for (i = 0; i < len; i += CACHELINE_SIZE)
+			_mm_clwb(buf + i);
+	} else {
+		for (i = 0; i < len; i += CACHELINE_SIZE)
+			_mm_clflush(buf + i);
+	}
+	/* Do a fence only if asked. We often don't need to do a fence
+	 * immediately after clflush because even if we get context switched
+	 * between clflush and subsequent fence, the context switch operation
+	 * provides implicit fence.
+	 */
+	if (fence)
+		PERSISTENT_BARRIER();
+}
+
+static inline void aeon_flush_64bit(void *buf)
+{
+	aeon_flush_buffer(buf, 64, 1);
 }
 
 #include "mprotect.h"
