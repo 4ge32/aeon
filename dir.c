@@ -511,6 +511,9 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	aeon_update_dentry_csum(de);
 	pi->i_dentry_addr = cpu_to_le64((u64)de - (u64)sbi->virt_addr);
 	aeon_update_inode_csum(pi);
+
+	aeon_flush_buffer(de, sizeof(*de), 1);
+	aeon_flush_64bit(&pi->i_dentry_addr);
 }
 
 void aeon_set_pdir_link(struct aeon_dentry *de, struct aeon_inode *pi,
