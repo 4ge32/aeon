@@ -419,7 +419,11 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 		if (dir_de)
 			inc_nlink(new_dir);
+
+		aeon_flush_buffer(new_dentry, sizeof(*new_dentry), 1);
+		aeon_flush_64bit(&pi->i_dentry_addr);
 	}
+
 
 	old_inode->i_ctime = current_time(old_inode);
 	aeon_remove_dentry(old_dentry, 0, pi, old_de);

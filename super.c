@@ -20,6 +20,7 @@
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
 int wprotect = 0;
+int support_clwb = 0;
 unsigned int aeon_dbgmask;
 
 module_param(wprotect, int, 0444);
@@ -562,6 +563,9 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 
 	if (num_online_cpus() == 1)
 		return -EINVAL;
+
+	if (arch_has_clwb())
+		support_clwb = 1;
 
 	sbi = kzalloc(sizeof(struct aeon_sb_info), GFP_KERNEL);
 	if (!sbi)
