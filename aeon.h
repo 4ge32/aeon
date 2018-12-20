@@ -60,9 +60,7 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
 #define aeon_info(s, args ...)          pr_info(s, ## args)
 
-
-//#define CONFIG_AEON_DEBUG_MODE
-#ifdef CONFIG_AEON_DEBUG_MODE
+#ifdef CONFIG_AEON_FS_DEBUG_MODE
 #define aeon_dbgv(s, args ...)		pr_info(s, ## args)
 #else
 #define aeon_dbgv(s, args ...)		do { } while (0)

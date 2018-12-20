@@ -855,6 +855,36 @@ test-recover-24 ()
   clean
 }
 
+test-recover-25 ()
+{
+  init
+
+  # fake rename
+  touch $DIR/orig
+  touch $DIR/target
+
+  touch $TMP/target
+
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
+  ./$TEST_AEON 3 22 $DIR/orig
+
+  ./run.sh rm
+
+  for i in `seq 1 10`
+  do
+    touch $DIR/NEW$1
+    touch $TMP/NEW$1
+  done
+
+  diff -r $DIR $TMP
+  res=$?
+
+  clean
+}
+
 test-libaeon-1 ()
 {
   init

@@ -87,8 +87,8 @@ int aeon_get_dentry_address(struct super_block *sb,
 		u32 pi_ino = le32_to_cpu(pi->aeon_ino);
 		u32 de_ino = le32_to_cpu(de->ino);
 
-		aeon_err(sb, "%s: pi_ino %u de_ino %u\n"
-			 , __func__, pi_ino, de_ino);
+		aeon_warn("%s: pi_ino %u de_ino %u\n"
+			  , __func__, pi_ino, de_ino);
 		return -EINVAL;
 	}
 
@@ -504,6 +504,9 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(dir->i_sb, sih);
 
+	/* TODO:
+	 * cleanup e.g. store value from old_dentry
+	 */
 	dir->i_ino = le32_to_cpu(pi->aeon_ino);
 	de->ino = pi->aeon_ino;
 	de->d_inode_addr = cpu_to_le64(sih->pi_addr - (u64)sbi->virt_addr);

@@ -538,8 +538,9 @@ aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 			return -ENOMEM;
 
 		adc->d = d;
-		aeon_dbgv("d->name %s d->name_len %d dino %u\n",
-			  d->name, d->name_len, le32_to_cpu(d->ino));
+		aeon_dbgv("d->name %s d->name_len %d dino %u pino %u\n",
+			  d->name, d->name_len,
+			  le32_to_cpu(d->ino), le32_to_cpu(pi->aeon_ino));
 		list_add_tail(&adc->list, &de_info->adc->list);
 		ret++;
 	}
@@ -580,8 +581,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 				   (i_dentry_tb << AEON_SHIFT));
 	next_block = le64_to_cpu(d->d_next_dentry_block);
 
-	//aeon_dbg("num_candidate_dentries %d\n", num_candidate_dentries);
-
+	aeon_dbgv("num_candidate_dentries %d\n", num_candidate_dentries);
 	i = 2;
 	while (num_candidate_dentries > 0) {
 		if (!i_dentry_tb)
@@ -615,7 +615,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 			if (!found) {
 				aeon_info("Get an orphan inode %u\n",
 					  le32_to_cpu(d->ino));
-				aeon_dbg("! %s\n", d->name);
+				aeon_dbgv("! %s\n", d->name);
 				err = insert_inode_to_validlist(sb, pidir,
 								d, ivl);
 				if (err == -ENOENT) {
@@ -690,15 +690,15 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 
 	mutex_lock(&de_info->dentry_mutex);
 
+	/* TODO:
+	 * Remove rebuilt ino from this list
+	 */
 	list_for_each_entry(ivl, &sbi->ivl->i_valid_list, i_valid_list) {
 		if (ivl->parent_ino == parent_ino)
 			goto found;
 	}
-	aeon_err(sb, "CANNOT FIND TARGET DIR\n");
-	kfree(de_info);
-	kfree(adi);
-	de_info = NULL;
-	adi = NULL;
+
+	aeon_err(sb, "CANNOT FIND TARGET DIR %u\n", parent_ino);
 	mutex_unlock(&de_info->dentry_mutex);
 	err = -ENOENT;
 	goto out1;
@@ -731,6 +731,7 @@ found:
 		de_map->num_internal_dentries = AEON_INTERNAL_ENTRY;
 
 	mutex_unlock(&de_info->dentry_mutex);
+
 	return 0;
 out1:
 	kfree(de_info->di);

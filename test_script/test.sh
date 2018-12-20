@@ -66,7 +66,7 @@ write ()
 
 recover ()
 {
-  _do_test 1 24
+  _do_test 1 25
 }
 
 libaeon ()
@@ -86,6 +86,8 @@ other ()
 
 source ./list_test.sh
 echo "===== TEST START ====="
+
+./run.sh set > /dev/null 2>&1
 
 case "$1" in
   rename)

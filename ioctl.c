@@ -30,6 +30,7 @@ enum failure_type {
 	UNLINK_1,
 	UNLINK_1_1,
 	UNLINK_2 = 21,
+	RENAME_1,
 };
 
 static inline __u32 aeon_mask_flags(umode_t mode, __u32 flags)
@@ -373,6 +374,28 @@ setversion_out:
 			 * Child - Error on inode access
 			 */
 			memset(de, 0, sizeof(*de));
+			break;
+		}
+		/* Block dropped: O_dir
+		 * Error: Old & New file/parent - Multiple entries
+		 * Key for Action:
+		 * Child - Error on inode access
+		 */
+		case RENAME_1: {
+			/* trace set_link() */
+			/* Script needs to create 2 files in same directory */
+			struct aeon_dentry *src = de;
+			struct aeon_dentry *dest = ++de;
+
+			dest->ino = pi->aeon_ino;
+			dest->d_inode_addr = src->d_inode_addr;
+			dest->d_pinode_addr = src->d_pinode_addr;
+			aeon_update_dentry_csum(dest);
+
+			pi->i_dentry_addr = dest->d_dentry_addr;
+			aeon_update_inode_csum(pi);
+
+			/* remain old dentry */
 			break;
 		}
 		default:
