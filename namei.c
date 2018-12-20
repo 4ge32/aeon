@@ -414,7 +414,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		if (err)
 			goto out_dir;
 
-		pi->i_dentry_addr = cpu_to_le64(de_addr) - (u64)sbi->virt_addr;
+		pi->i_dentry_addr = cpu_to_le64(de_addr - (u64)sbi->virt_addr);
 		aeon_update_inode_csum(pi);
 
 		if (dir_de)

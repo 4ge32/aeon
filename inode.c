@@ -93,7 +93,7 @@ int aeon_get_inode_address(struct super_block *sb,
 	u64 addr = le64_to_cpu(de->d_inode_addr);
 
 	if (addr <= 0 || addr > sbi->last_addr) {
-		aeon_err(sb, "out of bounds i_blocknr 0x%llx last 0x%llx\n",
+		aeon_err(sb, "out of bounds addr 0x%llx last 0x%llx\n",
 			 addr, sbi->last_addr);
 		return -ENOENT;
 	}

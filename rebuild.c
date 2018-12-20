@@ -597,6 +597,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 			if (i == 0)
 				next_block = d->d_next_dentry_block;
 			if (!d->valid) {
+reuse_space:
 				adi = kmalloc(sizeof(struct aeon_dentry_invalid),
 					      GFP_KERNEL);
 				if (!adi) {
@@ -621,7 +622,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 				if (err == -ENOENT) {
 					aeon_info("Discard %u\n",
 						  le32_to_cpu(d->ino));
-					goto next;
+					goto reuse_space;
 				} else if (err) {
 					aeon_err(sb, "%s:%d\n",
 						 __func__, __LINE__);
@@ -645,6 +646,7 @@ next:
 			if (num_candidate_dentries == 0)
 				break;
 		}
+		de_map->num_internal_dentries = 0;
 		i_dentry_tb = next_block;
 		i = 0;
 	}

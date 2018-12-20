@@ -855,13 +855,15 @@ test-recover-24 ()
   clean
 }
 
-test-recover-25 ()
+do_fake_rename ()
 {
   init
 
   # fake rename
   touch $DIR/orig
-  touch $DIR/target
+  if [ $# -eq 1 ]; then
+    touch $DIR/target
+  fi
 
   touch $TMP/target
 
@@ -869,20 +871,28 @@ test-recover-25 ()
     gcc -o $TEST_AEON ${TEST_AEON}.c
   fi
 
-  ./$TEST_AEON 3 22 $DIR/orig
+  ./$TEST_AEON 3 $1 $DIR/orig
 
   ./run.sh rm
 
-  for i in `seq 1 10`
+  for i in `seq 1 30`
   do
-    touch $DIR/NEW$1
-    touch $TMP/NEW$1
+    touch $DIR/NEW$i
+    touch $TMP/NEW$i
   done
 
+  ls $DIR
+  #cd ..
+  #./run.sh dentry
   diff -r $DIR $TMP
   res=$?
 
   clean
+}
+
+test-recover-25 ()
+{
+  do_fake_rename 22
 }
 
 test-libaeon-1 ()

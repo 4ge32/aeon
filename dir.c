@@ -662,7 +662,7 @@ static int aeon_readdir(struct file *file, struct dir_context *ctx)
 			aeon_dbg("%s: pos %lu\n", __func__, pos);
 			return 0;
 		}
-		//aeon_dbg("%u %s 0x%llx\n", ino, entry->name, (u64)entry);
+		aeon_dbgv("%u %s 0x%llx\n", ino, entry->name, (u64)entry);
 
 		temp = rb_next(temp);
 	}
