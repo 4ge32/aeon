@@ -14,6 +14,7 @@
 #include "aeon_super.h"
 #include "aeon_balloc.h"
 #include "aeon_extents.h"
+#include "aeon_compression.h"
 #include "xattr.h"
 #include "libaeon/aeon_malloc.h"
 
@@ -178,7 +179,6 @@ void aeon_err_msg(struct super_block *sb, const char *fmt, ...)
 	va_start(args, fmt);
 	vprintk(fmt, args);
 	va_end(args);
-
 }
 
 static void aeon_free_range_node(struct aeon_range_node *node)

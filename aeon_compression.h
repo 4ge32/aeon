@@ -1,6 +1,8 @@
 #ifndef __AEON_COMPRESSION_H
 #define __AEON_COMPRESSION_H
 
+#ifdef CONFIG_AEON_FS_COMPRESSION
+
 struct aeon_compress_op {
 	struct list_head *(*alloc_workspace)(void);
 
@@ -14,6 +16,10 @@ struct aeon_compress_op {
 			      unsigned long *total_in,
 			      unsigned long *total_out);
 
+	int (*compress_pages_to_pmem)(struct list_head *workspace,
+				      const void  *src,
+				      const int llen);
+
 	int (*decompress)(struct list_head *workspace,
 			  unsigned char *data_in,
 			  struct page *dest_page,
@@ -23,5 +29,18 @@ struct aeon_compress_op {
 	void (*set_level)(struct list_head *ws, unsigned int type);
 };
 
+extern void __init aeon_init_compress(void);
+extern void __cold aeon_exit_compress(void);
+int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i);
+
+#else
+
+static inline void __init aeon_init_compress(void)
+{
+}
+static inline void __cold aeon_exit_compress(void)
+{
+}
+#endif
 
 #endif

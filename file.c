@@ -8,6 +8,7 @@
 #include "aeon.h"
 #include "aeon_balloc.h"
 #include "aeon_extents.h"
+#include "aeon_compression.h"
 
 
 static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
@@ -395,7 +396,6 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct inode *inode = file->f_mapping->host;
 	ssize_t ret;
 
-	//aeon_dbg("---Now start writing : ret %ld---\n", ret);
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
 	if (ret <= 0)
@@ -407,6 +407,12 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (ret)
 		goto out_unlock;
 
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	ret = aeon_compress_data_iter(inode, from);
+	if (ret)
+		goto out_unlock;
+#endif
+
 	ret = dax_iomap_rw(iocb, from, &aeon_iomap_ops);
 	if (ret > 0 && iocb->ki_pos > i_size_read(inode))
 		wrap_i_size_write(inode, iocb);
@@ -415,11 +421,6 @@ out_unlock:
 	inode_unlock(inode);
 	if (ret > 0)
 		ret = generic_write_sync(iocb, ret);
-	//if (ret == -EIO)
-	//	aeon_dbg("IO ERROR\n");
-	//else
-	//	aeon_dbg("Maybe success");
-	//aeon_dbg("--------finish---------\n");
 	return ret;
 }
 
