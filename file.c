@@ -396,6 +396,10 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct inode *inode = file->f_mapping->host;
 	ssize_t ret;
 
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	size_t tmp = from->count;
+#endif
+
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
 	if (ret <= 0)
@@ -408,9 +412,11 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		goto out_unlock;
 
 #ifdef CONFIG_AEON_FS_COMPRESSION
-	ret = aeon_compress_data_iter(inode, from);
+	aeon_dbg("RRR %llu %lu\n", iocb->ki_pos, from->count);
+	ret = aeon_compress_data_iter(from);
 	if (ret)
 		goto out_unlock;
+	aeon_dbg("LLL %llu %lu\n", iocb->ki_pos, from->count);
 #endif
 
 	ret = dax_iomap_rw(iocb, from, &aeon_iomap_ops);
@@ -421,6 +427,12 @@ out_unlock:
 	inode_unlock(inode);
 	if (ret > 0)
 		ret = generic_write_sync(iocb, ret);
+
+	aeon_dbg("GGG %llu %lu %llu\n", iocb->ki_pos, from->count, i_size_read(inode));
+	aeon_dbg("ret %lu\n", ret);
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	ret = tmp;
+#endif
 	return ret;
 }
 

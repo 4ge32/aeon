@@ -262,7 +262,6 @@ static int zstd_decompress(struct list_head *ws, const char *data_in,
 	size_t ret2;
 	unsigned long total_out = 0;
 	unsigned long pg_offset = 0;
-	char *kaddr;
 
 	stream = ZSTD_initDStream(ZSTD_AEON_MAX_INPUT,
 				  workspace->mem, workspace->size);
@@ -766,9 +765,10 @@ int aeon_compress_pages(unsigned int type_level, struct address_space *mapping,
 	return ret;
 }
 
-static int aeon_compress_pmem(const void *src, unsigned long len)
+static int aeon_compress_pmem(void *src, struct iov_iter *i)
 {
 	struct list_head *workspace;
+	unsigned long len = i->count;
 	unsigned long out_pages = (len >> PAGE_SHIFT) + 1;
 	unsigned long total_in = 0;
 	unsigned long total_out = 0;
@@ -793,48 +793,68 @@ static int aeon_compress_pmem(const void *src, unsigned long len)
 
 	aeon_dbg("%lu %lu %lu\n", out_pages, total_in, total_out);
 
-	workspace = find_workspace(type);
-	ret = zstd_decompress(workspace, tmp, &dest_page, 0, ret, 4096, tmp);
-	free_workspace(type, workspace);
-	aeon_dbg("----FINISH------\n");
+	//workspace = find_workspace(type);
+	//ret = zstd_decompress(workspace, tmp, &dest_page, 0, ret, 4096, tmp);
+	//free_workspace(type, workspace);
+	//aeon_dbg("----FINISH------\n");
+	i->count = ret;
+	tmp[i->count] = '\0';
+	memcpy(src, tmp, i->count+1);
+	aeon_dbg("src %s\n", (char *)src);
 
 	return 0;
 }
 
-int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i)
+int aeon_compress_data_iter(struct iov_iter *i)
 {
-	struct super_block *sb = inode->i_sb;
-	int err;
+	char *buf;
+	int err = 0;
 
 	if (!i->count)
 		goto out;
+
+	buf = kzalloc(sizeof(char) * (i->count+1), GFP_KERNEL);
+	if (!buf) {
+		err = -ENOMEM;
+		goto out1;
+	}
 
 	if (unlikely(i->type & ITER_BVEC)) {
 		aeon_dbg("1!\n");
 	} else if (unlikely(i->type & ITER_KVEC)) {
 		aeon_dbg("2!\n");
 	} else {
-		char tmp[4096];
-		unsigned long out_pages = 0;
-		unsigned long total_in = 0;
-		unsigned long total_out = 0;
-
+		size_t tmp;
 		aeon_dbg("3!\n");
 
-		err = copy_from_user(tmp, i->iov->iov_base, i->count);
+		err = copy_from_user(buf, i->iov->iov_base, i->count);
 		if (err) {
-			aeon_err(sb, "%s: copy_from_user\n", __func__);
-			goto out;
+			AEON_ERR();
+			goto out1;
 		}
-		tmp[i->count] = '\0';
+		buf[i->count] = '\0';
+		tmp = i->count;
 
-		err = aeon_compress_pmem(tmp, i->count);
+		err = aeon_compress_pmem(buf, i);
 		if (err) {
-			aeon_err(sb, "%s\n", __func__);
-			goto out;
+			AEON_ERR();
+			goto out1;
 		}
+
+		aeon_dbg("new %lu\n", i->count);
+		aeon_dbg("buf %s\n", buf);
+		err = copy_to_user(i->iov->iov_base, buf, i->count+1);
+		if (err) {
+			AEON_ERR();
+			goto out1;
+		}
+		aeon_dbg("RES\n");
 	}
 
+
+out1:
+	kfree(buf);
+	buf = NULL;
 out:
-	return 0;
+	return err;
 }
