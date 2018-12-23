@@ -6,177 +6,19 @@
 #include "aeon_balloc.h"
 #include "aeon_dir.h"
 
-#define IF2DT(sif) (((sif) & S_IFMT) >> 12)
-
-int aeon_insert_dir_tree(struct super_block *sb,
-			 struct aeon_inode_info_header *sih,
-			 const char *name, int namelen,
-			 struct aeon_dentry *direntry)
+static struct aeon_dentry *aeon_alloc_new_dentry_block(struct super_block *sb,
+						       u64 *d_blocknr)
 {
-	struct aeon_range_node *node = NULL;
-	unsigned long hash;
-	int ret;
+	struct aeon_dentry *direntry;
+	u64 de_addr = 0;
 
-	hash = BKDRHash(name, namelen);
+	*d_blocknr = aeon_get_new_dentry_block(sb, &de_addr);
+	if (*d_blocknr == 0)
+		return ERR_PTR(-ENOSPC);
 
-	node  = aeon_alloc_dir_node(sb);
-	if (!node)
-		return -ENOMEM;
-	node->hash = hash;
-	node->direntry = direntry;
+	direntry = (struct aeon_dentry *)de_addr;
 
-	ret = aeon_insert_range_node(&sih->rb_tree, node, NODE_DIR);
-	if (ret) {
-		aeon_free_dir_node(node);
-		aeon_err(sb, "%s: %d - %s\n", __func__, ret, name);
-	}
-
-	return ret;
-}
-
-static int aeon_remove_dir_tree(struct super_block *sb,
-				struct aeon_inode_info_header *sih,
-				const char *name, int namelen)
-{
-	struct aeon_dentry *entry;
-	struct aeon_range_node *ret_node = NULL;
-	unsigned long hash;
-	bool found = false;
-
-	hash = BKDRHash(name, namelen);
-	found = aeon_find_range_node(&sih->rb_tree, hash, NODE_DIR, &ret_node);
-	if (!found || (hash != ret_node->hash)) {
-		aeon_err(sb, "%s target not found: %s, length %d, hash %lu\n",
-			 __func__, name,
-			 namelen, hash);
-		return -EINVAL;
-	}
-
-	entry = ret_node->direntry;
-	rb_erase(&ret_node->node, &sih->rb_tree);
-	aeon_free_dir_node(ret_node);
-
-	return 0;
-}
-
-/*
- * Filesystem already knows whether pi is valid or not.
- */
-int aeon_get_dentry_address(struct super_block *sb,
-			    struct aeon_inode *pi, u64 *de_addr)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_dentry *de;
-	u64 addr;
-
-	if (pi->aeon_ino == cpu_to_le32(AEON_ROOT_INO))
-		return 0;
-
-	addr = le64_to_cpu(pi->i_dentry_addr);
-	if (addr <= 0 || addr > sbi->last_addr) {
-		aeon_err(sb, "out of bounds: addr 0x%llx last 0x%llx"
-			 " from pi %llx, ino %u\n",
-			 addr, sbi->last_addr, (u64)pi,
-			 le32_to_cpu(pi->aeon_ino));
-		return -ENOENT;
-	}
-
-	*de_addr = (u64)sbi->virt_addr + addr;
-	de = (struct aeon_dentry *)(*de_addr);
-	if (pi->aeon_ino != de->ino) {
-		u32 pi_ino = le32_to_cpu(pi->aeon_ino);
-		u32 de_ino = le32_to_cpu(de->ino);
-
-		aeon_warn("%s: pi_ino %u de_ino %u\n"
-			  , __func__, pi_ino, de_ino);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-struct aeon_dentry *aeon_dotdot(struct super_block *sb,
-				struct dentry *dentry)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct dentry *parent = dentry->d_parent;
-	struct inode *inode = d_inode(parent);
-	struct aeon_dentry_map *de_map;
-	struct aeon_dentry *de;
-	unsigned long dotdot_block;
-
-	de_map = aeon_get_dentry_map(sb, &AEON_I(inode)->header);
-	if (!de_map)
-		return NULL;
-
-	dotdot_block = le64_to_cpu(de_map->block_dentry[0]);
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				    (dotdot_block << AEON_SHIFT) +
-				    (1 << AEON_D_SHIFT));
-	return de;
-}
-
-int aeon_delete_dir_tree(struct super_block *sb,
-			 struct aeon_inode_info_header *sih)
-{
-	struct aeon_dentry_map *de_map;
-	int length = AEON_PAGES_FOR_DENTRY;
-	int err = 0;
-	int i;
-
-	de_map = aeon_get_dentry_map(sb, sih);
-	if (!de_map)
-		goto out;
-
-	for (i = 0; i <= de_map->num_latest_dentry; i++) {
-		unsigned long blocknr;
-
-		blocknr = de_map->block_dentry[i];
-		err = aeon_insert_blocks_into_free_list(sb, blocknr, length, 0);
-		if (err) {
-			aeon_err(sb, "%s: free dentry resource\n", __func__);
-			goto out;
-		}
-
-	}
-
-out:
-	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
-	aeon_free_invalid_dentry_list(sb, sih);
-	kfree(sih->de_info);
-	sih->de_info = NULL;
-
-	return err;
-}
-
-static int isInvalidSpace(struct aeon_dentry_info *de_info)
-{
-	struct aeon_dentry_invalid *di = de_info->di;
-
-	if (list_empty(&di->invalid_list))
-		return 0;
-	return 1;
-}
-
-static void aeon_register_dentry_to_map(struct super_block *sb,
-					struct aeon_dentry_map *de_map,
-					unsigned long blocknr)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct aeon_dentry *de;
-	int global = de_map->num_latest_dentry;
-
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				    (de_map->block_dentry[global]<<AEON_SHIFT));
-	de->d_next_dentry_block = cpu_to_le64(blocknr);
-
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				    (blocknr<<AEON_SHIFT));
-	de->d_prev_dentry_block = de_map->block_dentry[global];
-
-	de_map->num_latest_dentry = ++global;
-	de_map->block_dentry[de_map->num_latest_dentry] = blocknr;
-	de_map->num_internal_dentries = 1;
+	return direntry;
 }
 
 static
@@ -299,19 +141,34 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pi,
 	return 0;
 }
 
-static struct aeon_dentry *aeon_alloc_new_dentry_block(struct super_block *sb,
-						       u64 *d_blocknr)
+static int isInvalidSpace(struct aeon_dentry_info *de_info)
 {
-	struct aeon_dentry *direntry;
-	u64 de_addr = 0;
+	struct aeon_dentry_invalid *di = de_info->di;
 
-	*d_blocknr = aeon_get_new_dentry_block(sb, &de_addr);
-	if (*d_blocknr == 0)
-		return ERR_PTR(-ENOSPC);
+	if (list_empty(&di->invalid_list))
+		return 0;
+	return 1;
+}
 
-	direntry = (struct aeon_dentry *)de_addr;
+static void aeon_register_dentry_to_map(struct super_block *sb,
+					struct aeon_dentry_map *de_map,
+					unsigned long blocknr)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_dentry *de;
+	int global = de_map->num_latest_dentry;
 
-	return direntry;
+	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
+				    (de_map->block_dentry[global]<<AEON_SHIFT));
+	de->d_next_dentry_block = cpu_to_le64(blocknr);
+
+	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
+				    (blocknr<<AEON_SHIFT));
+	de->d_prev_dentry_block = de_map->block_dentry[global];
+
+	de_map->num_latest_dentry = ++global;
+	de_map->block_dentry[de_map->num_latest_dentry] = blocknr;
+	de_map->num_internal_dentries = 1;
 }
 
 static int aeon_get_dentry_space(struct super_block *sb,
@@ -430,6 +287,31 @@ out:
 	return err;
 }
 
+static int aeon_remove_dir_tree(struct super_block *sb,
+				struct aeon_inode_info_header *sih,
+				const char *name, int namelen)
+{
+	struct aeon_dentry *entry;
+	struct aeon_range_node *ret_node = NULL;
+	unsigned long hash;
+	bool found = false;
+
+	hash = BKDRHash(name, namelen);
+	found = aeon_find_range_node(&sih->rb_tree, hash, NODE_DIR, &ret_node);
+	if (!found || (hash != ret_node->hash)) {
+		aeon_err(sb, "%s target not found: %s, length %d, hash %lu\n",
+			 __func__, name,
+			 namelen, hash);
+		return -EINVAL;
+	}
+
+	entry = ret_node->direntry;
+	rb_erase(&ret_node->node, &sih->rb_tree);
+	aeon_free_dir_node(ret_node);
+
+	return 0;
+}
+
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de)
 {
@@ -477,6 +359,65 @@ out:
 	return err;
 }
 
+int aeon_insert_dir_tree(struct super_block *sb,
+			 struct aeon_inode_info_header *sih,
+			 const char *name, int namelen,
+			 struct aeon_dentry *direntry)
+{
+	struct aeon_range_node *node = NULL;
+	unsigned long hash;
+	int ret;
+
+	hash = BKDRHash(name, namelen);
+
+	node  = aeon_alloc_dir_node(sb);
+	if (!node)
+		return -ENOMEM;
+	node->hash = hash;
+	node->direntry = direntry;
+
+	ret = aeon_insert_range_node(&sih->rb_tree, node, NODE_DIR);
+	if (ret) {
+		aeon_free_dir_node(node);
+		aeon_err(sb, "%s: %d - %s\n", __func__, ret, name);
+	}
+
+	return ret;
+}
+
+int aeon_delete_dir_tree(struct super_block *sb,
+			 struct aeon_inode_info_header *sih)
+{
+	struct aeon_dentry_map *de_map;
+	int length = AEON_PAGES_FOR_DENTRY;
+	int err = 0;
+	int i;
+
+	de_map = aeon_get_dentry_map(sb, sih);
+	if (!de_map)
+		goto out;
+
+	for (i = 0; i <= de_map->num_latest_dentry; i++) {
+		unsigned long blocknr;
+
+		blocknr = de_map->block_dentry[i];
+		err = aeon_insert_blocks_into_free_list(sb, blocknr, length, 0);
+		if (err) {
+			aeon_err(sb, "%s: free dentry resource\n", __func__);
+			goto out;
+		}
+
+	}
+
+out:
+	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
+	aeon_free_invalid_dentry_list(sb, sih);
+	kfree(sih->de_info);
+	sih->de_info = NULL;
+
+	return err;
+}
+
 struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 				     struct aeon_inode *pi,
 				     struct inode *inode,
@@ -495,6 +436,27 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 		direntry = ret_node->direntry;
 
 	return direntry;
+}
+
+struct aeon_dentry *aeon_dotdot(struct super_block *sb,
+				struct dentry *dentry)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct dentry *parent = dentry->d_parent;
+	struct inode *inode = d_inode(parent);
+	struct aeon_dentry_map *de_map;
+	struct aeon_dentry *de;
+	unsigned long dotdot_block;
+
+	de_map = aeon_get_dentry_map(sb, &AEON_I(inode)->header);
+	if (!de_map)
+		return NULL;
+
+	dotdot_block = le64_to_cpu(de_map->block_dentry[0]);
+	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
+				    (dotdot_block << AEON_SHIFT) +
+				    (1 << AEON_D_SHIFT));
+	return de;
 }
 
 void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
@@ -564,7 +526,7 @@ int aeon_free_cached_dentry_blocks(struct super_block *sb,
 	if (!de_map)
 		return 0;
 
-	/* It can be improved */
+	/* TODO: It can be improved */
 	for (global = 1; global <= de_map->num_latest_dentry; global++) {
 		free = true;
 		blocknr = de_map->block_dentry[global];
@@ -601,14 +563,51 @@ void aeon_free_invalid_dentry_list(struct super_block *sb,
 	if (!de_info)
 		return;
 
-	list_for_each_entry_safe(adi, dend, &de_info->di->invalid_list, invalid_list) {
-		//aeon_dbg("%s: Free invalid list (%u - %lu)\n", __func__, adi->internal, adi->global);
+	list_for_each_entry_safe(adi, dend, &de_info->di->invalid_list,
+				 invalid_list) {
 		list_del(&adi->invalid_list);
 		kfree(adi);
 		adi = NULL;
 	}
 }
 
+/*
+ * Filesystem already knows whether pi is valid or not.
+ */
+int aeon_get_dentry_address(struct super_block *sb,
+			    struct aeon_inode *pi, u64 *de_addr)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_dentry *de;
+	u64 addr;
+
+	if (pi->aeon_ino == cpu_to_le32(AEON_ROOT_INO))
+		return 0;
+
+	addr = le64_to_cpu(pi->i_dentry_addr);
+	if (addr <= 0 || addr > sbi->last_addr) {
+		aeon_err(sb, "out of bounds: addr 0x%llx last 0x%llx"
+			 " from pi %llx, ino %u\n",
+			 addr, sbi->last_addr, (u64)pi,
+			 le32_to_cpu(pi->aeon_ino));
+		return -ENOENT;
+	}
+
+	*de_addr = (u64)sbi->virt_addr + addr;
+	de = (struct aeon_dentry *)(*de_addr);
+	if (pi->aeon_ino != de->ino) {
+		u32 pi_ino = le32_to_cpu(pi->aeon_ino);
+		u32 de_ino = le32_to_cpu(de->ino);
+
+		aeon_warn("%s: pi_ino %u de_ino %u\n"
+			  , __func__, pi_ino, de_ino);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+#define IF2DT(sif) (((sif) & S_IFMT) >> 12)
 static int aeon_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);

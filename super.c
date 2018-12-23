@@ -548,18 +548,18 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct aeon_extent_header) > AEON_EXTENT_HEADER_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_extent) > AEON_EXTENT_SIZE);
 
-	aeon_dbg("free list    %lu\n", sizeof(struct free_list));
-	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
-	aeon_dbg("inode map    %lu\n", sizeof(struct inode_map));
-	aeon_dbg("sb info      %lu\n", sizeof(struct aeon_sb_info));
-	aeon_dbg("super block  %lu\n", sizeof(struct aeon_super_block));
-	aeon_dbg("inode        %lu\n", sizeof(struct aeon_inode));
-	aeon_dbg("dentry       %lu\n", sizeof(struct aeon_dentry));
-	aeon_dbg("extent       %lu\n", sizeof(struct aeon_extent));
-	aeon_dbg("extentheader %lu\n", sizeof(struct aeon_extent_header));
-	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
-	aeon_dbg("range node   %lu\n", sizeof(struct aeon_range_node));
-	aeon_dbg("dentry info  %lu\n", sizeof(struct aeon_dentry_info));
+	aeon_dbgv("free list    %lu\n", sizeof(struct free_list));
+	aeon_dbgv("region table %lu\n", sizeof(struct aeon_region_table));
+	aeon_dbgv("inode map    %lu\n", sizeof(struct inode_map));
+	aeon_dbgv("sb info      %lu\n", sizeof(struct aeon_sb_info));
+	aeon_dbgv("super block  %lu\n", sizeof(struct aeon_super_block));
+	aeon_dbgv("inode        %lu\n", sizeof(struct aeon_inode));
+	aeon_dbgv("dentry       %lu\n", sizeof(struct aeon_dentry));
+	aeon_dbgv("extent       %lu\n", sizeof(struct aeon_extent));
+	aeon_dbgv("extentheader %lu\n", sizeof(struct aeon_extent_header));
+	aeon_dbgv("region table %lu\n", sizeof(struct aeon_region_table));
+	aeon_dbgv("range node   %lu\n", sizeof(struct aeon_range_node));
+	aeon_dbgv("dentry info  %lu\n", sizeof(struct aeon_dentry_info));
 
 	if (num_online_cpus() == 1)
 		return -EINVAL;

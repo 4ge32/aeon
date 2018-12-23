@@ -13,7 +13,6 @@
 #include "libaeon/aeon_tree.h"
 #endif
 
-
 int aeon_alloc_block_free_lists(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -344,309 +343,6 @@ void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree)
 	}
 }
 
-static int not_enough_blocks(struct free_list *free_list,
-			     unsigned long num_blocks)
-{
-	struct aeon_range_node *first = free_list->first_node;
-	struct aeon_range_node *last = free_list->last_node;
-
-	if (free_list->num_free_blocks < num_blocks || !first || !last) {
-		aeon_dbgv("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
-			  __func__, free_list->num_free_blocks, num_blocks,
-			  first, last);
-		return 1;
-	}
-
-	return 0;
-}
-
-#ifdef USE_LIBAEON
-static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
-					   struct free_list *free_list,
-					   unsigned short btype,
-					   unsigned long num_blocks,
-					   unsigned long *new_blocknr)
-{
-	struct tt_root *tree;
-	struct aeon_range_node *curr;
-	struct aeon_range_node *next = NULL;
-	struct aeon_range_node *prev = NULL;
-	struct tt_node *temp;
-	struct tt_node *next_node;
-	struct tt_node *prev_node;
-	unsigned long curr_blocks;
-	bool found = 0;
-	unsigned long step = 0;
-
-	if (!free_list->first_node || free_list->num_free_blocks == 0) {
-		aeon_err(sb, "%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
-			 __func__, free_list->first_node,
-			 free_list->num_free_blocks);
-		return -ENOSPC;
-	}
-
-	tree = &(free_list->tt_block_free_tree);
-	temp = &(free_list->first_node->tt_node);
-
-	while (temp) {
-		step++;
-		curr = container_of(temp, struct aeon_range_node, tt_node);
-
-		curr_blocks = curr->range_high - curr->range_low + 1;
-
-		if (num_blocks >= curr_blocks) {
-			/* Superpage allocation must succeed */
-			if (btype > 0 && num_blocks > curr_blocks)
-				goto next;
-
-			/* Otherwise, allocate the whole blocknode */
-			if (curr == free_list->first_node) {
-				next_node = tt_next(temp);
-				if (next_node)
-					next = container_of(next_node, struct aeon_range_node, tt_node);
-				free_list->first_node = next;
-			}
-
-			if (curr == free_list->last_node) {
-				prev_node = tt_prev(temp);
-				if (prev_node)
-					prev = container_of(prev_node, struct aeon_range_node, tt_node);
-				free_list->last_node = prev;
-			}
-
-			tt_erase(&curr->tt_node, tree);
-			free_list->num_blocknode--;
-			num_blocks = curr_blocks;
-			*new_blocknr = curr->range_low;
-			aeon_free_block_node(curr);
-			found = 1;
-			break;
-		}
-
-		/* Allocate partial blocknode */
-		*new_blocknr = curr->range_low;
-		curr->range_low += num_blocks;
-		found = 1;
-		break;
-next:
-		temp = tt_next(temp);
-	}
-
-	if (free_list->num_free_blocks < num_blocks) {
-		aeon_dbg("%s: free list %d has %lu free blocks, but allocated %lu blocks?\n",
-			 __func__, free_list->index, free_list->num_free_blocks, num_blocks);
-		return -ENOSPC;
-	}
-
-	if (found)
-		free_list->num_free_blocks -= num_blocks;
-	else {
-		aeon_dbg("%s: Can't alloc.  found = %d", __func__, found);
-		return -ENOSPC;
-	}
-
-	return num_blocks;
-
-}
-#else
-/* Return how many blocks allocated */
-static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
-					   struct free_list *free_list,
-					   unsigned short btype,
-					   unsigned long num_blocks,
-					   unsigned long *new_blocknr)
-{
-	struct rb_root *tree;
-	struct aeon_range_node *curr;
-	struct aeon_range_node *next = NULL;
-	struct aeon_range_node *prev = NULL;
-	struct rb_node *temp;
-	struct rb_node *next_node;
-	struct rb_node *prev_node;
-	unsigned long curr_blocks;
-	bool found = 0;
-	unsigned long step = 0;
-
-	if (!free_list->first_node || free_list->num_free_blocks == 0) {
-		aeon_err(sb, "%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
-			 __func__, free_list->first_node,
-			 free_list->num_free_blocks);
-		return -ENOSPC;
-	}
-
-	tree = &(free_list->block_free_tree);
-	temp = &(free_list->first_node->node);
-
-	while (temp) {
-		step++;
-		curr = container_of(temp, struct aeon_range_node, node);
-
-		curr_blocks = curr->range_high - curr->range_low + 1;
-
-		if (num_blocks >= curr_blocks) {
-			/* Superpage allocation must succeed */
-			if (btype > 0 && num_blocks > curr_blocks)
-				goto next;
-
-			/* Otherwise, allocate the whole blocknode */
-			if (curr == free_list->first_node) {
-				next_node = rb_next(temp);
-				if (next_node)
-					next = container_of(next_node, struct aeon_range_node, node);
-				free_list->first_node = next;
-			}
-
-			if (curr == free_list->last_node) {
-				prev_node = rb_prev(temp);
-				if (prev_node)
-					prev = container_of(prev_node, struct aeon_range_node, node);
-				free_list->last_node = prev;
-			}
-
-			rb_erase(&curr->node, tree);
-			free_list->num_blocknode--;
-			num_blocks = curr_blocks;
-			*new_blocknr = curr->range_low;
-			aeon_free_block_node(curr);
-			found = 1;
-			break;
-		}
-
-		/* Allocate partial blocknode */
-		*new_blocknr = curr->range_low;
-		curr->range_low += num_blocks;
-		found = 1;
-		break;
-next:
-		temp = rb_next(temp);
-	}
-
-	if (free_list->num_free_blocks < num_blocks) {
-		aeon_dbg("%s: free list %d has %lu free blocks, but allocated %lu blocks?\n",
-			 __func__, free_list->index, free_list->num_free_blocks, num_blocks);
-		return -ENOSPC;
-	}
-
-	if (found)
-		free_list->num_free_blocks -= num_blocks;
-	else {
-		aeon_dbg("%s: Can't alloc.  found = %d", __func__, found);
-		return -ENOSPC;
-	}
-
-	return num_blocks;
-
-}
-#endif
-
-/* Find out the free list with most free blocks */
-static int aeon_get_candidate_free_list(struct super_block *sb)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct free_list *free_list;
-	int cpuid = 0;
-	int num_free_blocks = 0;
-	int i;
-
-	for (i = 0; i < sbi->cpus; i++) {
-		free_list = aeon_get_free_list(sb, i);
-		if (free_list->num_free_blocks > num_free_blocks) {
-			cpuid = i;
-			num_free_blocks = free_list->num_free_blocks;
-		}
-	}
-
-	return cpuid;
-}
-
-static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
-	unsigned int num, unsigned short btype, int cpuid)
-{
-	struct free_list *free_list;
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct inode_map *inode_map;
-	struct aeon_region_table *art;
-	unsigned long num_blocks = 0;
-	unsigned long new_blocknr = 0;
-	long ret_blocks = 0;
-	int retried = 0;
-	u64 addr;
-
-	num_blocks = num * aeon_get_numblocks(btype);
-
-	if (cpuid == ANY_CPU)
-		cpuid = aeon_get_cpuid(sb);
-
-retry:
-	free_list = aeon_get_free_list(sb, cpuid);
-	spin_lock(&free_list->s_lock);
-
-	if (not_enough_blocks(free_list, num_blocks)) {
-		aeon_dbgv("%s: cpu %d, free_blocks %lu, required %lu, blocknode %lu\n",
-			  __func__, cpuid, free_list->num_free_blocks,
-			  num_blocks, free_list->num_blocknode);
-
-		if (retried >= sbi->cpus-1) {
-			dump_stack();
-			goto alloc;
-		}
-
-		spin_unlock(&free_list->s_lock);
-		cpuid = aeon_get_candidate_free_list(sb);
-		retried++;
-		goto retry;
-	}
-
-alloc:
-	inode_map = &sbi->inode_maps[cpuid];
-	art = AEON_R_TABLE(inode_map);
-
-	ret_blocks = aeon_alloc_blocks_in_free_list(sb, free_list, btype,
-						    num_blocks, &new_blocknr);
-
-	if (ret_blocks > 0) {
-		art->alloc_data_count++;
-		art->alloc_data_pages += cpu_to_le64(ret_blocks);
-		art->num_free_blocks = cpu_to_le64(free_list->num_free_blocks);
-		art->b_range_low += cpu_to_le32(ret_blocks);
-	}
-
-	spin_unlock(&free_list->s_lock);
-
-	if (ret_blocks <= 0 || new_blocknr == 0) {
-		aeon_dbg("%s: not able to allocate %d blocks.  ret_blocks=%ld; new_blocknr=%lu",
-				 __func__, num, ret_blocks, new_blocknr);
-		return -ENOSPC;
-	}
-
-	*blocknr = new_blocknr;
-
-	addr = (new_blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
-	memset((void *)addr, 0, ret_blocks * 4096);
-
-	return ret_blocks / aeon_get_numblocks(btype);
-}
-
-// Allocate data blocks.  The offset for the allocated block comes back in
-// blocknr.  Return the number of blocks allocated.
-int aeon_new_data_blocks(struct super_block *sb,
-	struct aeon_inode_info_header *sih, unsigned long *blocknr,
-	unsigned long start_blk, unsigned int num, int cpu)
-{
-	int allocated;
-
-	allocated = aeon_new_blocks(sb, blocknr, num,
-				    sih->i_blk_type, cpu);
-
-	if (allocated < 0) {
-		aeon_dbg("FAILED: Inode (prev)sih->ino, start blk %lu, alloc %d data blocks from %lu to %lu\n",
-			  start_blk, allocated, *blocknr,
-			  *blocknr + allocated - 1);
-	}
-
-	return allocated;
-}
-
 #ifdef USE_LIBAEON
 static int aeon_find_free_slot(struct tt_root *tree, unsigned long range_low,
 			       unsigned long range_high,
@@ -947,6 +643,314 @@ out:
 }
 #endif
 
+static int not_enough_blocks(struct free_list *free_list,
+			     unsigned long num_blocks)
+{
+	struct aeon_range_node *first = free_list->first_node;
+	struct aeon_range_node *last = free_list->last_node;
+
+	if (free_list->num_free_blocks < num_blocks || !first || !last) {
+		aeon_dbgv("%s: num_free_blocks=%ld; num_blocks=%ld; first=0x%p; last=0x%p",
+			  __func__, free_list->num_free_blocks, num_blocks,
+			  first, last);
+		return 1;
+	}
+
+	return 0;
+}
+
+/* Find out the free list with most free blocks */
+static int aeon_get_candidate_free_list(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	int cpuid = 0;
+	int num_free_blocks = 0;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = aeon_get_free_list(sb, i);
+		if (free_list->num_free_blocks > num_free_blocks) {
+			cpuid = i;
+			num_free_blocks = free_list->num_free_blocks;
+		}
+	}
+
+	return cpuid;
+}
+
+#ifdef USE_LIBAEON
+static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
+					   struct free_list *free_list,
+					   unsigned short btype,
+					   unsigned long num_blocks,
+					   unsigned long *new_blocknr)
+{
+	struct tt_root *tree;
+	struct aeon_range_node *curr;
+	struct aeon_range_node *next = NULL;
+	struct aeon_range_node *prev = NULL;
+	struct tt_node *temp;
+	struct tt_node *next_node;
+	struct tt_node *prev_node;
+	unsigned long curr_blocks;
+	bool found = 0;
+	unsigned long step = 0;
+
+	if (!free_list->first_node || free_list->num_free_blocks == 0) {
+		aeon_err(sb, "%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
+			 __func__, free_list->first_node,
+			 free_list->num_free_blocks);
+		return -ENOSPC;
+	}
+
+	tree = &(free_list->tt_block_free_tree);
+	temp = &(free_list->first_node->tt_node);
+
+	while (temp) {
+		step++;
+		curr = container_of(temp, struct aeon_range_node, tt_node);
+
+		curr_blocks = curr->range_high - curr->range_low + 1;
+
+		if (num_blocks >= curr_blocks) {
+			/* Superpage allocation must succeed */
+			if (btype > 0 && num_blocks > curr_blocks)
+				goto next;
+
+			/* Otherwise, allocate the whole blocknode */
+			if (curr == free_list->first_node) {
+				next_node = tt_next(temp);
+				if (next_node)
+					next = container_of(next_node, struct aeon_range_node, tt_node);
+				free_list->first_node = next;
+			}
+
+			if (curr == free_list->last_node) {
+				prev_node = tt_prev(temp);
+				if (prev_node)
+					prev = container_of(prev_node, struct aeon_range_node, tt_node);
+				free_list->last_node = prev;
+			}
+
+			tt_erase(&curr->tt_node, tree);
+			free_list->num_blocknode--;
+			num_blocks = curr_blocks;
+			*new_blocknr = curr->range_low;
+			aeon_free_block_node(curr);
+			found = 1;
+			break;
+		}
+
+		/* Allocate partial blocknode */
+		*new_blocknr = curr->range_low;
+		curr->range_low += num_blocks;
+		found = 1;
+		break;
+next:
+		temp = tt_next(temp);
+	}
+
+	if (free_list->num_free_blocks < num_blocks) {
+		aeon_dbg("%s: free list %d has %lu free blocks,"
+			 "but allocated %lu blocks?\n",
+			 __func__, free_list->index,
+			 free_list->num_free_blocks, num_blocks);
+		return -ENOSPC;
+	}
+
+	if (found)
+		free_list->num_free_blocks -= num_blocks;
+	else {
+		aeon_dbg("%s: Can't alloc.  found = %d", __func__, found);
+		return -ENOSPC;
+	}
+
+	return num_blocks;
+
+}
+#else
+/* Return how many blocks allocated */
+static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
+					   struct free_list *free_list,
+					   unsigned short btype,
+					   unsigned long num_blocks,
+					   unsigned long *new_blocknr)
+{
+	struct rb_root *tree;
+	struct aeon_range_node *curr;
+	struct aeon_range_node *next = NULL;
+	struct aeon_range_node *prev = NULL;
+	struct rb_node *temp;
+	struct rb_node *next_node;
+	struct rb_node *prev_node;
+	unsigned long curr_blocks;
+	bool found = 0;
+	unsigned long step = 0;
+
+	if (!free_list->first_node || free_list->num_free_blocks == 0) {
+		aeon_err(sb, "%s: Can't alloc. free_list->first_node=0x%p free_list->num_free_blocks = %lu",
+			 __func__, free_list->first_node,
+			 free_list->num_free_blocks);
+		return -ENOSPC;
+	}
+
+	tree = &(free_list->block_free_tree);
+	temp = &(free_list->first_node->node);
+
+	while (temp) {
+		step++;
+		curr = container_of(temp, struct aeon_range_node, node);
+
+		curr_blocks = curr->range_high - curr->range_low + 1;
+
+		if (num_blocks >= curr_blocks) {
+			/* Superpage allocation must succeed */
+			if (btype > 0 && num_blocks > curr_blocks)
+				goto next;
+
+			/* Otherwise, allocate the whole blocknode */
+			if (curr == free_list->first_node) {
+				next_node = rb_next(temp);
+				if (next_node)
+					next = container_of(next_node, struct aeon_range_node, node);
+				free_list->first_node = next;
+			}
+
+			if (curr == free_list->last_node) {
+				prev_node = rb_prev(temp);
+				if (prev_node)
+					prev = container_of(prev_node, struct aeon_range_node, node);
+				free_list->last_node = prev;
+			}
+
+			rb_erase(&curr->node, tree);
+			free_list->num_blocknode--;
+			num_blocks = curr_blocks;
+			*new_blocknr = curr->range_low;
+			aeon_free_block_node(curr);
+			found = 1;
+			break;
+		}
+
+		/* Allocate partial blocknode */
+		*new_blocknr = curr->range_low;
+		curr->range_low += num_blocks;
+		found = 1;
+		break;
+next:
+		temp = rb_next(temp);
+	}
+
+	if (free_list->num_free_blocks < num_blocks) {
+		aeon_dbg("%s: free list %d has %lu free blocks,"
+			 "but allocated %lu blocks?\n",
+			 __func__, free_list->index,
+			 free_list->num_free_blocks, num_blocks);
+		return -ENOSPC;
+	}
+
+	if (found)
+		free_list->num_free_blocks -= num_blocks;
+	else {
+		aeon_dbg("%s: Can't alloc.  found = %d", __func__, found);
+		return -ENOSPC;
+	}
+
+	return num_blocks;
+
+}
+#endif
+
+static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
+	unsigned int num, unsigned short btype, int cpuid)
+{
+	struct free_list *free_list;
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map;
+	struct aeon_region_table *art;
+	unsigned long num_blocks = 0;
+	unsigned long new_blocknr = 0;
+	long ret_blocks = 0;
+	int retried = 0;
+	u64 addr;
+
+	num_blocks = num * aeon_get_numblocks(btype);
+
+	if (cpuid == ANY_CPU)
+		cpuid = aeon_get_cpuid(sb);
+
+retry:
+	free_list = aeon_get_free_list(sb, cpuid);
+	spin_lock(&free_list->s_lock);
+
+	if (not_enough_blocks(free_list, num_blocks)) {
+		aeon_dbgv("%s: cpu %d, free_blocks %lu, required %lu, blocknode %lu\n",
+			  __func__, cpuid, free_list->num_free_blocks,
+			  num_blocks, free_list->num_blocknode);
+
+		if (retried >= sbi->cpus-1) {
+			dump_stack();
+			goto alloc;
+		}
+
+		spin_unlock(&free_list->s_lock);
+		cpuid = aeon_get_candidate_free_list(sb);
+		retried++;
+		goto retry;
+	}
+
+alloc:
+	inode_map = &sbi->inode_maps[cpuid];
+	art = AEON_R_TABLE(inode_map);
+
+	ret_blocks = aeon_alloc_blocks_in_free_list(sb, free_list, btype,
+						    num_blocks, &new_blocknr);
+
+	if (ret_blocks > 0) {
+		art->alloc_data_count++;
+		art->alloc_data_pages += cpu_to_le64(ret_blocks);
+		art->num_free_blocks = cpu_to_le64(free_list->num_free_blocks);
+		art->b_range_low += cpu_to_le32(ret_blocks);
+	}
+
+	spin_unlock(&free_list->s_lock);
+
+	if (ret_blocks <= 0 || new_blocknr == 0) {
+		aeon_dbg("%s: not able to allocate %d blocks.  ret_blocks=%ld; new_blocknr=%lu",
+				 __func__, num, ret_blocks, new_blocknr);
+		return -ENOSPC;
+	}
+
+	*blocknr = new_blocknr;
+
+	addr = (new_blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
+	memset((void *)addr, 0, ret_blocks * 4096);
+
+	return ret_blocks / aeon_get_numblocks(btype);
+}
+
+// Allocate data blocks.  The offset for the allocated block comes back in
+// blocknr.  Return the number of blocks allocated.
+int aeon_new_data_blocks(struct super_block *sb,
+	struct aeon_inode_info_header *sih, unsigned long *blocknr,
+	unsigned long start_blk, unsigned int num, int cpu)
+{
+	int allocated;
+
+	allocated = aeon_new_blocks(sb, blocknr, num,
+				    sih->i_blk_type, cpu);
+
+	if (allocated < 0) {
+		aeon_dbg("FAILED: Inode (prev)sih->ino, start blk"
+			 "%lu, alloc %d data blocks from %lu to %lu\n",
+			  start_blk, allocated, *blocknr,
+			  *blocknr + allocated - 1);
+	}
+
+	return allocated;
+}
+
 /**
  * aeon_dax_get_blocks - The function tries to lookup the requested blocks.
  * Also it allocates new blcoks if these are needed.
@@ -1028,19 +1032,6 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	return allocated;
 }
 
-static void imem_cache_create(struct aeon_sb_info *sbi,
-			      struct inode_map *inode_map,
-			      unsigned long blocknr,
-			      u64 start_ino, int space)
-{
-	struct imem_cache *init;
-
-	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
-	inode_map->im = init;
-
-	INIT_LIST_HEAD(&inode_map->im->imem_list);
-}
-
 static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,
 					   struct inode_map *inode_map,
 					   struct aeon_region_table *art,
@@ -1055,6 +1046,19 @@ static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,
 
 	pi->i_next_inode_block = cpu_to_le64(blocknr);
 	art->i_blocknr = cpu_to_le64(blocknr);
+}
+
+static void imem_cache_create(struct aeon_sb_info *sbi,
+			      struct inode_map *inode_map,
+			      unsigned long blocknr,
+			      u64 start_ino, int space)
+{
+	struct imem_cache *init;
+
+	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	inode_map->im = init;
+
+	INIT_LIST_HEAD(&inode_map->im->imem_list);
 }
 
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)

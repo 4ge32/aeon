@@ -33,21 +33,6 @@ static inline int aeon_insert_inodetree(struct aeon_sb_info *sbi,
 	return ret;
 }
 
-static inline int aeon_search_inodetree(struct aeon_sb_info *sbi,
-					unsigned long ino,
-					struct aeon_range_node **ret_node)
-{
-	struct rb_root *tree;
-	unsigned long internal_ino;
-	int cpu;
-
-	cpu = ino % sbi->cpus;
-	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
-	internal_ino = ino / sbi->cpus;
-
-	return aeon_find_range_node(tree, internal_ino, NODE_INODE, ret_node);
-}
-
 int aeon_init_inode_inuse_list(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -629,6 +614,18 @@ fail:
 	return ERR_PTR(err);
 }
 
+void aeon_destroy_imem_cache(struct inode_map *inode_map)
+{
+	struct imem_cache *im;
+	struct imem_cache *dend = NULL;
+
+	list_for_each_entry_safe(im, dend, &inode_map->im->imem_list, imem_list) {
+		list_del(&im->imem_list);
+		kfree(im);
+		im = NULL;
+	}
+}
+
 int aeon_free_dram_resource(struct super_block *sb,
 			    struct aeon_inode_info_header *sih)
 {
@@ -661,16 +658,19 @@ int aeon_free_dram_resource(struct super_block *sb,
 	return freed;
 }
 
-void aeon_destroy_imem_cache(struct inode_map *inode_map)
+static inline int aeon_search_inodetree(struct aeon_sb_info *sbi,
+					unsigned long ino,
+					struct aeon_range_node **ret_node)
 {
-	struct imem_cache *im;
-	struct imem_cache *dend = NULL;
+	struct rb_root *tree;
+	unsigned long internal_ino;
+	int cpu;
 
-	list_for_each_entry_safe(im, dend, &inode_map->im->imem_list, imem_list) {
-		list_del(&im->imem_list);
-		kfree(im);
-		im = NULL;
-	}
+	cpu = ino % sbi->cpus;
+	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
+	internal_ino = ino / sbi->cpus;
+
+	return aeon_find_range_node(tree, internal_ino, NODE_INODE, ret_node);
 }
 
 static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
@@ -838,26 +838,6 @@ int aeon_update_time(struct inode *inode,
 	return 0;
 }
 
-static void aeon_setattr_to_pmem(const struct inode *inode,
-				 struct aeon_inode *pi,
-				 const struct iattr *attr)
-{
-	unsigned int ia_valid = attr->ia_valid;
-
-	if (ia_valid & ATTR_UID)
-		pi->i_uid = cpu_to_le32(i_uid_read(inode));
-	if (ia_valid & ATTR_GID)
-		pi->i_gid = cpu_to_le32(i_gid_read(inode));
-	if (ia_valid & ATTR_ATIME)
-		pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
-	if (ia_valid & ATTR_MTIME)
-		pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
-	if (ia_valid & ATTR_CTIME)
-		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	if (ia_valid & ATTR_MODE)
-		pi->i_mode = cpu_to_le16(inode->i_mode);
-}
-
 void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 {
 	struct super_block *sb = inode->i_sb;
@@ -968,6 +948,26 @@ expand:
 	if (err)
 		aeon_err(sb, "%s: ERROR\n", __func__);
 	mutex_unlock(&sih->truncate_mutex);
+}
+
+static void aeon_setattr_to_pmem(const struct inode *inode,
+				 struct aeon_inode *pi,
+				 const struct iattr *attr)
+{
+	unsigned int ia_valid = attr->ia_valid;
+
+	if (ia_valid & ATTR_UID)
+		pi->i_uid = cpu_to_le32(i_uid_read(inode));
+	if (ia_valid & ATTR_GID)
+		pi->i_gid = cpu_to_le32(i_gid_read(inode));
+	if (ia_valid & ATTR_ATIME)
+		pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	if (ia_valid & ATTR_MTIME)
+		pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	if (ia_valid & ATTR_CTIME)
+		pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	if (ia_valid & ATTR_MODE)
+		pi->i_mode = cpu_to_le16(inode->i_mode);
 }
 
 static int aeon_setsize(struct inode *inode, loff_t newsize)

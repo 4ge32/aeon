@@ -881,7 +881,7 @@ do_fake_rename ()
     touch $TMP/NEW$i
   done
 
-  ls $DIR
+  #ls $DIR
   #cd ..
   #./run.sh dentry
   diff -r $DIR $TMP
