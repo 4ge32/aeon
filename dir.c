@@ -128,7 +128,7 @@ int aeon_delete_dir_tree(struct super_block *sb,
 	if (!de_map)
 		goto out;
 
-	for (i = 0; i < de_map->num_latest_dentry; i++) {
+	for (i = 0; i <= de_map->num_latest_dentry; i++) {
 		unsigned long blocknr;
 
 		blocknr = de_map->block_dentry[i];
