@@ -173,7 +173,6 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 
 	aeon_init_extent_header(&pi->aeh);
 
-	pi->persisted = 1;
 	pi->valid = 1;
 
 	aeon_update_inode_csum(pi);

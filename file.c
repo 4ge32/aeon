@@ -367,6 +367,10 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
 	struct inode *inode = iocb->ki_filp->f_mapping->host;
 	ssize_t ret;
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	struct aeon_inode *pi;
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
+#endif
 
 	if(!iov_iter_count(to))
 		return 0;
@@ -381,7 +385,8 @@ static ssize_t aeon_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	 */
 	if (!ret)
 		goto out;
-	ret = aeon_decompress_data_iter(ret, to);
+	if (pi->compressed)
+		ret = aeon_decompress_data_iter(ret, to);
 out:
 #endif
 
@@ -425,7 +430,7 @@ static ssize_t aeon_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	/* TODO
 	 * Handle the case that ret is not equal to from->count
 	 */
-	ret = aeon_compress_data_iter(from);
+	ret = aeon_compress_data_iter(inode, from);
 	if (ret)
 		goto out_unlock;
 #endif

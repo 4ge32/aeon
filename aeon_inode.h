@@ -60,8 +60,8 @@ enum aeon_new_inode_type {
  */
 struct aeon_inode {
 	/* first 40 bytes */
-	u8	persisted;	 /* Is this inode persistent? */
 	u8	valid;		 /* Is this inode valid? */
+	u8	compressed;	 /* Is this file compressed? */
 	u8	deleted;	 /* Is this inode deleted? */
 	u8	i_new;           /* Is this inode new? */
 	/* 4  */

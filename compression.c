@@ -347,16 +347,14 @@ const struct aeon_compress_op aeon_zstd_compress = {
 	.compress_pages		= zstd_compress_pages,
 };
 
-static size_t
-zstd_compress_pages_test(struct list_head *ws, const void *src,
-			 unsigned long len,
-			 unsigned long *out_pages,
-			 unsigned long *total_in,
-			 unsigned long *total_out, void *tmp)
+static int
+zstd_do_compress_pages(struct list_head *ws, const void *src, unsigned long len,
+		       unsigned long *out_pages, unsigned long *total_in,
+		       unsigned long *total_out, void *tmp)
 {
 	struct workspace *workspace = list_entry(ws, struct workspace, list);
 	ZSTD_CStream *stream;
-	size_t ret = 0;
+	int ret = 0;
 	int nr_pages = 0;
 	struct page *in_page = NULL;  /* The current page to read */
 	struct page *out_page = NULL; /* The current page to write to */
@@ -452,7 +450,6 @@ zstd_compress_pages_test(struct list_head *ws, const void *src,
 		/* We've reached the end of the input */
 		if (workspace->in_buf.pos >= len) {
 			tot_in += workspace->in_buf.pos;
-			aeon_dbg("hey come here?\n");
 			break;
 		}
 		/* Check if we need more input */
@@ -510,12 +507,11 @@ zstd_compress_pages_test(struct list_head *ws, const void *src,
 
 	if (tot_out >= tot_in) {
 		ret = -E2BIG;
-		aeon_dbg("OOPS\n");
-		aeon_dbg("%lu %lu\n", tot_out, tot_in);
+		aeon_dbg("Can't compress data\n");
+		aeon_dbg("%lu <- %lu\n", tot_out, tot_in);
 		goto out;
 	}
 
-	ret = tot_out;
 	*total_in = tot_in;
 	*total_out = tot_out;
 
@@ -754,7 +750,7 @@ static int aeon_compress_pmem(void *src, struct iov_iter *i)
 	unsigned long total_in = 0;
 	unsigned long total_out = 0;
 	int type = 1 & 0xF;
-	size_t ret;
+	int ret;
 	void *tmp;
 
 	tmp = kzalloc(sizeof(char) * i->count, GFP_KERNEL);
@@ -767,26 +763,30 @@ static int aeon_compress_pmem(void *src, struct iov_iter *i)
 	aeon_dbg("%s", (char *)src);
 	aeon_dbg("%lu\n", len);
 	workspace = find_workspace(type);
-	ret = zstd_compress_pages_test(workspace, src, len,
-				       &out_pages, &total_in, &total_out, tmp);
+	ret = zstd_do_compress_pages(workspace, src, len,
+				     &out_pages, &total_in, &total_out, tmp);
 	free_workspace(type, workspace);
 	aeon_dbg("---COMPRESS FINISH---\n");
+	if (ret) {
+		aeon_dbg("ret %d\n", ret);
+		aeon_dbg("%s\n", (char *)src);
+		goto out;
+	}
 
 	aeon_dbg("---FINISH(log start)---\n");
 	aeon_dbg("%s", (char *)src);
 	aeon_dbg("%s", (char *)tmp);
-	aeon_dbg("%lu\n", ret);
+	aeon_dbg("%lu\n", total_out);
 
 	aeon_dbg("%lu %lu %lu\n", out_pages, total_in, total_out);
 
-	i->count = ret;
+	i->count = total_out;
 	memcpy(src, tmp, i->count);
-	aeon_dbg("src %s\n", (char *)src);
 	aeon_dbg("---FINISH(log end)---\n");
 
+out:
 	kfree(tmp);
-
-	return 0;
+	return ret;
 }
 
 static int aeon_decompress_pmem(void *src, ssize_t len, struct iov_iter *i)
@@ -822,8 +822,9 @@ static int aeon_decompress_pmem(void *src, ssize_t len, struct iov_iter *i)
 	return ret;
 }
 
-int aeon_compress_data_iter(struct iov_iter *i)
+int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i)
 {
+	struct aeon_inode *pi;
 	void *buf;
 	int err = 0;
 
@@ -835,6 +836,8 @@ int aeon_compress_data_iter(struct iov_iter *i)
 		err = -ENOMEM;
 		goto out1;
 	}
+
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 
 	if (unlikely(i->type & ITER_BVEC)) {
 		aeon_dbg("1!\n");
@@ -852,10 +855,8 @@ int aeon_compress_data_iter(struct iov_iter *i)
 		tmp = i->count;
 
 		err = aeon_compress_pmem(buf, i);
-		if (err) {
-			AEON_ERR();
-			goto out1;
-		}
+		if (!err)
+			pi->compressed = 1;
 
 		aeon_dbg("new %lu\n", i->count);
 		aeon_dbg("buf %s\n", (char *)buf);

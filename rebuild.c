@@ -114,7 +114,6 @@ static void aeon_rebuild_inode(struct aeon_inode *pi, struct aeon_dentry *de,
 	pi->i_dentry_addr = de->d_dentry_addr;
 	pi->i_inode_addr = de->d_inode_addr;
 	pi->valid = 1;
-	pi->persisted = 1;
 	aeon_update_inode_csum(pi);
 }
 
@@ -389,7 +388,6 @@ init_lost_inode(struct super_block *sb, struct aeon_inode *pi, u32 ino,
 	pi->i_inode_addr = cpu_to_le64(i_addr_base);
 	pi->i_dentry_addr = cpu_to_le64(d_addr_base);
 
-	pi->persisted = 1;
 	pi->valid = 1;
 
 	aeon_update_inode_csum(pi);

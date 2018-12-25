@@ -31,7 +31,7 @@ struct aeon_compress_op {
 
 extern void __init aeon_init_compress(void);
 extern void __cold aeon_exit_compress(void);
-int aeon_compress_data_iter(struct iov_iter *i);
+int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i);
 int aeon_decompress_data_iter(ssize_t len, struct iov_iter *i);
 
 #else
