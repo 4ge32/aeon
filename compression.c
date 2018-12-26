@@ -252,13 +252,14 @@ out:
 	return ret;
 }
 
-static ssize_t zstd_decompress(struct list_head *ws, const void *data_in,
-			       struct page *dest_page, unsigned long start_byte,
-			       size_t srclen, size_t destlen, void *tmp)
+static int
+zstd_decompress(struct list_head *ws, const void *data_in,
+		struct page *dest_page, unsigned long start_byte,
+		size_t srclen, size_t destlen, void *tmp, size_t *outlen)
 {
 	struct workspace *workspace = list_entry(ws, struct workspace, list);
 	ZSTD_DStream *stream;
-	ssize_t ret = 0;
+	int ret = 0;
 	size_t ret2;
 	unsigned long total_out = 0;
 	unsigned long pg_offset = 0;
@@ -329,7 +330,7 @@ static ssize_t zstd_decompress(struct list_head *ws, const void *data_in,
 		//kunmap_atomic(kaddr);
 
 		pg_offset += bytes;
-		ret = total_out;
+		*outlen = total_out;
 	}
 
 finish:
@@ -789,13 +790,15 @@ out:
 	return ret;
 }
 
-static int aeon_decompress_pmem(void *src, ssize_t len, struct iov_iter *i)
+static int
+aeon_decompress_pmem(void *src, ssize_t len, struct iov_iter *i, size_t *outlen)
 {
 	struct list_head *workspace;
 	int type = 1 & 0xF;
-	ssize_t ret = 0;
+	int ret = 0;
 	struct page dest_page;
 	size_t out_len = ((len >> PAGE_SHIFT) + 1) * PAGE_SIZE; /*TODO*/
+	size_t tmp_len = 0;
 	void *tmp;
 
 	tmp = kzalloc(sizeof(char) * out_len, GFP_KERNEL);
@@ -806,8 +809,13 @@ static int aeon_decompress_pmem(void *src, ssize_t len, struct iov_iter *i)
 
 	aeon_dbg("---DECOMPRESS START---\n");
 	workspace = find_workspace(type);
-	ret = zstd_decompress(workspace, src, &dest_page, 0, len, out_len, tmp);
+	ret = zstd_decompress(workspace, src, &dest_page, 0,
+			      len, out_len, tmp, &tmp_len);
 	free_workspace(type, workspace);
+	if (ret) {
+		AEON_ERR();
+		return ret;
+	}
 	aeon_dbg("---DECOMPRESS FINISH---\n");
 
 	aeon_dbg("---FINISH(log start)---\n");
@@ -815,6 +823,7 @@ static int aeon_decompress_pmem(void *src, ssize_t len, struct iov_iter *i)
 	aeon_dbg("%s\n", (char *)tmp);
 	memcpy(src, tmp, out_len);
 	aeon_dbg("src %s\n", (char *)src);
+	*outlen = tmp_len;
 	aeon_dbg("---FINISH(log end)---\n");
 
 	kfree(tmp);
@@ -878,8 +887,9 @@ out:
 int aeon_decompress_data_iter(ssize_t len, struct iov_iter *i)
 {
 	void *buf;
+	ssize_t ret = 0;
+	size_t outlen = 0;
 	int err = 0;
-	int ret = 0;
 
 	buf = kzalloc(sizeof(char) *
 		      (((len >> PAGE_SHIFT)+1) * PAGE_SIZE), GFP_KERNEL);
@@ -895,23 +905,25 @@ int aeon_decompress_data_iter(ssize_t len, struct iov_iter *i)
 	} else {
 		aeon_dbg("3!\n");
 
-		err = copy_from_user(buf, i->iov->iov_base, len+1);
+		err = copy_from_user(buf, i->iov->iov_base, len);
 		if (err) {
 			AEON_ERR();
 			goto out1;
 		}
 
-		ret = aeon_decompress_pmem(buf, len, i);
-		if (!ret) {
-			AEON_ERR();
-			goto out1;
-		}
-
-		err = copy_to_user(i->iov->iov_base, buf, ret+1);
+		err = aeon_decompress_pmem(buf, len, i, &outlen);
 		if (err) {
 			AEON_ERR();
 			goto out1;
 		}
+
+		err = copy_to_user(i->iov->iov_base, buf, outlen);
+		if (err) {
+			AEON_ERR();
+			goto out1;
+		}
+
+		ret = outlen;
 	}
 
 out1:
