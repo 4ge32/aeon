@@ -515,7 +515,7 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, unsigned long len,
 	*total_in = tot_in;
 	*total_out = tot_out;
 
-	memcpy(tmp, kmap(out_page), ret);
+	memcpy(tmp, kmap(out_page), *total_out);
 
 out:
 	aeon_dbg("OUT\n");
