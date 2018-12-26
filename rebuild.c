@@ -537,6 +537,7 @@ reuse_space:
 				if (err == -ENOENT) {
 					aeon_info("Discard %u\n",
 						  le32_to_cpu(d->ino));
+					d->valid = 0;
 					goto reuse_space;
 				} else if (err) {
 					aeon_err(sb, "%s:%d\n",
@@ -590,10 +591,12 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct obj_queue *oq;
+	struct obj_queue *dend;
 	unsigned long lost;
 	unsigned long links;
 	unsigned long entries;
 	unsigned int candidate = 0;
+	u64 paddr = (u64)pi - (u64)sbi->virt_addr;
 	int err;
 
 	list_for_each_entry(oq, &sbi->oq->obj_queue, obj_queue) {
@@ -614,19 +617,17 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 
 	lost = links - entries;
 	aeon_info("let's recover %lu objs\n", lost);
-	while (lost) {
-		struct aeon_inode *pi;
+	list_for_each_entry_safe(oq, dend, &sbi->oq->obj_queue, obj_queue) {
+		struct aeon_inode *ca;
 		struct aeon_dentry *de;
 		unsigned blocknr;
 
-		oq = list_first_entry(&sbi->oq->obj_queue, struct obj_queue, obj_queue);
-		if (!oq) {
-			aeon_err(sb, "Not objs in a queue\n");
-			return -ENOENT;
-		}
-
-		pi = oq->pi;
+		ca = oq->pi;
 		de = oq->de;
+
+		if (paddr != le64_to_cpu(ca->i_pinode_addr) ||
+		    paddr != le64_to_cpu(de->d_pinode_addr))
+			continue;
 
 		aeon_dbg("d->name %s d->name_len %d dino %u iino %u\n",
 			 de->name, de->name_len, le32_to_cpu(de->ino),
@@ -641,10 +642,13 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 		add_block_entry(de_map, blocknr);
 		update_dentry_map(de_map);
 
-		lost--;
-
 		list_del(&oq->obj_queue);
 		kfree(oq);
+
+		lost--;
+		if (!lost)
+			break;
+
 	}
 
 	aeon_update_inode_csum(pi);
