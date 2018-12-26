@@ -55,8 +55,9 @@
 #endif
 
 extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
-#define AEON_ERR(msg)			printk(KERN_CRIT "aeon_err: %s - %d\n", \
-						__func__, __LINE__)
+#define AEON_ERR(msg)			printk(KERN_CRIT "aeon_err:"	\
+					       "%s - %d - %d\n",	\
+						__func__, __LINE__, msg)
 #define aeon_dbg(s, args ...)           pr_info(s, ## args)
 #define aeon_err(sb, s, args ...)       aeon_err_msg(sb, s, ## args)
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
