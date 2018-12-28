@@ -195,22 +195,6 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 	return 0;
 }
 
-static int insert_existing_list(struct aeon_sb_info *sbi,
-				struct i_valid_child_list *ivcl)
-{
-	struct i_valid_list *ivl;
-
-	list_for_each_entry(ivl, &sbi->ivl->i_valid_list, i_valid_list) {
-		if (ivl->parent_ino == ivcl->parent_ino) {
-			list_add_tail(&ivcl->i_valid_child_list,
-				      &ivl->ivcl->i_valid_child_list);
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
 static int
 aeon_check_and_recover_dir(struct super_block *sb, struct aeon_inode *pidir,
 			   struct aeon_dentry *parent_de,
@@ -330,6 +314,22 @@ aeon_iterate_candidate(struct aeon_dentry *de, struct aeon_dentry_info *de_info)
 
 out:
 	return found;
+}
+
+static int insert_existing_list(struct aeon_sb_info *sbi,
+				struct i_valid_child_list *ivcl)
+{
+	struct i_valid_list *ivl;
+
+	list_for_each_entry(ivl, &sbi->ivl->i_valid_list, i_valid_list) {
+		if (ivl->parent_ino == ivcl->parent_ino) {
+			list_add_tail(&ivcl->i_valid_child_list,
+				      &ivl->ivcl->i_valid_child_list);
+			return 1;
+		}
+	}
+
+	return 0;
 }
 
 static int
@@ -472,8 +472,8 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 
 	i_dentry_tb = aeon_get_dentry_tb_head(sb, pidir);
 	if (!i_dentry_tb) {
-		/* TODO: What should i do?
-		 */
+		/* TODO: Not happend? */
+		AEON_ERR(1);
 	}
 
 	/* Skip dot and dotdot direntry */
