@@ -128,10 +128,10 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 
 extern int wprotect;
 
-struct obj_queue {
+struct opaque_list {
 	struct aeon_inode *pi;
 	struct aeon_dentry *de;
-	struct list_head obj_queue;
+	struct list_head opaque_list;
 };
 
 struct inode_map {

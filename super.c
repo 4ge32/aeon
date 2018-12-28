@@ -585,12 +585,12 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);
 	sbi->mode = (0777);	/* it will be changed */
-	sbi->oq = kzalloc(sizeof(struct obj_queue), GFP_KERNEL);
+	sbi->oq = kzalloc(sizeof(struct opaque_list), GFP_KERNEL);
 	if (!sbi->oq) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	INIT_LIST_HEAD(&sbi->oq->obj_queue);
+	INIT_LIST_HEAD(&sbi->oq->opaque_list);
 	sbi->inode_maps = kcalloc(sbi->cpus,
 				  sizeof(struct inode_map), GFP_KERNEL);
 	if(!sbi->inode_maps) {

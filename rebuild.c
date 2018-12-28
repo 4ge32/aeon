@@ -58,15 +58,6 @@ static int pi_has_valid_de_addr(struct super_block *sb, struct aeon_inode *pi)
 	return (0 < addr && addr <= last);
 }
 
-static int de_has_valid_pi_addr(struct super_block *sb, struct aeon_dentry *de)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	unsigned long last = sbi->last_addr;
-	u64 addr = de->d_inode_addr;
-
-	return (0 < addr && addr <= last);
-}
-
 static void aeon_rebuild_dentry(struct aeon_dentry *dest,
 				struct aeon_dentry *src, struct aeon_inode *pi)
 {
@@ -129,17 +120,17 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 		return 0;
 
 	if (err == CHILD_PERSIST) {
-		struct obj_queue *oq;
+		struct opaque_list *oq;
 
 		mutex_lock(&sbi->s_lock);
 
-		oq = kmalloc(sizeof(struct obj_queue), GFP_KERNEL);
+		oq = kmalloc(sizeof(struct opaque_list), GFP_KERNEL);
 		if (!oq)
 			return -ENOMEM;
 
 		oq->pi = *c_pi;
 		oq->de = *c_de;
-		list_add(&oq->obj_queue, &sbi->oq->obj_queue);
+		list_add(&oq->opaque_list, &sbi->oq->opaque_list);
 
 		mutex_unlock(&sbi->s_lock);
 
@@ -170,7 +161,8 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 			tmp = (void *)((u64)sbi->virt_addr + addr);
 			aeon_rebuild_dentry(tmp, *c_de, *c_pi);
 			*c_de = (struct aeon_dentry *)tmp;
-		}
+		} else
+			return -1;
 	} else if (err == P_AND_C_INODE_PERSIST) {
 		struct aeon_dentry *tmp;
 		unsigned long ino;
@@ -583,8 +575,8 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
-	struct obj_queue *oq;
-	struct obj_queue *dend;
+	struct opaque_list *oq;
+	struct opaque_list *dend;
 	unsigned long lost;
 	unsigned long links;
 	unsigned long entries;
@@ -592,7 +584,7 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 	u64 paddr = (u64)pi - (u64)sbi->virt_addr;
 	int err;
 
-	list_for_each_entry(oq, &sbi->oq->obj_queue, obj_queue) {
+	list_for_each_entry(oq, &sbi->oq->opaque_list, opaque_list) {
 		candidate++;
 	}
 	links = le64_to_cpu(pi->i_links_count);
@@ -610,7 +602,7 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 
 	lost = links - entries;
 	aeon_info("let's recover %lu objs\n", lost);
-	list_for_each_entry_safe(oq, dend, &sbi->oq->obj_queue, obj_queue) {
+	list_for_each_entry_safe(oq, dend, &sbi->oq->opaque_list, opaque_list) {
 		struct aeon_inode *ca;
 		struct aeon_dentry *de;
 		unsigned blocknr;
@@ -635,7 +627,7 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 		add_block_entry(de_map, blocknr);
 		update_dentry_map(de_map);
 
-		list_del(&oq->obj_queue);
+		list_del(&oq->opaque_list);
 		kfree(oq);
 
 		lost--;

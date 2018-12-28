@@ -85,7 +85,7 @@ struct aeon_sb_info {
 	struct aeon_stat_info *stat_info;
 
 	/* used in recovery process */
-	struct obj_queue *oq;
+	struct opaque_list *oq;
 
 	struct mb_cache *s_ea_block_cache;
 };
