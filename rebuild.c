@@ -171,13 +171,6 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 			aeon_rebuild_dentry(tmp, *c_de, *c_pi);
 			*c_de = (struct aeon_dentry *)tmp;
 		}
-
-		if (de_has_valid_pi_addr(sb, *c_de)) {
-			addr = le64_to_cpu((*c_de)->d_inode_addr);
-			tmp = (void *)((u64)sbi->virt_addr + addr);
-			aeon_rebuild_inode(tmp, *c_de, p_pi);
-			*c_pi = (struct aeon_inode *)tmp;
-		}
 	} else if (err == P_AND_C_INODE_PERSIST) {
 		struct aeon_dentry *tmp;
 		unsigned long ino;
