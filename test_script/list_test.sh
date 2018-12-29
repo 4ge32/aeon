@@ -1088,6 +1088,16 @@ test-recover-30 ()
   helper_recover_test_remain 3 15
 }
 
+test-recover-31 ()
+{
+  helper_recover_test_replace 3 16
+}
+
+test-recover-32 ()
+{
+  helper_recover_test_delete 3 17
+}
+
 test-libaeon-1 ()
 {
   init
