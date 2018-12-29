@@ -29,7 +29,7 @@ int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 	u64 block;
 	char *blockp;
 
-	blocknr = aeon_get_new_symlink_block(sb, &pi_addr, ANY_CPU);
+	blocknr = aeon_get_new_symlink_block(sb, &pi_addr);
 	if (blocknr == 0)
 		return -ENOSPC;
 

@@ -1186,15 +1186,14 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr)
 	return blocknr;
 }
 
-unsigned long aeon_get_new_symlink_block(struct super_block *sb,
-					 u64 *pi_addr, int cpuid)
+unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
 
-	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
 
 	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
 
