@@ -1170,13 +1170,35 @@ test-other-2 ()
     rm $TMP/$i
   done
   ./run.sh rm
-  for i in `seq 1 20`
+  for i in `seq 1 30`
   do
     touch $DIR/NEW$i
     touch $TMP/NEW$i
   done
   diff $TMP $DIR
   res=$?
+
+  clean
+}
+
+# check the state of direntry
+test-other-3 ()
+{
+  init
+
+  touch /mnt/abc
+  touch /mnt/bcd
+  ./run.sh rm
+  touch /mnt/f
+  touch /mnt/ff
+  touch /mnt/fff
+
+  cd ..
+  ret=`./run.sh dentry`
+  res=0
+  if [[ $ret == *"?"* ]]; then
+    res=1
+  fi
 
   clean
 }

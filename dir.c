@@ -504,6 +504,7 @@ int aeon_empty_dir(struct inode *inode)
 	de_map = aeon_get_dentry_map(sb, sih);
 	if (!de_map)
 		return 1;
+
 	if (de_map->num_dentries == 2)
 		return 1;
 

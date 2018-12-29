@@ -542,12 +542,12 @@ reuse_space:
 
 			num_candidate_dentries--;
 			update_dentry_map(de_map);
+			continue;
 next:
 			de_map->num_internal_dentries++;
 			if (num_candidate_dentries == 0)
 				break;
 		}
-		de_map->num_internal_dentries = 0;
 		i_dentry_tb = next_block;
 		i = 0;
 	}
@@ -718,6 +718,10 @@ found:
 
 	if (de_map->num_internal_dentries == 0)
 		de_map->num_internal_dentries = AEON_INTERNAL_ENTRY;
+
+	aeon_dbgv("demap - num:latestblock:internal %lu:%u:%u",
+		  de_map->num_dentries, de_map->num_latest_dentry,
+		  de_map->num_internal_dentries);
 
 	mutex_unlock(&de_info->dentry_mutex);
 
