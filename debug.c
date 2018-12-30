@@ -46,7 +46,6 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 			      struct aeon_stat_info *si, int cpu)
 {
 	struct free_list *free_list;
-	struct rb_root *tree;
 	struct aeon_range_node *curr;
 	struct rb_node *temp;
 	struct inode_map *inode_map;
@@ -77,13 +76,6 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	/* inode page's allocation state */
 	si->i_blocknr = le64_to_cpu(art->i_blocknr);
 
-	tree = &(free_list->block_free_tree);
-	temp = &(free_list->first_node->node);
-	curr = container_of(temp, struct aeon_range_node, node);
-	si->f_range_low = curr->range_low;
-	si->f_range_high = curr->range_high;
-	//aeon_dbg("R:%lu\n", curr->range_low);
-	//aeon_dbg("R*%lu\n", curr->range_high);
 	temp = &(free_list->last_node->node);
 	curr = container_of(temp, struct aeon_range_node, node);
 	si->l_range_low = curr->range_low;
@@ -95,29 +87,29 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	si->s_num_inodes = aeon_sb->s_num_inodes;
 }
 
-static void do_print(struct seq_file *s, struct rb_node *temp)
+static void do_print(struct seq_file *s, struct tt_node *temp)
 {
 	struct aeon_range_node *curr = NULL;
 
-	curr = container_of(temp, struct aeon_range_node, node);
+	curr = container_of(temp, struct aeon_range_node, tt_node);
 	if (curr == NULL)
 		return;
 
-	do_print(s, temp->rb_left);
+	do_print(s, temp->tt_left);
 	seq_printf(s, ": %lu - %lu :", curr->range_low, curr->range_high);
-	do_print(s, temp->rb_right);
+	do_print(s, temp->tt_right);
 }
 
 static void other_free_nodes_printf(struct seq_file *s,
 				    struct free_list *free_list,
 				    unsigned short btype)
 {
-	struct rb_root *tree;
-	struct rb_node *temp;
+	struct tt_root *tree;
+	struct tt_node *temp;
 
 	spin_lock(&free_list->s_lock);
-	tree = &(free_list->block_free_tree);
-	temp = tree->rb_node;
+	tree = &(free_list->tt_block_free_tree);
+	temp = tree->tt_node;
 	do_print(s, temp);
 	spin_unlock(&free_list->s_lock);
 
