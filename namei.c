@@ -5,40 +5,67 @@
 #include "aeon.h"
 #include "aeon_dir.h"
 
+static int aeon_init_mdata(struct super_block *sb, struct inode *dir,
+			   struct aeon_mdata *am, umode_t mode,
+			   size_t size, dev_t rdev)
+{
+	struct aeon_inode *pidir;
+
+	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
+	if (!pidir)
+		return -ENOENT;
+	am->pidir = pidir;
+	am->mode = mode;
+	am->size = size;
+	am->rdev = rdev;
+
+	return 0;
+}
+
+static int aeon_fill_mdata(struct super_block *sb, struct inode *dir,
+			   struct aeon_mdata *am, u32 ino, u64 pi_addr)
+{
+	struct aeon_inode *pidir;
+
+	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
+	if (!pidir)
+		return -ENOENT;
+	am->pidir = pidir;
+	am->ino = ino;
+	am->pi_addr = pi_addr;
+
+	return 0;
+}
 
 static int aeon_create(struct inode *dir, struct dentry *dentry,
 		       umode_t mode, bool excl)
 {
 	struct super_block *sb = dir->i_sb;
-	struct aeon_inode *pidir;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode *inode = NULL;
-	u64 pi_addr = 0;
-	u64 de_addr = 0;
-	u32 ino;
 	int err = PTR_ERR(inode);
+	struct aeon_mdata am;
 
-	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
-	if (!pidir)
-		goto out;
-
-	ino = aeon_new_aeon_inode(sb, &pi_addr);
-	if (ino == 0)
-		goto out;
-
-	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	err = aeon_init_mdata(sb, dir, &am, mode, 0, 0);
 	if (err)
 		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, de_addr, ino,
-				   mode, pidir, 0, 0);
+	err = aeon_new_aeon_inode(sb, &am);
+	if (err)
+		goto out;
+
+	err = aeon_add_dentry(dentry, &am);
+	if (err)
+		goto out;
+
+	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, &am);
 	if (IS_ERR(inode))
 		goto out;
 
 	d_instantiate(dentry, inode);
 
 	aeon_dbgv("CREATE %u %s 0x%llx 0x%llx\n",
-		  ino, dentry->d_name.name, (u64)dir, (u64)inode);
+		  am.ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
@@ -80,24 +107,24 @@ static int aeon_link(struct dentry *dest_dentry,
 	struct inode *dest_inode = d_inode(dest_dentry);
 	struct aeon_inode_info *si = AEON_I(dest_inode);
 	struct aeon_inode_info_header *sih = &si->header;
-	struct aeon_inode *pidir;
 	struct aeon_inode *pi;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct qstr *name = &dest_dentry->d_name;
 	struct aeon_dentry *de;
-	int err = -ENOENT;
-	u64 de_addr = 0;
+	struct aeon_mdata am;
+	int err;
 
-	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
-	if (!pidir)
+	err = aeon_init_mdata(sb, dir, &am, 0, 0, 0);
+	if (err)
 		goto out;
 
 	pi = aeon_get_inode(sb, sih);
 	if (!pi)
 		goto out;
+	am.pi_addr = (u64)pi;
 
-	de = aeon_find_dentry(dest_inode->i_sb, pidir, dir,
+	de = aeon_find_dentry(dest_inode->i_sb, am.pidir, dir,
 			      name->name, name->len);
 
 	dest_inode->i_ctime = current_time(dest_inode);
@@ -105,7 +132,13 @@ static int aeon_link(struct dentry *dest_dentry,
 	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
 
-	err = aeon_add_dentry(dentry, dest_inode->i_ino, (u64)pi, &de_addr);
+	err = aeon_fill_mdata(sb, dir, &am, dest_inode->i_ino, (u64)pi);
+	if (err) {
+		aeon_err(sb, "%s: return %d\n", err);
+		return err;
+	}
+
+	err = aeon_add_dentry(dentry, &am);
 	if (!err) {
 		d_instantiate(dentry, dest_inode);
 
@@ -119,7 +152,7 @@ static int aeon_link(struct dentry *dest_dentry,
 	iput(dest_inode);
 
 out:
-	aeon_err(dest_inode->i_sb, "%s\n", __func__);
+	aeon_err(sb, "%s\n", __func__);
 	return err;
 }
 
@@ -182,44 +215,40 @@ static int aeon_symlink(struct inode *dir,
 			const char *symname)
 {
 	struct super_block *sb = dir->i_sb;
-	int err = -ENAMETOOLONG;
-	unsigned l = strlen(symname) + 1;
 	struct inode *inode;
 	struct aeon_inode_info *si = AEON_I(dir);
 	struct aeon_inode_info_header *sih = &si->header;
 	struct aeon_inode *pi;
-	struct aeon_inode *pidir;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
-	u64 pi_addr = 0;
-	u64 de_addr = 0;
-	u32 ino;
+	struct aeon_mdata am;
+	unsigned l = strlen(symname) + 1;
+	int err = -ENAMETOOLONG;
 
 	if (l > sb->s_blocksize)
-		goto err;
+		goto out;
 
-	pidir = aeon_get_inode(sb, sih);
-	if (!pidir)
-		goto err;
-
-	ino = aeon_new_aeon_inode(sb, &pi_addr);
-	if (ino == 0) {
-		err = -ENOSPC;
-		goto err;
-	}
-
-	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	err = aeon_init_mdata(sb, dir, &am, S_IFLNK|0777, 0, 0);
 	if (err)
-		goto err;
+		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, de_addr, ino,
-				   S_IFLNK|0777, pidir, 0, 0);
+	err = aeon_new_aeon_inode(sb, &am);
+	if (err)
+		goto out;
+
+	err = aeon_add_dentry(dentry, &am);
+	if (err)
+		goto out;
+
+	inode = aeon_new_vfs_inode(TYPE_SYMLINK, dir, &am);
+	if (IS_ERR(inode))
+		goto out;
 
 	si = AEON_I(inode);
 	sih = &si->header;
 	pi = aeon_get_inode(sb, sih);
 	err = aeon_block_symlink(sb, pi, symname, l);
 	if (err)
-		goto err;
+		goto out;
 
 	d_instantiate(dentry, inode);
 
@@ -231,7 +260,7 @@ static int aeon_symlink(struct inode *dir,
 
 	return 0;
 
-err:
+out:
 	aeon_err(sb, "%s return %d\n", err);
 	return err;
 }
@@ -241,30 +270,24 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct inode *inode = NULL;
 	struct super_block *sb = dir->i_sb;
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
-	struct aeon_inode_info *si = AEON_I(dir);
-	struct aeon_inode_info_header *sih = &si->header;
-	struct aeon_inode *pidir;
-	u32 ino;
-	u64 pi_addr = 0;
-	u64 de_addr = 0;
-	int err = -EMLINK;
+	struct aeon_mdata am;
+	int err;
 
-	pidir = aeon_get_inode(sb, sih);
-	if (!pidir)
+	err = aeon_init_mdata(sb, dir, &am, S_IFDIR|mode, sb->s_blocksize, 0);
+	if (err)
 		goto out;
 
-	ino = aeon_new_aeon_inode(sb, &pi_addr);
-	if (ino == 0)
+	err = aeon_new_aeon_inode(sb, &am);
+	if (err)
 		goto out;
 
 	inc_nlink(dir);
 
-	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	err = aeon_add_dentry(dentry, &am);
 	if (err)
 		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, pi_addr, de_addr, ino,
-				   S_IFDIR | mode, pidir, sb->s_blocksize, 0);
+	inode = aeon_new_vfs_inode(TYPE_MKDIR, dir, &am);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out;
@@ -273,9 +296,9 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	d_instantiate(dentry, inode);
 
 	aeon_dbgv("MKDIR  %u %s 0x%llx 0x%llx\n",
-		  ino, dentry->d_name.name, (u64)dir, (u64)inode);
+		  am.ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
-	pidir->i_links_count = cpu_to_le64(inode->i_nlink);
+	am.pidir->i_links_count = cpu_to_le64(inode->i_nlink);
 
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
@@ -310,9 +333,6 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!pi)
 		goto out;
 
-	aeon_dbgv("RMDIR  %lu %s 0x%llx 0x%llx\n",
-		  inode->i_ino, dentry->d_name.name, (u64)dir, (u64)inode);
-
 	if (!aeon_empty_dir(inode))
 		return -ENOTEMPTY;
 
@@ -340,6 +360,9 @@ static int aeon_rmdir(struct inode *dir, struct dentry *dentry)
 
 	aeon_sb->s_num_inodes--;
 	aeon_update_super_block_csum(aeon_sb);
+
+	aeon_dbgv("RMDIR  %lu %s 0x%llx 0x%llx\n",
+		  inode->i_ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
 	return 0;
 
@@ -473,15 +496,18 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 					&AEON_I(new_inode)->header);
 		update->i_links_count = cpu_to_le64(new_inode->i_nlink);
 	} else {
-		u64 de_addr = 0;
+		struct aeon_mdata am;
 
-		err = aeon_add_dentry(new_dentry,
-				      le32_to_cpu(old_inode->i_ino),
-				      (u64)pi, &de_addr);
+		err = aeon_fill_mdata(sb, new_dir, &am,
+				      old_inode->i_ino, (u64)pi);
 		if (err)
 			goto out_dir;
 
-		pi->i_dentry_addr = cpu_to_le64(de_addr - (u64)sbi->virt_addr);
+		err = aeon_add_dentry(new_dentry, &am);
+		if (err)
+			goto out_dir;
+
+		pi->i_dentry_addr = cpu_to_le64(am.de_addr-(u64)sbi->virt_addr);
 		aeon_update_inode_csum(pi);
 
 		if (dir_de)
@@ -504,6 +530,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	return 0;
+
 out_dir:
 	aeon_err(sb, "%s return %d\n", __func__, err);
 	return err;
@@ -527,28 +554,24 @@ static int aeon_mknod(struct inode *dir, struct dentry *dentry,
 		      umode_t mode, dev_t rdev)
 {
 	struct super_block *sb = dir->i_sb;
-	struct aeon_inode *pidir;
 	struct aeon_super_block *aeon_sb = aeon_get_super(dir->i_sb);
 	struct inode *inode = NULL;
-	u64 pi_addr = 0;
-	u64 de_addr = 0;
-	u32 ino;
-	int err = PTR_ERR(inode);
+	struct aeon_mdata am;
+	int err;
 
-	pidir = aeon_get_inode(sb, &AEON_I(dir)->header);
-	if (!pidir)
-		goto out;
-
-	ino = aeon_new_aeon_inode(sb, &pi_addr);
-	if (ino == 0)
-		goto out;
-
-	err = aeon_add_dentry(dentry, ino, pi_addr, &de_addr);
+	err = aeon_init_mdata(sb, dir, &am, mode, 0, rdev);
 	if (err)
 		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, pi_addr, de_addr, ino,
-				   mode, pidir, 0, rdev);
+	err = aeon_new_aeon_inode(sb, &am);
+	if (err)
+		goto out;
+
+	err = aeon_add_dentry(dentry, &am);
+	if (err)
+		goto out;
+
+	inode = aeon_new_vfs_inode(TYPE_MKNOD, dir, &am);
 	if (IS_ERR(inode))
 		goto out;
 
@@ -565,28 +588,33 @@ out:
 
 static int aeon_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
+	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
-	struct aeon_inode *pidir;
-	u64 pi_addr;
-	u32 ino;
+	struct aeon_mdata am;
+	int err;
 
-	pidir = aeon_get_inode(dir->i_sb, &AEON_I(dir)->header);
-	if (!pidir)
-		return -ENOENT;
+	err = aeon_init_mdata(sb, dir, &am, mode, 0, 0);
+	if (err)
+		goto out;
 
-	ino = aeon_new_aeon_inode(dir->i_sb, &pi_addr);
-	if (ino == 0)
-		return -ENOSPC;
+	err = aeon_new_aeon_inode(sb, &am);
+	if (err)
+		goto out;
 
-	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, pi_addr, 0, ino, mode,
-				   pidir, 0, 0);
-	if (IS_ERR(inode))
-		return PTR_ERR(inode);
+	inode = aeon_new_vfs_inode(TYPE_CREATE, dir, &am);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto out;
+	}
 
 	aeon_set_file_ops(inode);
 	d_tmpfile(dentry, inode);
 
 	return 0;
+
+out:
+	aeon_err(sb, "%s return %d\n", err);
+	return err;
 }
 
 const struct inode_operations aeon_dir_inode_operations = {

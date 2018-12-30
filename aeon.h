@@ -126,6 +126,16 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 
 extern int wprotect;
 
+struct aeon_mdata {
+	u64 pi_addr;
+	u64 de_addr;
+	u32 ino;
+	umode_t mode;
+	struct aeon_inode *pidir;
+	size_t size;
+	dev_t rdev;
+};
+
 struct opaque_list {
 	struct aeon_inode *pi;
 	struct aeon_dentry *de;
