@@ -64,11 +64,11 @@ static int aeon_create(struct inode *dir, struct dentry *dentry,
 
 	d_instantiate(dentry, inode);
 
-	aeon_dbgv("CREATE %u %s 0x%llx 0x%llx\n",
-		  am.ino, dentry->d_name.name, (u64)dir, (u64)inode);
-
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
+
+	aeon_dbgv("CREATE %u %s 0x%llx 0x%llx\n",
+		  am.ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
 	return 0;
 
@@ -177,9 +177,6 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 	if (!pi)
 		goto out;
 
-	aeon_dbgv("UNLIN  %lu %s 0x%llx 0x%llx\n",
-		  inode->i_ino, dentry->d_name.name, (u64)dir, (u64)inode);
-
 	if (dentry->d_fsdata) {
 		remove_entry = (struct aeon_dentry *)dentry->d_fsdata;
 		dentry->d_fsdata = NULL;
@@ -202,6 +199,9 @@ static int aeon_unlink(struct inode *dir, struct dentry *dentry)
 
 	aeon_sb->s_num_inodes--;
 	aeon_update_super_block_csum(aeon_sb);
+
+	aeon_dbgv("UNLIN  %lu %s 0x%llx 0x%llx\n",
+		  inode->i_ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
 	return 0;
 
@@ -295,13 +295,13 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	d_instantiate(dentry, inode);
 
-	aeon_dbgv("MKDIR  %u %s 0x%llx 0x%llx\n",
-		  am.ino, dentry->d_name.name, (u64)dir, (u64)inode);
-
 	am.pidir->i_links_count = cpu_to_le64(inode->i_nlink);
 
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
+
+	aeon_dbgv("MKDIR  %u %s 0x%llx 0x%llx\n",
+		  am.ino, dentry->d_name.name, (u64)dir, (u64)inode);
 
 	return 0;
 
@@ -472,10 +472,6 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto out_dir;
 	}
 
-	aeon_dbgv("RENAME %lu %s to %s",
-		  old_inode->i_ino,
-		  old_dentry->d_name.name, new_dentry->d_name.name);
-
 	if (new_inode) {
 		err = -ENOTEMPTY;
 		if (dir_de && !aeon_empty_dir(new_inode))
@@ -528,6 +524,10 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 					&AEON_I(old_dir)->header);
 		update->i_links_count = cpu_to_le64(old_dir->i_nlink);
 	}
+
+	aeon_dbgv("RENAME %lu %s to %s",
+		  old_inode->i_ino,
+		  old_dentry->d_name.name, new_dentry->d_name.name);
 
 	return 0;
 
