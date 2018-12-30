@@ -124,8 +124,6 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 /* Flags that are appropriate for non-directories/regular files. */
 #define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
 
-#include "aeon_tree.h"
-
 extern int wprotect;
 
 struct opaque_list {
@@ -145,7 +143,6 @@ struct inode_map {
 
 struct aeon_range_node {
 	struct rb_node node;
-	struct tt_node tt_node;
 	struct vm_area_struct *vma;
 	union {
 		struct {
@@ -168,10 +165,7 @@ struct aeon_range_node {
 struct aeon_region_table {
 	spinlock_t r_lock;
 
-	struct tt_root block_free_tree;
-
 	u64	pmem_pool_addr;
-
 	__le64 freed;
 	__le32 i_num_allocated_pages;
 	__le32 i_range_high;

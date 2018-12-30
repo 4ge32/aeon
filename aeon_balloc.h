@@ -1,9 +1,6 @@
 #ifndef __AEON_BALLOC_H
 #define __AEON_BALLOC_H
 
-#define USE_LIBAEON
-#undef USE_LIBAEON
-
 enum node_type {
 	NODE_BLOCK = 1,
 	NODE_INODE,
@@ -13,7 +10,6 @@ enum node_type {
 
 struct free_list {
 	spinlock_t s_lock;
-	struct tt_root	tt_block_free_tree;
 	struct rb_root	block_free_tree;
 	struct aeon_range_node *first_node; // lowest address free range
 	struct aeon_range_node *last_node; // highest address free range

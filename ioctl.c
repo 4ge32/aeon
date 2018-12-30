@@ -5,7 +5,6 @@
 #include "aeon.h"
 #include "aeon_super.h"
 #include "aeon_dir.h"
-#include "libaeon/aeon_libtest.h"
 #include "aeon_compression.h"
 
 enum failure_type {
@@ -404,14 +403,6 @@ setversion_out:
 
 		fs_persisted = 0;
 
-		return 0;
-	}
-	case AEON_IOC_TEST_LIBAEON: {
-		aeon_info("TEST LIBAEON START\n");
-		if (!_test(sb)) {
-			//BUG();
-			aeon_err(sb, "LIBAEON\n");
-		}
 		return 0;
 	}
 	case AEON_IOC_TEST_COMPRESSION:
