@@ -15,10 +15,7 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 	struct free_list *free_list;
 	int i;
 
-	sbi->free_lists = kcalloc(sbi->cpus,
-				  sizeof(struct free_list), GFP_KERNEL);
-	if (!sbi->free_lists)
-		return -ENOMEM;
+	sbi->free_lists = aeon_alloc_free_lists(sb);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = aeon_get_free_list(sb, i);
@@ -45,7 +42,7 @@ void aeon_delete_free_lists(struct super_block *sb)
 		free_list->last_node = NULL;
 
 	}
-	kfree(sbi->free_lists);
+	aeon_free_free_lists(sb);
 	sbi->free_lists = NULL;
 }
 

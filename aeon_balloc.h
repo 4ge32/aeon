@@ -27,12 +27,23 @@ struct free_list {
 	u32		csum;		/* Protect integrity */
 };
 
+static inline struct free_list *aeon_alloc_free_lists(struct super_block *sb)
+{
+	return alloc_percpu(struct free_list);
+}
+
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 						   int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
-	return &sbi->free_lists[cpu];
+	return per_cpu_ptr(sbi->free_lists, cpu);
+}
+
+static inline void aeon_free_free_lists(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	free_percpu(sbi->free_lists);
 }
 
 int aeon_alloc_block_free_lists(struct super_block *sb);
