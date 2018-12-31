@@ -301,7 +301,7 @@ int aeon_insert_blocks_into_free_list(struct super_block *sb,
 
 	cpu_id = blocknr / sbi->per_list_blocks;
 	free_list = aeon_get_free_list(sb, cpu_id);
-	art = AEON_R_TABLE(&sbi->inode_maps[cpu_id]);
+	art = aeon_get_rtable(sb, cpu_id);
 	spin_lock(&free_list->s_lock);
 
 	tree = &(free_list->block_free_tree);
@@ -544,7 +544,7 @@ retry:
 	}
 
 alloc:
-	inode_map = &sbi->inode_maps[cpuid];
+	inode_map = aeon_get_inode_map(sb, cpuid);
 	art = AEON_R_TABLE(inode_map);
 
 	ret_blocks = aeon_alloc_blocks_in_free_list(sb, free_list, btype,
@@ -707,7 +707,7 @@ static void imem_cache_create(struct aeon_sb_info *sbi,
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
+	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
@@ -735,7 +735,7 @@ out:
 static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 					 int cpu_id, u32 ino)
 {
-	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
+	struct inode_map *inode_map = aeon_get_inode_map(sbi->sb, cpu_id);
 	struct free_list *free_list = aeon_get_free_list(sbi->sb, cpu_id);
 	struct rb_root *tree;
 	struct rb_node *temp;

@@ -401,7 +401,7 @@ insert_inode_to_validlist(struct super_block *sb, struct aeon_inode *pidir,
 	if (cpu_id >= sbi->cpus)
 		cpu_id -= sbi->cpus;
 
-	inode_map = &sbi->inode_maps[cpu_id];
+	inode_map = aeon_get_inode_map(sb, cpu_id);
 
 	mutex_lock(&inode_map->inode_table_mutex);
 
@@ -847,7 +847,7 @@ next:
 static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
+	struct inode_map *inode_map = aeon_get_inode_map(sb, cpu_id);
 	struct aeon_region_table *art;
 	unsigned long offset;
 	unsigned long blocknr = 0;

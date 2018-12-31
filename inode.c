@@ -18,17 +18,19 @@ unsigned int blk_type_to_shift[AEON_BLOCK_TYPE_MAX] = {12};
 uint32_t blk_type_to_size[AEON_BLOCK_TYPE_MAX] = {0x1000};
 
 
-static inline int aeon_insert_inodetree(struct aeon_sb_info *sbi,
+static inline int aeon_insert_inodetree(struct super_block *sb,
 					struct aeon_range_node *new_node,
 					int cpu)
 {
 	struct rb_root *tree;
+	struct inode_map *inode_map;
 	int ret;
 
-	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
+	inode_map = aeon_get_inode_map(sb, cpu);
+	tree = &inode_map->inode_inuse_tree;
 	ret = aeon_insert_range_node(tree, new_node, NODE_INODE);
 	if (ret)
-		aeon_err(sbi->sb, "ERROR: %s failed %d\n", __func__, ret);
+		aeon_err(sb, "ERROR: %s failed %d\n", __func__, ret);
 
 	return ret;
 }
@@ -43,7 +45,7 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 	int ret;
 
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_map = &sbi->inode_maps[i];
+		inode_map = aeon_get_inode_map(sb, i);
 		mutex_lock(&inode_map->inode_table_mutex);
 		art = AEON_R_TABLE(inode_map);
 		range_node = aeon_alloc_inode_node(sb);
@@ -53,7 +55,7 @@ int aeon_init_inode_inuse_list(struct super_block *sb)
 		}
 		range_node->range_low = 0;
 		range_node->range_high = le32_to_cpu(art->i_range_high);
-		ret = aeon_insert_inodetree(sbi, range_node, i);
+		ret = aeon_insert_inodetree(sb, range_node, i);
 		if (ret) {
 			aeon_err(sb, "%s failed\n", __func__);
 			aeon_free_inode_node(range_node);
@@ -372,7 +374,7 @@ int aeon_new_aeon_inode(struct super_block *sb, struct aeon_mdata *am)
 
 	cpu_id = aeon_sb->s_map_id;
 	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
-	inode_map = &sbi->inode_maps[cpu_id];
+	inode_map = aeon_get_inode_map(sb, cpu_id);
 
 	mutex_lock(&inode_map->inode_table_mutex);
 
@@ -661,11 +663,13 @@ static inline int aeon_search_inodetree(struct aeon_sb_info *sbi,
 					struct aeon_range_node **ret_node)
 {
 	struct rb_root *tree;
+	struct inode_map *inode_map;
 	unsigned long internal_ino;
 	int cpu;
 
 	cpu = ino % sbi->cpus;
-	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
+	inode_map = aeon_get_inode_map(sbi->sb, cpu);
+	tree = &inode_map->inode_inuse_tree;
 	internal_ino = ino / sbi->cpus;
 
 	return aeon_find_range_node(tree, internal_ino, NODE_INODE, ret_node);
@@ -683,7 +687,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	int found;
 	int ret = 0;
 
-	inode_map = &sbi->inode_maps[cpuid];
+	inode_map = aeon_get_inode_map(sb, cpuid);
 	art = AEON_R_TABLE(inode_map);
 
 	found = aeon_search_inodetree(sbi, ino, &i);
@@ -715,7 +719,7 @@ static int aeon_free_inuse_inode(struct super_block *sb, unsigned long ino)
 
 		i->range_high = internal_ino - 1;
 
-		ret = aeon_insert_inodetree(sbi, curr_node, cpuid);
+		ret = aeon_insert_inodetree(sb, curr_node, cpuid);
 		if (ret) {
 			aeon_free_inode_node(curr_node);
 			goto err;
@@ -739,7 +743,7 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	u32 ino = le32_to_cpu(pi->aeon_ino);
 	int cpuid = ino % sbi->cpus;
-	struct inode_map *inode_map = &sbi->inode_maps[cpuid];
+	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
 	struct imem_cache *im;
 	int err = 0;
 

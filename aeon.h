@@ -208,6 +208,13 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	return ret;
 }
 
+static inline struct inode_map *aeon_get_inode_map(struct super_block *sb,
+						   int cpu_id)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return &sbi->inode_maps[cpu_id];
+}
 
 static inline unsigned int
 aeon_get_numblocks(unsigned short btype)
