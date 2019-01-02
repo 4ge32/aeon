@@ -219,13 +219,14 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		head_ino = le32_to_cpu(art->i_head_ino);
 		if (head_ino < si->sbi->cpus * 2)
 			space = 1;
-		ino = head_ino + (le16_to_cpu(art->i_allocated) -
-						space) * si->sbi->cpus;
+		ino = head_ino;
 		if (inode_map->im) {
 			struct imem_cache *im;
 			int count = 0;
-			list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
-				seq_printf(s, "ino: %3u : 0x%llx", im->ino, im->addr);
+			list_for_each_entry(im, &inode_map->im->imem_list,
+					    imem_list) {
+				seq_printf(s, "ino: %3u : 0x%llx",
+					   im->ino, im->addr);
 
 				if (count % 4 == 0)
 					seq_printf(s, "\n");
@@ -235,7 +236,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 			}
 			seq_printf(s, "inodes cache: %d\n\n", count);
 		}
-		for (i = le16_to_cpu(art->i_allocated);
+		for (i = 0;
 		     i < AEON_I_NUM_PER_PAGE; i++) {
 			blocknr = le64_to_cpu(art->i_blocknr);
 			internal_ino = ((ino - cpu_id) / si->sbi->cpus) %
@@ -244,13 +245,14 @@ static int stat_imem_show(struct seq_file *s, void *v)
 				+ (internal_ino << AEON_I_SHIFT);
 			pi = (struct aeon_inode *)addr;
 			if (pi->valid || pi->deleted)
-				continue;
+				goto next;
 			seq_printf(s, "ino: %3u : 0x%llx", ino, addr);
 			if (count % 4 == 0)
 				seq_printf(s, "\n");
 			else
 				seq_printf(s, "  ");
 			count++;
+next:
 			ino += si->sbi->cpus;
 		}
 		seq_printf(s, "inodes cache: %d\n\n", count);
