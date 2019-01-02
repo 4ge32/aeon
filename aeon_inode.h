@@ -60,8 +60,8 @@ enum aeon_new_inode_type {
  */
 struct aeon_inode {
 	/* first 40 bytes */
-	u8	persisted;	 /* Is this inode persistent? */
 	u8	valid;		 /* Is this inode valid? */
+	u8	compressed;	 /* Is this file compressed? */
 	u8	deleted;	 /* Is this inode deleted? */
 	u8	i_new;           /* Is this inode new? */
 	/* 4  */
@@ -221,10 +221,8 @@ int aeon_get_inode_address(struct super_block *sb,
 u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
 void aeon_set_file_ops(struct inode *inode);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
-				 struct inode *dir, u64 pi_addr, u64 de_addr,
-				 u32 ino, umode_t mode, struct aeon_inode *pidir,
-				 size_t size, dev_t rdev);
-u32 aeon_new_aeon_inode(struct super_block *sb, u64 *pi_addr);
+				 struct inode *dir, struct aeon_mdata *am);
+int aeon_new_aeon_inode(struct super_block *sb, struct aeon_mdata *am);
 void aeon_set_inode_flags(struct inode *inode, struct aeon_inode *pi,
 			  unsigned int flags);
 struct inode *aeon_iget(struct super_block *sb, u32 ino);

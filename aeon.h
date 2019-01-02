@@ -55,6 +55,9 @@
 #endif
 
 extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
+#define AEON_ERR(msg)			printk(KERN_CRIT "aeon_err:"	\
+					       "%s - %d - %d\n",	\
+						__func__, __LINE__, msg)
 #define aeon_dbg(s, args ...)           pr_info(s, ## args)
 #define aeon_err(sb, s, args ...)       aeon_err_msg(sb, s, ## args)
 #define aeon_warn(s, args ...)          pr_warning(s, ## args)
@@ -121,14 +124,22 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 /* Flags that are appropriate for non-directories/regular files. */
 #define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
 
-#include "aeon_tree.h"
-
 extern int wprotect;
 
-struct obj_queue {
+struct aeon_mdata {
+	u64 pi_addr;
+	u64 de_addr;
+	u32 ino;
+	umode_t mode;
+	struct aeon_inode *pidir;
+	size_t size;
+	dev_t rdev;
+};
+
+struct opaque_list {
 	struct aeon_inode *pi;
 	struct aeon_dentry *de;
-	struct list_head obj_queue;
+	struct list_head opaque_list;
 };
 
 struct inode_map {
@@ -142,7 +153,6 @@ struct inode_map {
 
 struct aeon_range_node {
 	struct rb_node node;
-	struct tt_node tt_node;
 	struct vm_area_struct *vma;
 	union {
 		struct {
@@ -165,10 +175,7 @@ struct aeon_range_node {
 struct aeon_region_table {
 	spinlock_t r_lock;
 
-	struct tt_root block_free_tree;
-
 	u64	pmem_pool_addr;
-
 	__le64 freed;
 	__le32 i_num_allocated_pages;
 	__le32 i_range_high;
@@ -201,6 +208,13 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	return ret;
 }
 
+static inline struct inode_map *aeon_get_inode_map(struct super_block *sb,
+						   int cpu_id)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return &sbi->inode_maps[cpu_id];
+}
 
 static inline unsigned int
 aeon_get_numblocks(unsigned short btype)
@@ -314,16 +328,4 @@ void aeon_destroy_stats(struct aeon_sb_info *sbi);
 int __init aeon_create_root_stats(void);
 void aeon_destroy_root_stats(void);
 
-/* compression.c */
-#ifdef CONFIG_AEON_FS_COMPRESSION
-extern void __init aeon_init_compress(void);
-extern void __cold aeon_exit_compress(void);
-#else
-static inline void __init aeon_init_compress(void)
-{
-}
-static inline void __cold aeon_exit_compress(void)
-{
-}
-#endif
 #endif

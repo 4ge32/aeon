@@ -14,8 +14,8 @@
 #include "aeon_super.h"
 #include "aeon_balloc.h"
 #include "aeon_extents.h"
+#include "aeon_compression.h"
 #include "xattr.h"
-#include "libaeon/aeon_malloc.h"
 
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
@@ -70,7 +70,7 @@ static void aeon_put_super(struct super_block *sb)
 	}
 
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_map = &sbi->inode_maps[i];
+		inode_map = aeon_get_inode_map(sb, i);
 		aeon_destroy_imem_cache(inode_map);
 		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
@@ -178,7 +178,6 @@ void aeon_err_msg(struct super_block *sb, const char *fmt, ...)
 	va_start(args, fmt);
 	vprintk(fmt, args);
 	va_end(args);
-
 }
 
 static void aeon_free_range_node(struct aeon_range_node *node)
@@ -464,7 +463,7 @@ static void aeon_fill_region_table(struct super_block *sb)
 
 	for (cpu_id = 0; cpu_id < sbi->cpus; cpu_id++) {
 
-		inode_map = &sbi->inode_maps[cpu_id];
+		inode_map = aeon_get_inode_map(sb, cpu_id);
 		free_list = aeon_get_free_list(sb, cpu_id);
 		art = AEON_R_TABLE(inode_map);
 
@@ -548,18 +547,18 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	BUILD_BUG_ON(sizeof(struct aeon_extent_header) > AEON_EXTENT_HEADER_SIZE);
 	BUILD_BUG_ON(sizeof(struct aeon_extent) > AEON_EXTENT_SIZE);
 
-	aeon_dbg("free list    %lu\n", sizeof(struct free_list));
-	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
-	aeon_dbg("inode map    %lu\n", sizeof(struct inode_map));
-	aeon_dbg("sb info      %lu\n", sizeof(struct aeon_sb_info));
-	aeon_dbg("super block  %lu\n", sizeof(struct aeon_super_block));
-	aeon_dbg("inode        %lu\n", sizeof(struct aeon_inode));
-	aeon_dbg("dentry       %lu\n", sizeof(struct aeon_dentry));
-	aeon_dbg("extent       %lu\n", sizeof(struct aeon_extent));
-	aeon_dbg("extentheader %lu\n", sizeof(struct aeon_extent_header));
-	aeon_dbg("region table %lu\n", sizeof(struct aeon_region_table));
-	aeon_dbg("range node   %lu\n", sizeof(struct aeon_range_node));
-	aeon_dbg("dentry info  %lu\n", sizeof(struct aeon_dentry_info));
+	aeon_dbgv("free list    %lu\n", sizeof(struct free_list));
+	aeon_dbgv("region table %lu\n", sizeof(struct aeon_region_table));
+	aeon_dbgv("inode map    %lu\n", sizeof(struct inode_map));
+	aeon_dbgv("sb info      %lu\n", sizeof(struct aeon_sb_info));
+	aeon_dbgv("super block  %lu\n", sizeof(struct aeon_super_block));
+	aeon_dbgv("inode        %lu\n", sizeof(struct aeon_inode));
+	aeon_dbgv("dentry       %lu\n", sizeof(struct aeon_dentry));
+	aeon_dbgv("extent       %lu\n", sizeof(struct aeon_extent));
+	aeon_dbgv("extentheader %lu\n", sizeof(struct aeon_extent_header));
+	aeon_dbgv("region table %lu\n", sizeof(struct aeon_region_table));
+	aeon_dbgv("range node   %lu\n", sizeof(struct aeon_range_node));
+	aeon_dbgv("dentry info  %lu\n", sizeof(struct aeon_dentry_info));
 
 	if (num_online_cpus() == 1)
 		return -EINVAL;
@@ -585,12 +584,12 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);
 	sbi->mode = (0777);	/* it will be changed */
-	sbi->oq = kzalloc(sizeof(struct obj_queue), GFP_KERNEL);
+	sbi->oq = kzalloc(sizeof(struct opaque_list), GFP_KERNEL);
 	if (!sbi->oq) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	INIT_LIST_HEAD(&sbi->oq->obj_queue);
+	INIT_LIST_HEAD(&sbi->oq->opaque_list);
 	sbi->inode_maps = kcalloc(sbi->cpus,
 				  sizeof(struct inode_map), GFP_KERNEL);
 	if(!sbi->inode_maps) {
@@ -599,7 +598,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	for (i = 0; i < sbi->cpus; i++) {
-		inode_map = &sbi->inode_maps[i];
+		inode_map = aeon_get_inode_map(sb, i);
 		inode_map->i_table_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;

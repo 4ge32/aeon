@@ -56,7 +56,7 @@ static void aeon_update_stats(struct aeon_sb_info *sbi,
 	//struct tt_node *tt_temp;
 
 	free_list = &sbi->free_lists[cpu];
-	inode_map = &sbi->inode_maps[cpu];
+	inode_map = aeon_get_inode_map(sbi->sb, cpu);
 	art = AEON_R_TABLE(inode_map);
 	//tt_tree = &art->block_free_tree;
 	//tt_temp = tt_tree->tt_node;
@@ -214,7 +214,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		}
 		aeon_update_stats(si->sbi, si, cpu_id);
 		seq_printf(s, "cpu-id: %d\n", cpu_id);
-		inode_map = &si->sbi->inode_maps[cpu_id];
+		inode_map = aeon_get_inode_map(si->sbi->sb, cpu_id);
 		art = AEON_R_TABLE(inode_map);
 		head_ino = le32_to_cpu(art->i_head_ino);
 		if (head_ino < si->sbi->cpus * 2)

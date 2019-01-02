@@ -66,7 +66,7 @@ write ()
 
 recover ()
 {
-  _do_test 1 25
+  _do_test 1 32
 }
 
 libaeon ()
@@ -81,7 +81,7 @@ compression ()
 
 other ()
 {
-  _do_test 1 2
+  _do_test 1 3
 }
 
 source ./list_test.sh

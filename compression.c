@@ -4,6 +4,7 @@
 #include <linux/pagemap.h>
 #include <linux/sched/mm.h>
 #include <linux/ratelimit.h>
+#include <linux/uio.h>
 
 #include "aeon.h"
 #include "aeon_compression.h"
@@ -251,23 +252,23 @@ out:
 	return ret;
 }
 
-static int zstd_decompress(struct list_head *ws, unsigned char *data_in,
-			   struct page *dest_page, unsigned long start_byte,
-			   size_t srclen, size_t destlen)
+static int
+zstd_decompress(struct list_head *ws, const void *data_in,
+		unsigned long start_byte, size_t srclen,
+		size_t destlen, void *tmp, size_t *outlen)
 {
 	struct workspace *workspace = list_entry(ws, struct workspace, list);
 	ZSTD_DStream *stream;
-	int ret = 0;
-	size_t ret2;
+	int err = 0;
+	size_t ret;
 	unsigned long total_out = 0;
 	unsigned long pg_offset = 0;
-	char *kaddr;
 
 	stream = ZSTD_initDStream(ZSTD_AEON_MAX_INPUT,
 				  workspace->mem, workspace->size);
 	if (!stream) {
 		aeon_warn("ZSTD_initDStream failed\n");
-		ret = -EIO;
+		err = -EIO;
 		goto finish;
 	}
 
@@ -281,7 +282,7 @@ static int zstd_decompress(struct list_head *ws, unsigned char *data_in,
 	workspace->out_buf.pos = 0;
 	workspace->out_buf.size = PAGE_SIZE;
 
-	ret2 = 1;
+	ret = 1;
 	while (pg_offset < destlen &&
 	       workspace->in_buf.pos < workspace->in_buf.size) {
 		unsigned long buf_start;
@@ -289,17 +290,16 @@ static int zstd_decompress(struct list_head *ws, unsigned char *data_in,
 		unsigned long bytes;
 
 		/* Check if the frame is over and we still need more input */
-		if (ret2 == 0) {
+		if (ret == 0) {
 			aeon_dbg("ZSTD_decompressStream ended early\n");
-			ret = -EIO;
+			err = -EIO;
 			goto finish;
 		}
 
-		ret2 = ZSTD_decompressStream(stream, &workspace->out_buf,
+		ret = ZSTD_decompressStream(stream, &workspace->out_buf,
 					     &workspace->in_buf);
-		if (ZSTD_isError(ret2)) {
-			aeon_dbg();
-			ret = -EIO;
+		if (ZSTD_isError(ret)) {
+			err = -EIO;
 			goto finish;
 		}
 
@@ -311,7 +311,7 @@ static int zstd_decompress(struct list_head *ws, unsigned char *data_in,
 			continue;
 
 		if (total_out > start_byte && buf_start < start_byte)
-			buf_offset = start_byte -buf_start;
+			buf_offset = start_byte - buf_start;
 		else
 			buf_offset = 0;
 
@@ -321,37 +321,211 @@ static int zstd_decompress(struct list_head *ws, unsigned char *data_in,
 		/* this is the point which can be changed
 		 * when using pmem.
 		 * */
-		kaddr = kmap_atomic(dest_page);
-		memcpy(kaddr + pg_offset,
+		memcpy(tmp, workspace->out_buf.dst, total_out);
+		AEON_ERR(1);
+		aeon_dbg("%lu %lu", pg_offset, destlen);
+		memcpy(tmp + pg_offset,
 		       workspace->out_buf.dst + buf_offset, bytes);
-		kunmap_atomic(kaddr);
 
 		pg_offset += bytes;
+		*outlen = total_out;
 	}
-	ret = 0;
 
 finish:
-	if (pg_offset < destlen) {
-		/* Also here */
-		kaddr = kmap_atomic(dest_page);
-		memset(kaddr + pg_offset, 0, destlen - pg_offset);
-		kunmap_atomic(kaddr);
-	}
-	return ret;
+	aeon_dbg("%lu %lu", pg_offset, destlen);
+	if (pg_offset < destlen)
+		memset(tmp + pg_offset, 0, destlen - pg_offset);
+
+	return err;
 }
 
 const struct aeon_compress_op aeon_zstd_compress = {
 	.alloc_workspace	= zstd_alloc_workspace,
 	.compress_pages		= zstd_compress_pages,
-	.decompress		= zstd_decompress,
+};
+
+static int
+zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
+		       unsigned long *out_pages, size_t *total_in,
+		       size_t *total_out, void *tmp)
+{
+	struct workspace *workspace = list_entry(ws, struct workspace, list);
+	ZSTD_CStream *stream;
+	int err = 0;
+	int nr_pages = 0;
+	struct page *in_page = NULL;  /* The current page to read */
+	struct page *out_page = NULL; /* The current page to write to */
+	size_t tot_in = 0;
+	size_t tot_out = 0;
+	const unsigned long nr_dest_pages = *out_pages;
+	size_t max_out = nr_dest_pages * PAGE_SIZE;
+	ZSTD_parameters params = zstd_get_aeon_parameters(len);
+
+	*out_pages = 0;
+	*total_out = 0;
+	*total_in = 0;
+
+	stream = ZSTD_initCStream(params, len, workspace->mem, workspace->size);
+	if (!stream) {
+		aeon_warn("ZSTD_initCStream failed\n");
+		err = -EIO;
+		goto out;
+	}
+
+	workspace->in_buf.src = src;
+	workspace->in_buf.pos = 0;
+	workspace->in_buf.size = min_t(size_t, len, PAGE_SIZE);
+
+	out_page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
+	if (out_page == NULL) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	nr_pages++;
+	workspace->out_buf.dst = kmap(out_page);
+	workspace->out_buf.pos = 0;
+	workspace->out_buf.size = min_t(size_t, max_out, PAGE_SIZE);
+
+	while (1) {
+		size_t ret;
+
+		ret = ZSTD_compressStream(stream, &workspace->out_buf,
+					   &workspace->in_buf);
+		if (ZSTD_isError(ret)) {
+			aeon_dbg("ZSTD_compressionStream returned %d\n",
+				 ZSTD_getErrorCode(ret));
+			err = -EIO;
+			goto out;
+		}
+
+		/* Check to see if we are making it bigger */
+		if (tot_in + workspace->in_buf.pos > 8192 &&
+		    tot_in + workspace->in_buf.pos <
+		    tot_out + workspace->out_buf.pos) {
+			err = -E2BIG;
+			goto out;
+		}
+
+		/* Check if we need more output space */
+		if (workspace->out_buf.pos == workspace->out_buf.size) {
+			tot_out += PAGE_SIZE;
+			max_out -= PAGE_SIZE;
+			// here should be replaced by another one
+			kunmap(out_page);
+			if (nr_pages == nr_dest_pages) {
+				out_page = NULL;
+				err = -E2BIG;
+				goto out;
+			}
+
+			out_page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
+			if (out_page == NULL) {
+				err = -ENOMEM;
+				goto out;
+			}
+
+			nr_pages++;
+			workspace->out_buf.dst = kmap(out_page);
+			workspace->out_buf.pos = 0;
+			workspace->out_buf.size = min_t(size_t, max_out,
+							PAGE_SIZE);
+		}
+
+		/* We've reached the end of the input */
+		if (workspace->in_buf.pos >= len) {
+			tot_in += workspace->in_buf.pos;
+			break;
+		}
+		/* Check if we need more input */
+		// what means need more input?
+		if (workspace->in_buf.pos == workspace->in_buf.size) {
+			tot_in += PAGE_SIZE;
+			kunmap(in_page);
+			put_page(in_page);
+
+			len -= PAGE_SIZE;
+			// find_get_page could be replaced by something like find_extent
+			workspace->in_buf.src = kmap(in_page);
+			workspace->in_buf.pos = 0;
+			workspace->in_buf.size = min_t(size_t, len, PAGE_SIZE);
+		}
+	}
+
+	while (1) {
+		size_t ret;
+
+		ret = ZSTD_endStream(stream, &workspace->out_buf);
+		if (ZSTD_isError(ret)) {
+			aeon_warn("ZSTD_endstream returned %d\n",
+				  ZSTD_getErrorCode(ret));
+			err = -EIO;
+			goto out;
+		}
+
+		if (ret == 0) {
+			tot_out += workspace->out_buf.pos;
+			break;
+		}
+
+		if (workspace->out_buf.pos > max_out) {
+			tot_out += workspace->out_buf.pos;
+			err = -E2BIG;
+			goto out;
+		}
+
+		tot_out += PAGE_SIZE;
+		max_out -= PAGE_SIZE;
+		kunmap(out_page);
+
+		out_page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
+		if (out_page == NULL) {
+			err = -ENOMEM;
+			goto out;
+		}
+
+		nr_pages++;
+		workspace->out_buf.dst = kmap(out_page);
+		workspace->out_buf.pos = 0;
+		workspace->out_buf.size = min_t(size_t, max_out, PAGE_SIZE);
+	}
+
+	if (tot_out >= tot_in) {
+		err = -E2BIG;
+		aeon_dbg("Can't compress data\n");
+		aeon_dbg("%lu <- %lu\n", tot_out, tot_in);
+		goto out;
+	}
+
+	*total_in = tot_in;
+	*total_out = tot_out;
+
+	memcpy(tmp, kmap(out_page), *total_out);
+
+out:
+	aeon_dbg("OUT\n");
+	*out_pages = nr_pages;
+	/* Cleanup */
+	if (in_page) {
+		kunmap(in_page);
+		put_page(in_page);
+	}
+
+	if (out_page)
+		kunmap(out_page);
+
+	return err;
+}
+
+const struct aeon_compress_op aeon_zstd_on_pmem_compress = {
+	.alloc_workspace	= zstd_alloc_workspace,
 };
 
 enum aeon_compression_type {
-	AEON_COMPRESS_NONE = 0,
-	AEON_COMPRESS_ZSTD,
+	AEON_COMPRESS_ZSTD = 0,
+	AEON_COMPRESS_ZSTD_ON_PMEM,
 	AEON_COMPRESS_TYPES,
 };
-
 
 struct workspace_list {
 	struct list_head idle_ws;
@@ -365,6 +539,7 @@ static struct workspace_list aeon_comp_ws[AEON_COMPRESS_TYPES];
 
 static const struct aeon_compress_op * const aeon_compress_op[] = {
 	&aeon_zstd_compress,
+	&aeon_zstd_on_pmem_compress,
 };
 
 void __init aeon_init_compress(void)
@@ -497,7 +672,8 @@ static void free_workspaces(void)
 		while (!list_empty(&aeon_comp_ws[i].idle_ws)) {
 			workspace = aeon_comp_ws[i].idle_ws.next;
 			list_del(workspace);
-			aeon_compress_op[i]->free_workspace(workspace);
+			/* TODO: Define it */
+			//aeon_compress_op[i]->free_workspace(workspace);
 			atomic_dec(&aeon_comp_ws[i].total_ws);
 		}
 	}
@@ -548,5 +724,192 @@ int aeon_compress_pages(unsigned int type_level, struct address_space *mapping,
 						       out_pages,
 						       total_in, total_out);
 	free_workspace(type, workspace);
+	return ret;
+}
+
+static int aeon_compress_pmem(void *src, struct iov_iter *i)
+{
+	struct list_head *workspace;
+	size_t len = i->count;
+	size_t total_in = 0;
+	size_t total_out = 0;
+	unsigned long out_pages = (len >> PAGE_SHIFT) + 1;
+	int type = 1 & 0xF;
+	int err;
+	void *tmp;
+
+	tmp = kzalloc(sizeof(char) * i->count, GFP_KERNEL);
+	if (!tmp) {
+		AEON_ERR(-ENOMEM);
+		return -ENOMEM;
+	}
+
+	aeon_dbg("---COMPRESS START---\n");
+	aeon_dbg("%s", (char *)src);
+	aeon_dbg("%lu\n", len);
+	workspace = find_workspace(type);
+	err = zstd_do_compress_pages(workspace, src, len,
+				     &out_pages, &total_in, &total_out, tmp);
+	free_workspace(type, workspace);
+	aeon_dbg("---COMPRESS FINISH---\n");
+	if (err) {
+		AEON_ERR(err);
+		goto out;
+	}
+
+	aeon_dbg("---FINISH(log start)---\n");
+	aeon_dbg("%s", (char *)src);
+	aeon_dbg("%s", (char *)tmp);
+	aeon_dbg("%lu\n", total_out);
+
+	aeon_dbg("%lu %lu %lu\n", out_pages, total_in, total_out);
+
+	i->count = total_out;
+	memcpy(src, tmp, i->count);
+	aeon_dbg("---FINISH(log end)---\n");
+
+out:
+	kfree(tmp);
+	return err;
+}
+
+static int
+aeon_decompress_pmem(void *src, size_t len, struct iov_iter *i, size_t *outlen)
+{
+	struct list_head *workspace;
+	int type = 1 & 0xF;
+	int err = 0;
+	size_t destlen = ((len >> PAGE_SHIFT) + 1) * PAGE_SIZE; /*TODO*/
+	void *tmp;
+
+	tmp = kzalloc(sizeof(char) * destlen, GFP_KERNEL);
+	if (!tmp) {
+		AEON_ERR(-ENOMEM);
+		return -ENOMEM;
+	}
+
+	aeon_dbg("---DECOMPRESS START---\n");
+	workspace = find_workspace(type);
+	err = zstd_decompress(workspace, src, 0, len, destlen, tmp, outlen);
+	free_workspace(type, workspace);
+	if (err) {
+		AEON_ERR(err);
+		return err;
+	}
+	aeon_dbg("---DECOMPRESS FINISH---\n");
+
+	aeon_dbg("---FINISH(log start)---\n");
+	aeon_dbg("%s\n", (char *)tmp);
+	memcpy(src, tmp, destlen);
+	aeon_dbg("src %s\n", (char *)src);
+	aeon_dbg("---FINISH(log end)---\n");
+
+	kfree(tmp);
+
+	return err;
+}
+
+int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i)
+{
+	struct aeon_inode *pi;
+	void *buf;
+	int err = 0;
+
+	if (!i->count)
+		goto out;
+
+	buf = kzalloc(sizeof(char) * i->count, GFP_KERNEL);
+	if (!buf) {
+		err = -ENOMEM;
+		goto out1;
+	}
+
+	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
+
+	if (unlikely(i->type & ITER_BVEC)) {
+		aeon_dbg("1!\n");
+	} else if (unlikely(i->type & ITER_KVEC)) {
+		aeon_dbg("2!\n");
+	} else {
+		size_t tmp;
+		aeon_dbg("3!\n");
+
+		err = copy_from_user(buf, i->iov->iov_base, i->count);
+		if (err) {
+			AEON_ERR(err);
+			goto out1;
+		}
+		tmp = i->count;
+
+		err = aeon_compress_pmem(buf, i);
+		if (!err)
+			pi->compressed = 1;
+
+		aeon_dbg("new %lu\n", i->count);
+		aeon_dbg("buf %s\n", (char *)buf);
+		err = copy_to_user(i->iov->iov_base, buf, i->count);
+		if (err) {
+			AEON_ERR(err);
+			goto out1;
+		}
+	}
+
+
+out1:
+	kfree(buf);
+	buf = NULL;
+out:
+	return err;
+}
+
+ssize_t aeon_decompress_data_iter(ssize_t len, struct iov_iter *i)
+{
+	void *buf;
+	size_t ret = 0;
+	size_t outlen = 0;
+	int err = 0;
+
+	buf = kzalloc(sizeof(char) *
+		      (((len >> PAGE_SHIFT)+1) * PAGE_SIZE), GFP_KERNEL);
+	if (!buf) {
+		err = -ENOMEM;
+		goto out1;
+	}
+
+	if (unlikely(i->type & ITER_BVEC)) {
+		aeon_dbg("1!\n");
+	} else if (unlikely(i->type & ITER_KVEC)) {
+		aeon_dbg("2!\n");
+	} else {
+		aeon_dbg("3!\n");
+
+		err = copy_from_user(buf, i->iov->iov_base, len);
+		if (err) {
+			AEON_ERR(err);
+			ret = 0;
+			goto out1;
+		}
+
+		err = aeon_decompress_pmem(buf, len, i, &outlen);
+		if (err) {
+			AEON_ERR(err);
+			ret = 0;
+			goto out1;
+		}
+
+		err = copy_to_user(i->iov->iov_base, buf, outlen);
+		if (err) {
+			AEON_ERR(err);
+			ret = 0;
+			goto out1;
+		}
+
+		ret = outlen;
+	}
+
+out1:
+	kfree(buf);
+	buf = NULL;
+
 	return ret;
 }

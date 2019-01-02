@@ -881,7 +881,7 @@ do_fake_rename ()
     touch $TMP/NEW$i
   done
 
-  ls $DIR
+  #ls $DIR
   #cd ..
   #./run.sh dentry
   diff -r $DIR $TMP
@@ -893,6 +893,209 @@ do_fake_rename ()
 test-recover-25 ()
 {
   do_fake_rename 22
+}
+
+helper_recover_test_delete ()
+{
+  init
+
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
+  n=30
+  nplus=$(($n+1))
+  N=50
+
+  mkdir $DIR/dirtest
+  mkdir $TMP/dirtest
+
+  for i in `seq 1 $N`
+  do
+    touch $DIR/dirtest/OLD$i
+  done
+
+  for i in `seq 1 $n`
+  do
+    touch $TMP/dirtest/OLD$i
+  done
+
+  for i in `seq $nplus $N`
+  do
+    ./$TEST_AEON $1 $2 $DIR/dirtest/OLD$i
+  done
+
+  #echo "direntry"
+  #echo "TMP"
+  #ls $TMP/dirtest
+  #echo "DIR"
+  #ls $DIR/dirtest
+
+  #for i in `seq 18 $N `
+  #do
+  #  ./$TEST_AEON $1 $2 $DIR/dirtest/OLD$i
+  #done
+  ./run.sh rm
+
+  # confirm whether region is overwritten or not
+  for i in `seq 1 $N`
+  do
+    touch $TMP/dirtest/NEW$i
+    touch $DIR/dirtest/NEW$i
+  done
+  #echo "FINAL"
+  #echo "TMP"
+  #ls $TMP/dirtest
+  #echo "DIR"
+  #ls $DIR/dirtest
+
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+helper_recover_test_replace ()
+{
+  init
+
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
+  # config which depends num cpu
+  # discard the newer dentry table
+  n=30
+  nplus=$(($n+1))
+  N=50
+  Nminus=$(($N-4))
+  num_inode=47
+
+  mkdir $DIR/dirtest
+  mkdir $TMP/dirtest
+
+  # initial state
+  for i in `seq 1 $N`
+  do
+    touch $DIR/dirtest/OLD$i
+  done
+
+  # prepare the expected state
+  for i in `seq 1 $n`
+  do
+    touch $TMP/dirtest/OLD$i
+  done
+  for _i in `seq $nplus $Nminus`
+  do
+    touch $TMP/dirtest/R-$num_inode
+    num_inode=$(($num_inode+1))
+  done
+
+    # destroy
+  for i in `seq $nplus $N`
+  do
+    ./$TEST_AEON $1 $2 $DIR/dirtest/OLD$i
+  done
+
+  ./run.sh rm
+
+  # confirm whether region is overwritten or not
+  for i in `seq 1 $N`
+  do
+    touch $TMP/dirtest/NEW$i
+    touch $DIR/dirtest/NEW$i
+  done
+
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+helper_recover_test_remain ()
+{
+  init
+
+  if [ ! -e $TEST_AEON ]; then
+    gcc -o $TEST_AEON ${TEST_AEON}.c
+  fi
+
+  # config which depends num cpu
+  # discard the newer dentry table
+  n=30
+  nplus=$(($n+1))
+  N=50
+
+  mkdir $DIR/dirtest
+  mkdir $TMP/dirtest
+
+  # initial state
+  for i in `seq 1 $N`
+  do
+    touch $DIR/dirtest/OLD$i
+  done
+
+  # prepare the expected state
+  for i in `seq 1 $N`
+  do
+    touch $TMP/dirtest/OLD$i
+  done
+
+    # destroy
+  for i in `seq $nplus $N`
+  do
+    ./$TEST_AEON $1 $2 $DIR/dirtest/OLD$i
+  done
+
+  ./run.sh rm
+
+  # confirm whether region is overwritten or not
+  for i in `seq 1 $N`
+  do
+    touch $TMP/dirtest/NEW$i
+    touch $DIR/dirtest/NEW$i
+  done
+
+  diff -r $TMP $DIR
+  res=$?
+
+  clean
+}
+
+# more load
+test-recover-26 ()
+{
+  helper_recover_test_delete 3 11
+}
+
+test-recover-27 ()
+{
+  helper_recover_test_replace 3 12
+}
+
+test-recover-28 ()
+{
+  helper_recover_test_replace 3 13
+}
+
+test-recover-29 ()
+{
+  helper_recover_test_delete 3 14
+}
+
+test-recover-30 ()
+{
+  helper_recover_test_remain 3 15
+}
+
+test-recover-31 ()
+{
+  helper_recover_test_replace 3 16
+}
+
+test-recover-32 ()
+{
+  helper_recover_test_delete 3 17
 }
 
 test-libaeon-1 ()
@@ -967,13 +1170,35 @@ test-other-2 ()
     rm $TMP/$i
   done
   ./run.sh rm
-  for i in `seq 1 20`
+  for i in `seq 1 30`
   do
     touch $DIR/NEW$i
     touch $TMP/NEW$i
   done
   diff $TMP $DIR
   res=$?
+
+  clean
+}
+
+# check the state of direntry
+test-other-3 ()
+{
+  init
+
+  touch /mnt/abc
+  touch /mnt/bcd
+  ./run.sh rm
+  touch /mnt/f
+  touch /mnt/ff
+  touch /mnt/fff
+
+  cd ..
+  ret=`./run.sh dentry`
+  res=0
+  if [[ $ret == *"?"* ]]; then
+    res=1
+  fi
 
   clean
 }

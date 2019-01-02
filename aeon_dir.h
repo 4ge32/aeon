@@ -126,8 +126,7 @@ int aeon_insert_dir_tree(struct super_block *sb,
 			 struct aeon_inode_info_header *sih,
 			 const char *name, int namelen,
 			 struct aeon_dentry *direntry);
-int aeon_add_dentry(struct dentry *dentry, u32 ino,
-		    u64 pi_addr, u64 *de_addr);
+int aeon_add_dentry(struct dentry *dentry, struct aeon_mdata *am);
 int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 		       struct aeon_inode *update, struct aeon_dentry *de);
 int aeon_get_dentry_address(struct super_block *sb,

@@ -1,9 +1,6 @@
 #ifndef __AEON_BALLOC_H
 #define __AEON_BALLOC_H
 
-#define USE_LIBAEON
-#undef USE_LIBAEON
-
 enum node_type {
 	NODE_BLOCK = 1,
 	NODE_INODE,
@@ -13,7 +10,6 @@ enum node_type {
 
 struct free_list {
 	spinlock_t s_lock;
-	struct tt_root	tt_block_free_tree;
 	struct rb_root	block_free_tree;
 	struct aeon_range_node *first_node; // lowest address free range
 	struct aeon_range_node *last_node; // highest address free range
@@ -31,12 +27,23 @@ struct free_list {
 	u32		csum;		/* Protect integrity */
 };
 
+static inline struct free_list *aeon_alloc_free_lists(struct super_block *sb)
+{
+	return alloc_percpu(struct free_list);
+}
+
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 						   int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
-	return &sbi->free_lists[cpu];
+	return per_cpu_ptr(sbi->free_lists, cpu);
+}
+
+static inline void aeon_free_free_lists(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	free_percpu(sbi->free_lists);
 }
 
 int aeon_alloc_block_free_lists(struct super_block *sb);
@@ -60,8 +67,7 @@ int aeon_dax_get_blocks(struct inode *inode, sector_t iblock,
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 start_ino);
 void aeon_init_new_inode_block(struct super_block *sb, u32 ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr);
-unsigned long aeon_get_new_symlink_block(struct super_block *sb,
-					 u64 *pi_addr, int cpuid);
+unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr);
 unsigned long aeon_get_new_extents_block(struct super_block *sb);
 u64 aeon_get_new_blk(struct super_block *sb, int cpu_id);
 u64 aeon_get_xattr_blk(struct super_block *sb);
