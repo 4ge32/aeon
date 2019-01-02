@@ -123,7 +123,6 @@ void aeon_init_header(struct super_block *sb,
 	init_rwsem(&sih->dax_sem);
 	mutex_init(&sih->truncate_mutex);
 	rwlock_init(&sih->i_meta_lock);
-	spin_lock_init(&sih->i_exlock);
 #ifdef CONFIG_AEON_FS_XATTR
 	init_rwsem(&sih->xattr_sem);
 #endif

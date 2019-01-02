@@ -119,7 +119,6 @@ struct aeon_inode_info_header {
 	int	   num_vmas;
 	u64	   pi_addr;
 	u8	   i_blk_type;
-	spinlock_t i_exlock;
 	rwlock_t   i_meta_lock;
 };
 
