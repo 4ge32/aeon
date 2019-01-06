@@ -814,6 +814,7 @@ int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i)
 	struct aeon_inode *pi;
 	void *buf;
 	int err = 0;
+	size_t tmp;
 
 	if (!i->count)
 		goto out;
@@ -826,32 +827,25 @@ int aeon_compress_data_iter(struct inode *inode, struct iov_iter *i)
 
 	pi = aeon_get_inode(inode->i_sb, &AEON_I(inode)->header);
 
-	if (unlikely(i->type & ITER_BVEC)) {
-		aeon_dbg("1!\n");
-	} else if (unlikely(i->type & ITER_KVEC)) {
-		aeon_dbg("2!\n");
-	} else {
-		size_t tmp;
-		aeon_dbg("3!\n");
+	aeon_dbg("3!\n");
 
-		err = copy_from_user(buf, i->iov->iov_base, i->count);
-		if (err) {
-			AEON_ERR(err);
-			goto out1;
-		}
-		tmp = i->count;
+	err = copy_from_user(buf, i->iov->iov_base, i->count);
+	if (err) {
+		AEON_ERR(err);
+		goto out1;
+	}
+	tmp = i->count;
 
-		err = aeon_compress_pmem(buf, i);
-		if (!err)
-			pi->compressed = 1;
+	err = aeon_compress_pmem(buf, i);
+	if (!err)
+		pi->compressed = 1;
 
-		aeon_dbg("new %lu\n", i->count);
-		aeon_dbg("buf %s\n", (char *)buf);
-		err = copy_to_user(i->iov->iov_base, buf, i->count);
-		if (err) {
-			AEON_ERR(err);
-			goto out1;
-		}
+	aeon_dbg("new %lu\n", i->count);
+	aeon_dbg("buf %s\n", (char *)buf);
+	err = copy_to_user(i->iov->iov_base, buf, i->count);
+	if (err) {
+		AEON_ERR(err);
+		goto out1;
 	}
 
 
@@ -876,36 +870,28 @@ ssize_t aeon_decompress_data_iter(ssize_t len, struct iov_iter *i)
 		goto out1;
 	}
 
-	if (unlikely(i->type & ITER_BVEC)) {
-		aeon_dbg("1!\n");
-	} else if (unlikely(i->type & ITER_KVEC)) {
-		aeon_dbg("2!\n");
-	} else {
-		aeon_dbg("3!\n");
-
-		err = copy_from_user(buf, i->iov->iov_base, len);
-		if (err) {
-			AEON_ERR(err);
-			ret = 0;
-			goto out1;
-		}
-
-		err = aeon_decompress_pmem(buf, len, i, &outlen);
-		if (err) {
-			AEON_ERR(err);
-			ret = 0;
-			goto out1;
-		}
-
-		err = copy_to_user(i->iov->iov_base, buf, outlen);
-		if (err) {
-			AEON_ERR(err);
-			ret = 0;
-			goto out1;
-		}
-
-		ret = outlen;
+	err = copy_from_user(buf, i->iov->iov_base, len);
+	if (err) {
+		AEON_ERR(err);
+		ret = 0;
+		goto out1;
 	}
+
+	err = aeon_decompress_pmem(buf, len, i, &outlen);
+	if (err) {
+		AEON_ERR(err);
+		ret = 0;
+		goto out1;
+	}
+
+	err = copy_to_user(i->iov->iov_base, buf, outlen);
+	if (err) {
+		AEON_ERR(err);
+		ret = 0;
+		goto out1;
+	}
+
+	ret = outlen;
 
 out1:
 	kfree(buf);
