@@ -353,7 +353,6 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
 	ZSTD_CStream *stream;
 	int err = 0;
 	int nr_pages = 0;
-	struct page *in_page = NULL;  /* The current page to read */
 	struct page *out_page = NULL; /* The current page to write to */
 	size_t tot_in = 0;
 	size_t tot_out = 0;
@@ -438,17 +437,14 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
 			break;
 		}
 		/* Check if we need more input */
-		// what means need more input?
 		if (workspace->in_buf.pos == workspace->in_buf.size) {
 			tot_in += PAGE_SIZE;
-			kunmap(in_page);
-			put_page(in_page);
 
 			len -= PAGE_SIZE;
 			// find_get_page could be replaced by something like find_extent
-			workspace->in_buf.src = kmap(in_page);
 			workspace->in_buf.pos = 0;
 			workspace->in_buf.size = min_t(size_t, len, PAGE_SIZE);
+			workspace->in_buf.src = src + PAGE_SIZE;
 		}
 	}
 
@@ -503,14 +499,8 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
 	memcpy(tmp, kmap(out_page), *total_out);
 
 out:
-	aeon_dbg("OUT\n");
 	*out_pages = nr_pages;
 	/* Cleanup */
-	if (in_page) {
-		kunmap(in_page);
-		put_page(in_page);
-	}
-
 	if (out_page)
 		kunmap(out_page);
 
@@ -745,7 +735,6 @@ static int aeon_compress_pmem(void *src, struct iov_iter *i)
 	}
 
 	aeon_dbg("---COMPRESS START---\n");
-	aeon_dbg("%s", (char *)src);
 	aeon_dbg("%lu\n", len);
 	workspace = find_workspace(type);
 	err = zstd_do_compress_pages(workspace, src, len,
@@ -758,8 +747,6 @@ static int aeon_compress_pmem(void *src, struct iov_iter *i)
 	}
 
 	aeon_dbg("---FINISH(log start)---\n");
-	aeon_dbg("%s", (char *)src);
-	aeon_dbg("%s", (char *)tmp);
 	aeon_dbg("%lu\n", total_out);
 
 	aeon_dbg("%lu %lu %lu\n", out_pages, total_in, total_out);

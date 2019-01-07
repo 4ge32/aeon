@@ -137,7 +137,7 @@ static loff_t aeon_llseek(struct file *file, loff_t offset, int origin)
 //		aeon_dbgv("nr       %ld\n", nr >> PAGE_SHIFT);
 //		aeon_dbgv("dax_mem  0x%lx\n", (unsigned long)dax_mem);
 //
-//		left = copy_to_user(buf + copied, dax_mem, nr);
+//		left = copy_to_user(buf + copied, dax_mem + offset, nr);
 //		copied += (nr - left);
 //		offset += (nr - left);
 //		index += (offset >> PAGE_SHIFT);
