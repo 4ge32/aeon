@@ -49,6 +49,13 @@ struct aeon_dentry {
 	u8	valid;			/* Invalid now? */
 	u8	persisted;		/* fully persisted? */
 
+	__le16	d_mode;			/* duplicated mode */
+	__le16	d_size;			/* duplicated size */
+	/* duplicated rdev */
+	struct {
+		__le32 rdev;	 /* major/minor # */
+	} dev;			 /* device inode */
+
 	__le32	ino;
 	__le64	d_pinode_addr;
 	__le64	d_inode_addr;
@@ -61,7 +68,7 @@ struct aeon_dentry {
 	/* 128 bytes */
 	char	name[AEON_NAME_LEN+1];  /* File name */
 	/* padding */
-	char	pad[68];
+	char	pad[60];
 	__le32	csum;			/* entry checksum */
 } __attribute((__packed__));
 

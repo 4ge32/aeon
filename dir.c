@@ -219,6 +219,9 @@ void aeon_fill_dentry_data(struct super_block *sb, struct aeon_dentry *de,
 	de->d_dentry_addr = cpu_to_le64(d_addr_offset);
 	strscpy(de->name, name, namelen + 1);
 	de->d_this_dentry_block = d_addr_offset >> AEON_SHIFT;
+	de->d_mode = cpu_to_le16(am->mode);
+	de->d_size = cpu_to_le16(am->size);
+	de->dev.rdev = cpu_to_le32(am->rdev);
 	de->valid = 1;
 	de->persisted = 1;
 	aeon_update_dentry_csum(de);

@@ -23,7 +23,7 @@ static int aeon_init_mdata(struct super_block *sb, struct inode *dir,
 }
 
 static int aeon_fill_mdata(struct super_block *sb, struct inode *dir,
-			   struct aeon_mdata *am, u32 ino, u64 pi_addr)
+			   struct aeon_mdata *am, struct aeon_inode *pi)
 {
 	struct aeon_inode *pidir;
 
@@ -31,8 +31,11 @@ static int aeon_fill_mdata(struct super_block *sb, struct inode *dir,
 	if (!pidir)
 		return -ENOENT;
 	am->pidir = pidir;
-	am->ino = ino;
-	am->pi_addr = pi_addr;
+	am->ino = le32_to_cpu(pi->aeon_ino);
+	am->pi_addr = (u64)pi;
+	am->mode = le16_to_cpu(pi->i_mode);
+	am->size = le16_to_cpu(pi->i_size);
+	am->rdev = le32_to_cpu(pi->dev.rdev);
 
 	return 0;
 }
@@ -132,7 +135,7 @@ static int aeon_link(struct dentry *dest_dentry,
 	pi->i_links_count = cpu_to_le64(dest_inode->i_nlink);
 	ihold(dest_inode);
 
-	err = aeon_fill_mdata(sb, dir, &am, dest_inode->i_ino, (u64)pi);
+	err = aeon_fill_mdata(sb, dir, &am, pi);
 	if (err) {
 		aeon_err(sb, "%s: return %d\n", err);
 		return err;
@@ -494,8 +497,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 	} else {
 		struct aeon_mdata am;
 
-		err = aeon_fill_mdata(sb, new_dir, &am,
-				      old_inode->i_ino, (u64)pi);
+		err = aeon_fill_mdata(sb, new_dir, &am, pi);
 		if (err)
 			goto out_dir;
 
