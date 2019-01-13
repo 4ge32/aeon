@@ -267,7 +267,7 @@ aeon_insert_extenttree(struct super_block *sb,
 
 int
 aeon_update_extent(struct super_block *sb, struct inode *inode,
-		   unsigned blocknr, unsigned long offset, int num_blocks)
+		   unsigned long blocknr, unsigned long offset, int num_blocks)
 {
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
