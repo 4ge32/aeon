@@ -35,6 +35,7 @@ struct aeon_dentry_candidate {
  * Structure of an private dentry info on dram
  */
 struct aeon_dentry_info {
+	spinlock_t de_lock;
 	struct mutex dentry_mutex;
 	struct aeon_dentry_invalid *di;
 	struct aeon_dentry_map de_map;

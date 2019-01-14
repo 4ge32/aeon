@@ -78,6 +78,7 @@ static int aeon_init_dentry_map(struct super_block *sb,
 		return -ENOMEM;
 	}
 
+	spin_lock_init(&de_info->de_lock);
 	de_map = &de_info->de_map;
 	de_map->num_dentries = 0;
 	de_map->num_latest_dentry = 0;
@@ -336,7 +337,7 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	if (err)
 		goto out;
 
-	mutex_lock(&de_info->dentry_mutex);
+	spin_lock(&de_info->de_lock);
 
 	adi->d_addr = de;
 	list_add(&adi->invalid_list, &de_info->di->invalid_list);
@@ -345,7 +346,7 @@ int aeon_remove_dentry(struct dentry *dentry, int dec_link,
 	memset(de->name, '\0', de->name_len + 1);
 	aeon_update_dentry_csum(de);
 
-	mutex_unlock(&de_info->dentry_mutex);
+	spin_unlock(&de_info->de_lock);
 
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 
