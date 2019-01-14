@@ -307,8 +307,10 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	unsigned long blocknr;
 	unsigned long internal_ino;
-	int cpu_id;
 	u64 addr;
+	int cpu_id;
+	int max_inodes = (1<<AEON_SHIFT / AEON_INODE_SIZE) *
+					le32_to_cpu(art->i_pages);
 
 	if (inode_map->im) {
 		struct imem_cache *im;
@@ -327,9 +329,7 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 	if (cpu_id >= sbi->cpus)
 		cpu_id -= sbi->cpus;
 
-	internal_ino = (((ino - cpu_id) / sbi->cpus) %
-			AEON_I_NUM_PER_PAGE);
-
+	internal_ino = ((ino - cpu_id) / sbi->cpus) % max_inodes;
 	blocknr = le64_to_cpu(art->i_blocknr);
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(internal_ino << AEON_I_SHIFT);

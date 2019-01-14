@@ -717,7 +717,7 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 
 	if (le16_to_cpu(art->i_allocated) == max_inodes + 1) {
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
-		if (allocated != AEON_PAGES_FOR_INODE)
+		if (!allocated)
 			goto out;
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
