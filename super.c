@@ -119,7 +119,7 @@ static void aeon_evict_inode(struct inode *inode)
 		if (pi) {
 			if (pi->aeon_ino == 0) {
 				aeon_dbg("%lu: What happend?\n", inode->i_ino);
-				pi->aeon_ino = le32_to_cpu(inode->i_ino);
+				pi->aeon_ino = cpu_to_le32(inode->i_ino);
 			}
 			ret = aeon_free_inode_resource(sb, pi, sih);
 			if (ret)
@@ -134,7 +134,7 @@ static void aeon_evict_inode(struct inode *inode)
 	}
 out:
 	if (destroy == 0) {
-		//aeon_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
+		aeon_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
 		aeon_free_dram_resource(sb, sih);
 	}
 

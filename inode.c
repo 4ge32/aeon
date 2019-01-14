@@ -772,8 +772,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 	int err;
 
 	pi->deleted = 1;
-	if (pi->valid)
-		pi->valid = 0;
+	pi->valid = 0;
 
 	switch (le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFREG:
