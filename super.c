@@ -477,10 +477,12 @@ static void aeon_fill_region_table(struct super_block *sb)
 
 			art->allocated = 0;
 			art->freed = 0;
-			art->i_num_allocated_pages = le32_to_cpu(1);
-			art->i_range_high = le32_to_cpu(range_high);
-			art->b_range_low = le32_to_cpu(free_list->first_node->range_low);
-			art->i_allocated = le32_to_cpu(1);
+			art->i_num_allocated_pages =
+				cpu_to_le32(AEON_PAGES_FOR_INODE);
+			art->i_range_high = cpu_to_le32(range_high);
+			art->b_range_low =
+				cpu_to_le32(free_list->first_node->range_low);
+			art->i_allocated = cpu_to_le32(1);
 			art->i_head_ino = cpu_to_le32(inode_start);
 			blocknr = (((u64)inode_map->i_table_addr -
 				   (u64)sbi->virt_addr) >> AEON_SHIFT);
