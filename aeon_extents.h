@@ -27,6 +27,12 @@ void aeon_init_extent_header(struct aeon_extent_header *aeh)
 	memset(aeh->eh_extent_blocks, 0, sizeof(aeh->eh_extent_blocks));
 }
 
+static inline
+struct aeon_extent *aeon_get_prev_extent(struct aeon_extent_header *aeh)
+{
+	return (struct aeon_extent *)le64_to_cpu(aeh->eh_prev_extent);
+}
+
 u64 aeon_pull_extent_addr(struct super_block *sb,
 			  struct aeon_inode_info_header *sih, int index);
 int aeon_delete_extenttree(struct super_block *sb,

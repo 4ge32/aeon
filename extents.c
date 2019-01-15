@@ -273,21 +273,47 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	struct aeon_extent *ae;
+	unsigned long next;
 	int err = -ENOSPC;
 
+	if (le16_to_cpu(aeh->eh_entries)) {
+		ae = aeon_get_prev_extent(aeh);
+		if (!ae)
+			goto new_alloc;
+
+		if (le16_to_cpu(ae->ex_length) < SHRT_MAX)
+			goto new_alloc;
+
+		next = le64_to_cpu(ae->ex_block) + le16_to_cpu(ae->ex_length);
+		if (next != blocknr)
+			goto new_alloc;
+
+		write_lock(&sih->i_meta_lock);
+
+		ae->ex_length += cpu_to_le16(num_blocks);
+		aeh->eh_blocks += cpu_to_le16(num_blocks);
+
+		write_unlock(&sih->i_meta_lock);
+
+		return 0;
+	}
+
+new_alloc:
 	ae = aeon_get_new_extent(sb, sih);
 	if (!ae) {
 		aeon_err(sb, "can't expand file more\n");
 		return err;
 	}
 
-	read_lock(&sih->i_meta_lock);
+	write_lock(&sih->i_meta_lock);
+
 	ae->ex_index = aeh->eh_entries;
 	ae->ex_length = cpu_to_le16(num_blocks);
 	ae->ex_block = cpu_to_le64(blocknr);
 	ae->ex_offset = cpu_to_le32(offset);
 	aeh->eh_blocks += cpu_to_le16(num_blocks);
 	aeh->eh_entries++;
+	aeh->eh_prev_extent = cpu_to_le64(ae);
 
 	pi->i_blocks = aeh->eh_blocks * 8;
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
@@ -298,7 +324,7 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 		return err;
 	}
 
-	read_unlock(&sih->i_meta_lock);
+	write_unlock(&sih->i_meta_lock);
 
 	return 0;
 }
