@@ -67,11 +67,11 @@ static int aeon_init_dentry_map(struct super_block *sb,
 	struct aeon_dentry_map *de_map;
 	struct aeon_dentry_invalid *adi;
 
-	de_info = kmalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
+	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
 	if (!de_info)
 		return -ENOMEM;
 
-	adi = kmalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
+	adi = kzalloc(sizeof(struct aeon_dentry_invalid), GFP_KERNEL);
 	if (!adi) {
 		kfree(de_info);
 		de_info = NULL;

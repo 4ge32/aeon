@@ -145,7 +145,6 @@ struct opaque_list {
 struct inode_map {
 	struct mutex		inode_table_mutex;
 	struct rb_root		inode_inuse_tree;
-	struct rb_root		reclaim_tree;
 	unsigned long		num_range_node_inode;
 	struct aeon_range_node	*first_inode_range;
 	struct imem_cache	*im;
@@ -169,10 +168,6 @@ struct aeon_range_node {
 			int length;
 			struct aeon_extent *extent;
 		};
-		struct {
-			unsigned long ino;
-			u64 addr;
-		};
 	};
 	u32 csum;
 };
@@ -190,8 +185,6 @@ struct aeon_region_table {
 	__le32 i_head_ino;
 	__le64 i_blocknr;	/* it can be deleted */
 	__le64 this_block;	/* this table blocknr */
-
-	__le32 i_top_ino;
 
 	__le64 num_free_blocks;
 	__le64 alloc_data_count;
