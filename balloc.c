@@ -687,19 +687,6 @@ static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,
 	art->i_blocknr = cpu_to_le64(blocknr);
 }
 
-static void imem_cache_create(struct aeon_sb_info *sbi,
-			      struct inode_map *inode_map,
-			      unsigned long blocknr,
-			      u64 start_ino, int space)
-{
-	struct imem_cache *init;
-
-	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
-	inode_map->im = init;
-
-	INIT_LIST_HEAD(&inode_map->im->imem_list);
-}
-
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -720,7 +707,6 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		art->i_allocated = 1;
 		art->i_head_ino = cpu_to_le32(ino);
-		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 	} else
 		blocknr = le64_to_cpu(art->i_blocknr);
 
@@ -776,7 +762,6 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 
 	inode_map->i_table_addr = (void *)((*table_blocknr << AEON_SHIFT) +
 					   (u64)sbi->virt_addr);
-	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 }
 
 void aeon_init_new_inode_block(struct super_block *sb, u32 ino)

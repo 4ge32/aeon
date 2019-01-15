@@ -71,7 +71,7 @@ static void aeon_put_super(struct super_block *sb)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = aeon_get_inode_map(sb, i);
-		aeon_destroy_imem_cache(inode_map);
+		//aeon_destroy_imem_cache(inode_map);
 		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
 			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));
@@ -494,6 +494,8 @@ static void aeon_fill_region_table(struct super_block *sb)
 			art->alloc_data_pages = cpu_to_le64(AEON_PAGES_FOR_INODE);
 			art->freed_data_count = 0;
 			art->freed_data_pages = 0;
+
+			art->i_top_ino = cpu_to_le32(inode_start);
 		} else {
 			//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
 			free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
@@ -604,6 +606,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		inode_map->i_table_addr = 0;
 		mutex_init(&inode_map->inode_table_mutex);
 		inode_map->inode_inuse_tree = RB_ROOT;
+		inode_map->reclaim_tree = RB_ROOT;
 	}
 
 	mutex_init(&sbi->s_lock);

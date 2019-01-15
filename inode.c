@@ -306,25 +306,30 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 			    struct inode_map *inode_map, u32 ino)
 {
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
+	struct rb_root *tree;
+	struct aeon_range_node *ret_node = NULL;
 	unsigned long blocknr;
 	unsigned long internal_ino;
 	int cpu_id;
 	u64 addr;
-
-	if (inode_map->im) {
-		struct imem_cache *im;
-		list_for_each_entry(im, &inode_map->im->imem_list, imem_list) {
-			if (ino == im->ino) {
-				addr = im->addr;
-				list_del(&im->imem_list);
-				kfree(im);
-				im = NULL;
-				goto found;
-			}
-		}
-	}
+	bool found;
 
 	cpu_id = ino % sbi->cpus;
+
+	if (le32_to_cpu(art->i_top_ino) < ino)
+		goto alloc_new;
+
+	tree = &inode_map->reclaim_tree;
+	found = aeon_find_range_node(tree, ino, NODE_DIR, &ret_node);
+	if (found) {
+		addr = ret_node->addr;
+		rb_erase(&ret_node->node, tree);
+		aeon_free_inode_node(ret_node);
+		goto  found;
+	}
+
+alloc_new:
+
 	if (cpu_id >= sbi->cpus)
 		cpu_id -= sbi->cpus;
 
@@ -334,6 +339,7 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 	blocknr = le64_to_cpu(art->i_blocknr);
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(internal_ino << AEON_I_SHIFT);
+	art->i_top_ino = cpu_to_le32(ino);
 
 found:
 	//aeon_dbg("%s ino %u addr 0x%llx\n", __func__, ino, addr);
@@ -737,6 +743,21 @@ block_found:
 	return ret;
 }
 
+static int aeon_insert_reclaim_tree(struct super_block *sb,
+				    struct aeon_range_node *new_node,
+				    struct inode_map *inode_map)
+{
+	struct rb_root *tree;
+	int ret;
+
+	tree = &inode_map->reclaim_tree;
+	ret = aeon_insert_range_node(tree, new_node, NODE_DIR);
+	if (ret)
+		aeon_err(sb, "ERROR: %s failed %d\n", __func__, ret);
+
+	return ret;
+}
+
 static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 			   struct aeon_inode_info_header *sih)
 {
@@ -744,24 +765,26 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	u32 ino = le32_to_cpu(pi->aeon_ino);
 	int cpuid = ino % sbi->cpus;
 	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
-	struct imem_cache *im;
+	struct aeon_range_node *reclaim;
 	int err = 0;
 
-	/* TODO:
-	 * improve it
-	 */
 	mutex_lock(&inode_map->inode_table_mutex);
+
 	err = aeon_free_inuse_inode(sb, ino);
 	if (err) {
 		mutex_unlock(&inode_map->inode_table_mutex);
 		return err;
 	}
-	im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
-	im->ino = ino;
-	im->addr = sih->pi_addr;
-	im->independent = 1;
-	im->head = im;
-	list_add(&im->imem_list, &inode_map->im->imem_list);
+
+	reclaim = aeon_alloc_inode_node(sb);
+	reclaim->ino = ino;
+	reclaim->addr = (u64)pi;
+	err = aeon_insert_reclaim_tree(sb, reclaim, inode_map);
+	if (err) {
+		mutex_unlock(&inode_map->inode_table_mutex);
+		return err;
+	}
+
 	mutex_unlock(&inode_map->inode_table_mutex);
 
 	return err;
