@@ -516,7 +516,6 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 	unsigned long new_blocknr = 0;
 	long ret_blocks = 0;
 	int retried = 0;
-	u64 addr;
 
 	num_blocks = num * aeon_get_numblocks(btype);
 
@@ -566,9 +565,6 @@ alloc:
 	}
 
 	*blocknr = new_blocknr;
-
-	addr = (new_blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
-	memset((void *)addr, 0, ret_blocks * 4096);
 
 	return ret_blocks / aeon_get_numblocks(btype);
 }
@@ -712,11 +708,14 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = AEON_PAGES_FOR_INODE;
+	u64 addr;
 
 	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE + 1) {
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
+		addr = (u64)sbi->virt_addr + (blocknr<<AEON_SHIFT);
+		memset((void *)addr, 0, 256);
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		art->i_allocated = 1;
@@ -798,6 +797,7 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr)
 
 	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
 	*de_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
+	memset((void *)(*de_addr), 0, allocated * 4096);
 
 	return blocknr;
 }
