@@ -712,17 +712,14 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = AEON_PAGES_FOR_INODE;
-	int max_inodes = (1<<AEON_SHIFT / AEON_INODE_SIZE) *
-					le32_to_cpu(art->i_pages);
 
-	if (le16_to_cpu(art->i_allocated) == max_inodes + 1) {
+	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE + 1) {
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		art->i_allocated = 1;
-		art->i_pages = cpu_to_le16(allocated);
 		art->i_head_ino = cpu_to_le32(ino);
 		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 	} else

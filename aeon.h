@@ -181,7 +181,6 @@ struct aeon_region_table {
 	__le32 i_range_high;
 	__le32 b_range_low;
 	__le64 allocated;	/* allocated entire inodes */
-	__le32 i_pages;		/* current allocated pages for inode */
 	__le16 i_allocated;	/* allocated inodes in current pages */
 	__le32 i_head_ino;
 	__le64 i_blocknr;	/* it can be deleted */
