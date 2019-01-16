@@ -9,6 +9,72 @@
 #include "aeon_extents.h"
 #include "aeon_balloc.h"
 
+#ifdef CONFIG_AEON_FS_NUMA
+int aeon_alloc_block_free_lists(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	struct numa_maps *nm;
+	int numa_id;
+	int cpu_id;
+
+	/* FIXME:
+	 * How do I get the number of numa node?
+	 */
+	sbi->numa_nodes = 2;
+
+	sbi->nm = aeon_alloc_numa_maps(sb);
+	if (!sbi->nm)
+		return -ENOMEM;
+
+
+	for (numa_id = 0; numa_id < sbi->numa_nodes; numa_id++) {
+		sbi->nm[numa_id].free_lists = aeon_alloc_free_lists(sb);
+		if (!sbi->nm->free_lists)
+			return -ENOMEM;
+	}
+
+	for (numa_id = 0; numa_id < sbi->numa_nodes; numa_id++) {
+		int list_id = 0;
+
+		nm = &sbi->nm[numa_id];
+		nm->map_id = 0;
+		nm->max_id = sbi->cpus/sbi->numa_nodes;
+		nm->numa_id = numa_id;
+
+		for (cpu_id = 0; cpu_id < sbi->cpus; cpu_id++) {
+			if (cpu_to_mem(cpu_id) != numa_id)
+				continue;
+
+			free_list  = &sbi->nm[numa_id].free_lists[list_id++];
+			free_list->block_free_tree = RB_ROOT;
+			spin_lock_init(&free_list->s_lock);
+			free_list->index = cpu_id;
+			free_list->numa_index = numa_id;
+		}
+	}
+
+	for (numa_id = 0; numa_id < sbi->numa_nodes; numa_id++) {
+		int list_id = 0;
+
+		nm = &sbi->nm[numa_id];
+
+		for (cpu_id = 0; cpu_id < sbi->cpus; cpu_id++) {
+			if (cpu_to_mem(cpu_id) != numa_id)
+				continue;
+
+			aeon_dbg("%d,%d,%d numa %d cpuid %d\n",
+				 numa_id, cpu_id,
+				 nm->numa_id,
+				 nm->free_lists[list_id].numa_index,
+				 nm->free_lists[list_id].index);
+			list_id++;
+		}
+	}
+
+	return 0;
+}
+#else
 int aeon_alloc_block_free_lists(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -16,6 +82,8 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 	int i;
 
 	sbi->free_lists = aeon_alloc_free_lists(sb);
+	if (!sbi->free_lists)
+		return -ENOMEM;
 
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = aeon_get_free_list(sb, i);
@@ -26,6 +94,7 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 
 	return 0;
 }
+#endif
 
 void aeon_delete_free_lists(struct super_block *sb)
 {
@@ -395,6 +464,37 @@ static int not_enough_blocks(struct free_list *free_list,
 }
 
 /* Find out the free list with most free blocks */
+#ifdef CONFIG_AEON_FS_NUMA
+static struct free_list *aeon_get_candidate_free_list(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct free_list *free_list;
+	int numa_id = 0;
+	int cpu_id = 0;
+	int num_free_blocks = 0;
+	int i;
+	int j;
+
+	for (i = 0; i < sbi->numa_nodes; i++) {
+		for (j = 0; j < sbi->cpus/sbi->numa_nodes; j++) {
+			free_list = &sbi->nm[i].free_lists[j];
+			if (free_list->num_free_blocks > num_free_blocks) {
+				numa_id = i;
+				cpu_id = j;
+				num_free_blocks = free_list->num_free_blocks;
+			}
+		}
+	}
+
+	if (numa_id >= 2 || cpu_id >= 2) {
+		aeon_dbg("%d %d\n", numa_id, cpu_id);
+		BUG();
+
+	}
+
+	return &sbi->nm[numa_id].free_lists[cpu_id];
+}
+#else
 static int aeon_get_candidate_free_list(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -413,6 +513,7 @@ static int aeon_get_candidate_free_list(struct super_block *sb)
 
 	return cpuid;
 }
+#endif
 
 /* Return how many blocks allocated */
 static long aeon_alloc_blocks_in_free_list(struct super_block *sb,
@@ -519,13 +620,45 @@ static int aeon_new_blocks(struct super_block *sb, unsigned long *blocknr,
 
 	num_blocks = num * aeon_get_numblocks(btype);
 
+#ifdef CONFIG_AEON_FS_NUMA
+#else
 	if (cpuid == ANY_CPU)
 		cpuid = aeon_get_cpuid(sb);
+#endif
 
+#ifdef CONFIG_AEON_FS_NUMA
+	free_list = aeon_get_numa_list(sb);
+	cpuid = free_list->index;
+#else
 retry:
 	free_list = aeon_get_free_list(sb, cpuid);
 	spin_lock(&free_list->s_lock);
+#endif
 
+#ifdef CONFIG_AEON_FS_NUMA
+numa_retry:
+	spin_lock(&free_list->s_lock);
+
+	if (not_enough_blocks(free_list, num_blocks)) {
+		aeon_dbgv("%s: cpu %d, free_blocks %lu, required %lu, blocknode %lu\n",
+			  __func__, cpuid, free_list->num_free_blocks,
+			  num_blocks, free_list->num_blocknode);
+
+		if (retried >= sbi->numa_nodes) {
+			dump_stack();
+			BUG();
+			goto alloc;
+		}
+
+		spin_unlock(&free_list->s_lock);
+		free_list = aeon_get_candidate_free_list(sb);
+		if (!free_list) {
+			BUG();
+		}
+		retried++;
+		goto numa_retry;
+	}
+#else
 	if (not_enough_blocks(free_list, num_blocks)) {
 		aeon_dbgv("%s: cpu %d, free_blocks %lu, required %lu, blocknode %lu\n",
 			  __func__, cpuid, free_list->num_free_blocks,
@@ -541,6 +674,7 @@ retry:
 		retried++;
 		goto retry;
 	}
+#endif
 
 alloc:
 	inode_map = aeon_get_inode_map(sb, cpuid);

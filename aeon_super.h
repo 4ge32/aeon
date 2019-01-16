@@ -88,6 +88,11 @@ struct aeon_sb_info {
 	struct opaque_list *oq;
 
 	struct mb_cache *s_ea_block_cache;
+
+	struct numa_maps *nm;
+	int numa_nodes;
+
+	struct free_list *candidate;
 };
 
 

@@ -588,6 +588,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);
 	sbi->mode = (0777);	/* it will be changed */
+	sbi->candidate = NULL;
 	sbi->oq = kzalloc(sizeof(struct opaque_list), GFP_KERNEL);
 	if (!sbi->oq) {
 		ret = -ENOMEM;

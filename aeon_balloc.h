@@ -15,6 +15,7 @@ struct free_list {
 	struct aeon_range_node *last_node; // highest address free range
 
 	int		index; // Which CPU do I belong to?
+	int		numa_index;
 
 	unsigned long	block_start;
 	unsigned long	block_end;
@@ -27,24 +28,99 @@ struct free_list {
 	u32		csum;		/* Protect integrity */
 };
 
+#ifdef CONFIG_AEON_FS_NUMA
+struct numa_maps {
+	int map_id;
+	int max_id;
+	int numa_id;
+	struct free_list *free_lists;
+};
+
+static inline struct numa_maps *aeon_alloc_numa_maps(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return kcalloc(sbi->numa_nodes, sizeof(struct numa_maps), GFP_KERNEL);
+}
+#endif
+
 static inline struct free_list *aeon_alloc_free_lists(struct super_block *sb)
 {
+#ifdef CONFIG_AEON_FS_PERCPU_FREE_LIST
 	return alloc_percpu(struct free_list);
+#else
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+#ifdef CONFIG_AEON_FS_NUMA
+	return kcalloc(sbi->cpus/sbi->numa_nodes,
+		       sizeof(struct free_list), GFP_KERNEL);
+#else
+	return kcalloc(sbi->cpus, sizeof(struct free_list), GFP_KERNEL);
+#endif
+#endif
+}
+
+
+#ifdef CONFIG_AEON_FS_NUMA
+static inline struct free_list *aeon_get_numa_list(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int numa_id = numa_mem_id();
+	struct numa_maps *nm = &sbi->nm[numa_id];
+	int map_id;
+
+	map_id = nm->map_id;
+	nm->map_id = (nm->map_id + 1) % sbi->numa_nodes;
+
+	if (map_id >= 2 || map_id < 0)
+		BUG();
+
+	aeon_dbgv("numa id %d cpu_id %d\n",
+		  numa_id, nm->free_lists[map_id].index);
+	return &sbi->nm->free_lists[map_id];
 }
 
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 						   int cpu)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int i;
+	int j;
 
-	return per_cpu_ptr(sbi->free_lists, cpu);
+	/* TODO */
+	for (i = 0; i < sbi->numa_nodes; i++) {
+		for (j = 0; j < sbi->cpus/sbi->numa_nodes; j++) {
+			if (cpu == sbi->nm[i].free_lists[j].index)
+				return &sbi->nm[i].free_lists[j];
+		}
+	}
+
+	return NULL;
 }
+#else
+static inline struct free_list *aeon_get_free_list(struct super_block *sb,
+						   int cpu)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+#ifdef CONFIG_AEON_FS_PERCPU_FREELIST
+	return per_cpu_ptr(sbi->free_lists, cpu);
+#else
+	return &sbi->free_lists[cpu];
+#endif
+}
+#endif
 
 static inline void aeon_free_free_lists(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
+#ifdef CONFIG_AEON_FS_PERCPU_FREELIST
 	free_percpu(sbi->free_lists);
+#else
+	kfree(sbi->free_lists);
+	sbi->free_lists = NULL;
+#endif
 }
 
 int aeon_alloc_block_free_lists(struct super_block *sb);
