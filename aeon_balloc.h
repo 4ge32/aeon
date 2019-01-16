@@ -43,6 +43,7 @@ static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 static inline void aeon_free_free_lists(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+
 	free_percpu(sbi->free_lists);
 }
 

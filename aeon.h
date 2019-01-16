@@ -36,6 +36,7 @@
 #include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/crc32.h>
+#include <linux/slab.h>
 
 /* manual */
 #define AEON_I_SHIFT            8
@@ -216,6 +217,15 @@ static inline struct inode_map *aeon_get_inode_map(struct super_block *sb,
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
 	return &sbi->inode_maps[cpu_id];
+	//return per_cpu_ptr(sbi->inode_maps, cpu_id);
+}
+
+static inline void aeon_free_inode_maps(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	kfree(sbi->inode_maps);
+	//free_percpu(sbi->inode_maps);
 }
 
 static inline unsigned int

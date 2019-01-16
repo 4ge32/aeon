@@ -357,7 +357,8 @@ static u64 aeon_reclaim_inode(struct inode_map *inode_map, u32 *ino)
 	addr = im->addr;
 	*ino = im->ino;
 	list_del(&im->imem_list);
-	kfree(im);
+	//kfree(im);
+	aeon_free_inode_node((struct aeon_range_node *)im);
 	im = NULL;
 
 	return addr;
@@ -368,13 +369,14 @@ int aeon_new_aeon_inode(struct super_block *sb, struct aeon_mdata *am)
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
 	struct inode_map *inode_map;
-	int cpu_id;
+	int cpu_id ;
 	int err = 0;
 	u64 pi_addr = 0;
 	u32 free_ino = 0;
 
 	cpu_id = aeon_sb->s_map_id;
 	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
+	//cpu_id = aeon_get_cpuid(sb);
 	inode_map = aeon_get_inode_map(sb, cpu_id);
 
 	mutex_lock(&inode_map->inode_table_mutex);
@@ -630,7 +632,8 @@ void aeon_destroy_imem_cache(struct inode_map *inode_map)
 
 	list_for_each_entry_safe(im, dend, &inode_map->im->imem_list, imem_list) {
 		list_del(&im->imem_list);
-		kfree(im);
+		aeon_free_inode_node((struct aeon_range_node *)im);
+		//kfree(im);
 		im = NULL;
 	}
 }
@@ -701,7 +704,8 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	mutex_lock(&inode_map->inode_table_mutex);
 
 	//art->freed++;
-	im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	//im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	im = (struct imem_cache *)aeon_alloc_inode_node(sb);
 	im->ino = ino;
 	im->addr = sih->pi_addr;
 	im->independent = 1;
