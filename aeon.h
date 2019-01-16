@@ -211,21 +211,39 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	return ret;
 }
 
+static inline struct inode_map *aeon_alloc_inode_maps(struct super_block *sb)
+{
+
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	return alloc_percpu(struct inode_map);
+#else
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return kcalloc(sbi->cpus, sizeof(struct inode_map), GFP_KERNEL);
+#endif
+}
+
 static inline struct inode_map *aeon_get_inode_map(struct super_block *sb,
 						   int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	return per_cpu_ptr(sbi->inode_maps, cpu_id);
+#else
 	return &sbi->inode_maps[cpu_id];
-	//return per_cpu_ptr(sbi->inode_maps, cpu_id);
+#endif
 }
 
 static inline void aeon_free_inode_maps(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	free_percpu(sbi->inode_maps);
+#else
 	kfree(sbi->inode_maps);
-	//free_percpu(sbi->inode_maps);
+#endif
 }
 
 static inline unsigned int
@@ -243,8 +261,7 @@ static inline struct aeon_region_table *AEON_R_TABLE(struct inode_map *inode_map
 static inline
 struct aeon_region_table *aeon_get_rtable(struct super_block *sb, int cpu_id)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	struct inode_map *inode_map = &sbi->inode_maps[cpu_id];
+	struct inode_map *inode_map = aeon_get_inode_map(sb, cpu_id);
 
 	return (struct aeon_region_table *)(inode_map->i_table_addr);
 }

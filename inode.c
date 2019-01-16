@@ -366,17 +366,23 @@ static u64 aeon_reclaim_inode(struct inode_map *inode_map, u32 *ino)
 
 int aeon_new_aeon_inode(struct super_block *sb, struct aeon_mdata *am)
 {
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+#else
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_super_block *aeon_sb = aeon_get_super(sb);
+#endif
 	struct inode_map *inode_map;
 	int cpu_id ;
 	int err = 0;
 	u64 pi_addr = 0;
 	u32 free_ino = 0;
 
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	cpu_id = aeon_get_cpuid(sb);
+#else
 	cpu_id = aeon_sb->s_map_id;
 	aeon_sb->s_map_id = (aeon_sb->s_map_id + 1) % sbi->cpus;
-	//cpu_id = aeon_get_cpuid(sb);
+#endif
 	inode_map = aeon_get_inode_map(sb, cpu_id);
 
 	mutex_lock(&inode_map->inode_table_mutex);

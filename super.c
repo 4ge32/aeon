@@ -595,9 +595,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 	INIT_LIST_HEAD(&sbi->oq->opaque_list);
-	sbi->inode_maps = kcalloc(sbi->cpus,
-				  sizeof(struct inode_map), GFP_KERNEL);
-	//sbi->inode_maps = alloc_percpu(struct inode_map);
+	sbi->inode_maps = aeon_alloc_inode_maps(sb);
 	if(!sbi->inode_maps) {
 		ret = -ENOMEM;
 		goto out0;

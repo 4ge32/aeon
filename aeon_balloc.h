@@ -46,7 +46,7 @@ static inline struct numa_maps *aeon_alloc_numa_maps(struct super_block *sb)
 
 static inline struct free_list *aeon_alloc_free_lists(struct super_block *sb)
 {
-#ifdef CONFIG_AEON_FS_PERCPU_FREE_LIST
+#ifdef CONFIG_AEON_FS_PERCPU_FREELIST
 	return alloc_percpu(struct free_list);
 #else
 	struct aeon_sb_info *sbi = AEON_SB(sb);
