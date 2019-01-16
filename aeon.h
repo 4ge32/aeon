@@ -186,6 +186,8 @@ struct aeon_region_table {
 	__le64 i_blocknr;	/* it can be deleted */
 	__le64 this_block;	/* this table blocknr */
 
+	__le32 i_top_ino;
+
 	__le64 num_free_blocks;
 	__le64 alloc_data_count;
 	__le64 alloc_data_pages;

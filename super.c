@@ -494,6 +494,8 @@ static void aeon_fill_region_table(struct super_block *sb)
 			art->alloc_data_pages = cpu_to_le64(AEON_PAGES_FOR_INODE);
 			art->freed_data_count = 0;
 			art->freed_data_pages = 0;
+
+			art->i_top_ino = cpu_to_le32(inode_start);
 		} else {
 			//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
 			free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
