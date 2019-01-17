@@ -91,6 +91,7 @@ struct aeon_sb_info {
 
 	struct numa_maps *nm;
 	int numa_nodes;
+	int num_lists;
 
 	struct free_list *candidate;
 };
