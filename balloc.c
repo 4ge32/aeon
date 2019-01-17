@@ -1001,3 +1001,34 @@ u64 aeon_get_xattr_blk(struct super_block *sb)
 
 	return addr;
 }
+
+u64 aeon_get_new_extents_header_block(struct super_block *sb,
+				      struct aeon_extent_header *prev)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_extent_header *aeh;
+	unsigned long num_blocks = 2;
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	u64 header_addr;
+	u64 extent_addr;
+
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
+	if (allocated != 2) {
+		aeon_err(sb, "failed to get new exttens block\n");
+		return -ENOSPC;
+	}
+
+	header_addr = (blocknr<<AEON_SHIFT);
+	extent_addr = (blocknr+1)<<AEON_SHIFT;
+	aeh = (struct aeon_extent_header *)(header_addr + (u64)sbi->virt_addr);
+	memset((void *)aeh, 0, 4096);
+	aeh->eh_entries = 0;
+	aeh->eh_depth = 0;
+	aeh->eh_blocks = 0;
+	aeh->eh_extent_blocks[0] = extent_addr>>AEON_SHIFT;
+
+	prev->eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT-1] = header_addr>>AEON_SHIFT;
+
+	return header_addr;
+}

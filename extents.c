@@ -38,6 +38,9 @@ u64 aeon_pull_extent_addr(struct super_block *sb,
 		return addr;
 	}
 
+	if (le16_to_cpu(aeh->eh_depth))
+		return (u64)aeon_search_extent(sb, sih, index);
+
 	internal_index = index - PI_MAX_INTERNAL_EXTENT;
 	num_exblock = internal_index / AEON_EXTENT_PER_PAGE;
 	if (num_exblock < 0 || PI_MAX_EXTERNAL_EXTENT <= num_exblock) {
@@ -50,6 +53,58 @@ u64 aeon_pull_extent_addr(struct super_block *sb,
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 				(internal_index << AEON_E_SHIFT);
 	return addr;
+}
+
+static
+struct aeon_extent *do_aeon_get_extent_on_pmem2(struct super_block *sb,
+						struct aeon_extent_header *head)
+{
+	struct aeon_extent_header *aeh;
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int offset;
+	int depth;
+	int extent_blocknr;
+	u64 addr;
+	u64 base_addr;
+	u64 next_addr;
+
+	depth = le16_to_cpu(head->eh_depth);
+	if (depth == AEON_EXTENT_MAX_DEPTH)
+		return ERR_PTR(-ENOSPC);
+
+	next_addr = le64_to_cpu(head->eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT-1]);
+	next_addr <<= AEON_SHIFT;
+	aeh = (struct aeon_extent_header *)(next_addr + (u64)sbi->virt_addr);
+	aeh += (depth-1);
+
+	extent_blocknr = le16_to_cpu(aeh->eh_blocks);
+	offset = le16_to_cpu(aeh->eh_entries) % AEON_EXTENT_PER_PAGE;
+	base_addr = le32_to_cpu(aeh->eh_extent_blocks[extent_blocknr]);
+	base_addr <<= AEON_SHIFT;
+
+	addr = (u64)sbi->virt_addr + base_addr + (offset * AEON_EXTENT_SIZE);
+
+	aeh->eh_entries += le16_to_cpu(1);
+	if (!(le16_to_cpu(aeh->eh_entries) % AEON_EXTENT_PER_PAGE)) {
+		unsigned long new_blocknr;
+		int e;
+
+		new_blocknr = aeon_get_new_extents_block(sb);
+		aeh->eh_blocks++;
+		e = le16_to_cpu(aeh->eh_blocks);
+
+		if (e == PI_MAX_EXTERNAL_EXTENT) {
+			head->eh_depth++;
+			aeh++;
+			aeh->eh_entries = 0;
+			aeh->eh_blocks = 0;
+			e = 0;
+		}
+
+		aeh->eh_extent_blocks[e] = new_blocknr;
+	}
+
+	return (struct aeon_extent *)addr;
 }
 
 static
@@ -69,6 +124,9 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	if (entries < PI_MAX_INTERNAL_EXTENT)
 		return &pi->ae[entries];
 
+	if (le16_to_cpu(aeh->eh_depth))
+		return do_aeon_get_extent_on_pmem2(sb, aeh);
+
 	entries = entries - PI_MAX_INTERNAL_EXTENT;
 	num_exblock = le64_to_cpu(pi->i_exblocks) - 2;
 	external_entries = entries % AEON_EXTENT_PER_PAGE;
@@ -77,9 +135,15 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 		unsigned long new_blocknr = 0;
 		int next_num_exblock = num_exblock + 1;
 
-		if (next_num_exblock == PI_MAX_EXTERNAL_EXTENT) {
-			aeon_err(sb, "no space in extent header\n");
-			return NULL;
+		if (next_num_exblock == PI_MAX_EXTERNAL_EXTENT-1) {
+			aeh->eh_depth = cpu_to_le16(1);
+			addr = aeon_get_new_extents_header_block(sb, aeh);
+			if (!addr) {
+				aeon_err(sb, "no space in extent header\n");
+				return ERR_PTR(-ENOSPC);
+			}
+
+			return do_aeon_get_extent_on_pmem2(sb, aeh);
 		}
 
 		new_blocknr = aeon_get_new_extents_block(sb);
@@ -355,6 +419,28 @@ aeon_remove_extenttree(struct super_block *sb,
 #endif
 }
 
+static int
+aeon_free_extents_blocks(struct super_block *sb,
+			 struct aeon_extent_header *aeh,
+			 int depth)
+{
+	unsigned long blocknr;
+	int err;
+	int i;
+
+	aeh += (depth-1);
+	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT; i++) {
+		blocknr = le64_to_cpu(aeh->eh_extent_blocks[i]);
+		err = aeon_insert_blocks_into_free_list(sb, blocknr, 1, 0);
+		if (err) {
+			AEON_ERR(err);
+			return err;
+		}
+	}
+
+	return 0;
+}
+
 int
 aeon_delete_extenttree(struct super_block *sb,
 		       struct aeon_inode_info_header *sih)
@@ -400,7 +486,7 @@ next:
 		entries--;
 	}
 
-	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT; i++) {
+	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT-1; i++) {
 		freed_blocknr = aeh->eh_extent_blocks[i];
 		if (!freed_blocknr)
 			goto end;
@@ -409,6 +495,25 @@ next:
 		if (err) {
 			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
 			return -EINVAL;
+		}
+	}
+
+	if (le16_to_cpu(aeh->eh_depth)) {
+		struct aeon_sb_info *sbi = AEON_SB(sb);
+		u64 next;
+		u64 blocknr;
+		struct aeon_extent_header *aehpp;
+		int i;
+
+		blocknr = le64_to_cpu(aeh->eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT-1]);
+		next = (u64)sbi->virt_addr + (blocknr<<AEON_SHIFT);
+		aehpp = (struct aeon_extent_header *)next;
+		for (i = 0; i < le16_to_cpu(aeh->eh_depth); i++) {
+			err = aeon_free_extents_blocks(sb, aehpp, i);
+			if (err) {
+				aeon_err(sb, "%s - %d\n", __func__, __LINE__);
+				return err;
+			}
 		}
 	}
 

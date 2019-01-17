@@ -10,7 +10,7 @@
  * extent tree's header referred from inode
  */
 #define PI_MAX_INTERNAL_EXTENT 5
-#define PI_MAX_EXTERNAL_EXTENT 2
+#define PI_MAX_EXTERNAL_EXTENT 4
 
 struct imem_cache {
 	u32	ino;
@@ -37,7 +37,7 @@ struct i_valid_child_list {
 struct aeon_extent_header {
 	__le16  eh_entries;
 	__le16  eh_depth;
-	__le64  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
+	__le32  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
 	__le32  eh_blocks;
 	__le64  eh_prev_extent;
 } __attribute((__packed__));

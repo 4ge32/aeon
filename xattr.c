@@ -434,7 +434,7 @@ bad_block:
 
 	if (value != NULL) {
 		/* Insert the new value */
-		aeon_dbg("IN3\n");
+		aeon_dbgv("IN3\n");
 		here->e_value_size = cpu_to_le32(value_len);
 		if (value_len) {
 			size_t size = AEON_XATTR_SIZE(value_len);

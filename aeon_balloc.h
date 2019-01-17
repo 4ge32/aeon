@@ -72,12 +72,13 @@ static inline struct free_list *aeon_get_numa_list(struct super_block *sb)
 	map_id = nm->map_id;
 	nm->map_id = (nm->map_id + 1) % sbi->numa_nodes;
 
-	if (map_id >= 2 || map_id < 0)
-		BUG();
+	//if (map_id >= 2 || map_id < 0)
+	//	BUG();
 
 	aeon_dbgv("numa id %d cpu_id %d\n",
 		  numa_id, nm->free_lists[map_id].index);
-	return &sbi->nm->free_lists[map_id];
+	//return &sbi->nm[numa_id].free_lists[aeon_get_cpuid(sb)/sbi->numa_nodes];
+	return &sbi->nm[numa_id].free_lists[map_id];
 }
 
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,
@@ -148,5 +149,6 @@ unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr);
 unsigned long aeon_get_new_extents_block(struct super_block *sb);
 u64 aeon_get_new_blk(struct super_block *sb, int cpu_id);
 u64 aeon_get_xattr_blk(struct super_block *sb);
-
+u64 aeon_get_new_extents_header_block(struct super_block *sb,
+				      struct aeon_extent_header *prev);
 #endif
