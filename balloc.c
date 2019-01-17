@@ -18,11 +18,6 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 	int numa_id;
 	int cpu_id;
 
-	/* FIXME:
-	 * How do I get the number of numa node?
-	 */
-	sbi->numa_nodes = 2;
-
 	sbi->nm = aeon_alloc_numa_maps(sb);
 	if (!sbi->nm)
 		return -ENOMEM;

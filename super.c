@@ -584,6 +584,7 @@ static int aeon_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->uid  = current_fsuid();
 	sbi->gid  = current_fsgid();
 	sbi->cpus = num_online_cpus();
+	sbi->numa_nodes = nr_numa_nodes();
 	sbi->num_blocks = (unsigned long)(sbi->initsize) >> PAGE_SHIFT;
 	sbi->blocksize = AEON_DEF_BLOCK_SIZE_4K;
 	aeon_set_blocksize(sb, sbi->blocksize);

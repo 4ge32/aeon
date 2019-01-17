@@ -196,6 +196,19 @@ static inline int is_shutdown_ok(struct super_block *sb)
 	return 1;
 }
 
+static inline int nr_numa_nodes(void)
+{
+	int i;
+	int ret = 0;
+
+	for (i = 0; i < num_online_cpus(); i++) {
+		if (ret == cpu_to_mem(i))
+			ret++;
+	}
+
+	return ret;
+}
+
 
 struct aeon_range_node *aeon_alloc_inode_node(struct super_block *);
 void aeon_free_inode_node(struct aeon_range_node *node);
