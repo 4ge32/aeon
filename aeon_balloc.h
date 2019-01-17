@@ -70,10 +70,10 @@ static inline struct free_list *aeon_get_numa_list(struct super_block *sb)
 	int map_id;
 
 	map_id = nm->map_id;
-	nm->map_id = (nm->map_id + 1) % sbi->cpus;
+	nm->map_id = (nm->map_id + 1) % sbi->num_lists;
 
-	aeon_dbgv("numa id %d cpu_id %d\n",
-		  numa_id, nm->free_lists[map_id].index);
+	aeon_dbgv("numa id %d map id %d cpu_id %d\n",
+		  numa_id, map_id, nm->free_lists[map_id].index);
 	//return &sbi->nm[numa_id].free_lists[aeon_get_cpuid(sb)/sbi->numa_nodes];
 	return &sbi->nm[numa_id].free_lists[map_id];
 }
