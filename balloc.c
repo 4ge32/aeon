@@ -481,12 +481,6 @@ static struct free_list *aeon_get_candidate_free_list(struct super_block *sb)
 		}
 	}
 
-	if (numa_id >= 2 || cpu_id >= 2) {
-		aeon_dbg("%d %d\n", numa_id, cpu_id);
-		BUG();
-
-	}
-
 	return &sbi->nm[numa_id].free_lists[cpu_id];
 }
 #else
