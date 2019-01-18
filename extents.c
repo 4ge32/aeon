@@ -121,8 +121,10 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	u64 addr;
 
 	entries = le16_to_cpu(aeh->eh_entries);
-	if (entries < PI_MAX_INTERNAL_EXTENT)
+	if (entries < PI_MAX_INTERNAL_EXTENT) {
+		aeh->eh_entries++;
 		return &pi->ae[entries];
+	}
 
 	if (le16_to_cpu(aeh->eh_depth))
 		return do_aeon_get_extent_on_pmem2(sb, aeh);
@@ -160,7 +162,7 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	blocknr = le64_to_cpu(aeh->eh_extent_blocks[num_exblock]);
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(external_entries << AEON_E_SHIFT);
-
+	aeh->eh_entries++;
 	return (struct aeon_extent *)addr;
 }
 
@@ -378,7 +380,6 @@ new_alloc:
 	ae->ex_block = cpu_to_le64(blocknr);
 	ae->ex_offset = cpu_to_le32(offset);
 	aeh->eh_blocks += cpu_to_le16(num_blocks);
-	aeh->eh_entries++;
 	aeh->eh_prev_extent = cpu_to_le64(ae);
 
 	pi->i_blocks = aeh->eh_blocks * 8;
