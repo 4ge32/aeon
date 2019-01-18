@@ -829,7 +829,7 @@ imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
 				goto next;
 			if (!pi->deleted)
 				pi->deleted = 1;
-			im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+			im = aeon_alloc_icache(sbi->sb);
 			im->ino = ino;
 			im->addr = addr;
 			im->head = im;

@@ -201,6 +201,16 @@ struct aeon_region_table {
 #include "aeon_inode.h"
 #include "aeon_dir.h"
 
+static inline struct imem_cache *aeon_alloc_icache(struct super_block *sb)
+{
+	return (struct imem_cache *)aeon_alloc_inode_node(sb);
+}
+
+static inline void aeon_free_icache(struct imem_cache *im)
+{
+	aeon_free_inode_node((struct aeon_range_node *)im);
+}
+
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 					 unsigned int size)
 {
@@ -251,7 +261,6 @@ aeon_get_numblocks(unsigned short btype)
 {
 	return 1;
 }
-
 
 static inline struct aeon_region_table *AEON_R_TABLE(struct inode_map *inode_map)
 {
