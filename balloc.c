@@ -635,15 +635,11 @@ numa_retry:
 
 		if (retried >= sbi->numa_nodes) {
 			dump_stack();
-			BUG();
 			goto alloc;
 		}
 
 		spin_unlock(&free_list->s_lock);
 		free_list = aeon_get_candidate_free_list(sb);
-		if (!free_list) {
-			BUG();
-		}
 		retried++;
 		goto numa_retry;
 	}
