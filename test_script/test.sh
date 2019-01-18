@@ -87,6 +87,13 @@ other ()
 source ./list_test.sh
 echo "===== TEST START ====="
 
+OPT=CONFIG_AEON_FS_PERCPU_INODEMAP
+cat ../Makefile | grep \#${OPT} >> /dev/null
+if [ $? -eq 1 ]; then
+  echo "Disable $OPT"
+  exit 1
+fi
+
 ./run.sh set > /dev/null 2>&1
 
 case "$1" in
