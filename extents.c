@@ -271,6 +271,7 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 		node = aeon_alloc_extent_node(sb);
 		if (!node)
 			return -ENOMEM;
+
 		node->offset = le32_to_cpu(pi->ae[i].ex_offset);
 		node->length = le16_to_cpu(pi->ae[i].ex_length);
 		node->extent = &pi->ae[i];
@@ -314,6 +315,7 @@ aeon_insert_extenttree(struct super_block *sb,
 	node = aeon_alloc_extent_node(sb);
 	if (!node)
 		return -ENOMEM;
+
 	node->offset = le32_to_cpu(ae->ex_offset);
 	node->length = le16_to_cpu(ae->ex_length);
 	node->extent = ae;
@@ -384,7 +386,7 @@ new_alloc:
 
 	err = aeon_insert_extenttree(sb, sih, aeh, ae);
 	if (err) {
-		read_unlock(&sih->i_meta_lock);
+		write_unlock(&sih->i_meta_lock);
 		return err;
 	}
 
@@ -552,7 +554,7 @@ aeon_cutoff_extenttree(struct super_block *sb,
 		ae = (struct aeon_extent *)addr;
 		blocknr = le64_to_cpu(ae->ex_block);
 		length = le16_to_cpu(ae->ex_length);
-		offset = le16_to_cpu(ae->ex_offset);
+		offset = le32_to_cpu(ae->ex_offset);
 
 		err = aeon_insert_blocks_into_free_list(sb, blocknr, length, 0);
 		if (err) {
