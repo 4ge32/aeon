@@ -9,6 +9,7 @@
 #include <linux/parser.h>
 #include <linux/cred.h>
 #include <linux/statfs.h>
+#include <linux/blkdev.h>
 
 #include "aeon.h"
 #include "aeon_super.h"
@@ -25,6 +26,7 @@ unsigned int aeon_dbgmask;
 
 module_param(wprotect, int, 0444);
 MODULE_PARM_DESC(wprotect, "Write-protect pmem region and use CR0.WP to allow updates");
+static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi);
 
 
 static struct inode *aeon_alloc_inode(struct super_block *sb)
@@ -84,6 +86,9 @@ static void aeon_put_super(struct super_block *sb)
 
 	kfree(sbi->oq);
 	aeon_free_inode_maps(sb);
+	if (sbi->s_bdev2)
+		blkdev_put(sbi->s_bdev2, FMODE_READ | FMODE_EXCL);
+
 
 	kfree(sbi);
 
@@ -243,46 +248,6 @@ struct aeon_range_node *aeon_alloc_extent_node(struct super_block *sb)
 	return aeon_alloc_range_node(sb);
 }
 
-static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
-{
-	void *virt_addr = NULL;
-	pfn_t __pfn_t;
-	long size;
-	struct dax_device *dax_dev;
-
-	if (!bdev_dax_supported(sb->s_bdev, AEON_DEF_BLOCK_SIZE_4K)) {
-		aeon_dbg("device does not support DAX\n");
-		return -EINVAL;
-	}
-	sbi->s_bdev = sb->s_bdev;
-
-	dax_dev = fs_dax_get_by_host(sb->s_bdev->bd_disk->disk_name);
-	if (!dax_dev) {
-		aeon_err(sb, "Couldn't retrieve DAX device.\n");
-		return -EINVAL;
-	}
-	sbi->s_dax_dev = dax_dev;
-
-	size = dax_direct_access(sbi->s_dax_dev, 0, LONG_MAX/PAGE_SIZE,
-				 &virt_addr, &__pfn_t) * PAGE_SIZE;
-	if (size <= 0) {
-		aeon_err(sb, "direct_access failed\n");
-		return -EINVAL;
-	}
-
-	sbi->virt_addr = virt_addr;
-
-	if (!sbi->virt_addr) {
-		aeon_err(sb, "ioremap of the aeon image failed(1)\n");
-		return -EINVAL;
-	}
-
-	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
-	sbi->initsize = size;
-	aeon_info("head addr 0x%llx\n", (u64)virt_addr);
-
-	return 0;
-}
 
 static int aeon_root_check(struct super_block *sb, struct aeon_inode *root_pi)
 {
@@ -687,6 +652,7 @@ out:
 static struct dentry *aeon_mount(struct file_system_type *fs_type,
 				 int flags, const char *dev_name, void *data)
 {
+	aeon_dbg("%s\n", dev_name);
 	return mount_bdev(fs_type, flags, dev_name, data, aeon_fill_super);
 }
 
@@ -697,6 +663,95 @@ static struct file_system_type aeon_fs_type = {
 	.kill_sb	= kill_block_super,
 };
 
+static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
+{
+	void *virt_addr = NULL;
+	pfn_t __pfn_t;
+	long size;
+	struct dax_device *dax_dev;
+	struct block_device *bdev;
+	fmode_t mode = FMODE_READ | FMODE_EXCL;
+
+	if (!bdev_dax_supported(sb->s_bdev, AEON_DEF_BLOCK_SIZE_4K)) {
+		aeon_dbg("device does not support DAX\n");
+		return -EINVAL;
+	}
+	sbi->s_bdev = sb->s_bdev;
+
+	dax_dev = fs_dax_get_by_host(sb->s_bdev->bd_disk->disk_name);
+	if (!dax_dev) {
+		aeon_err(sb, "Couldn't retrieve DAX device.\n");
+		return -EINVAL;
+	}
+	sbi->s_dax_dev = dax_dev;
+
+	size = dax_direct_access(sbi->s_dax_dev, 0, LONG_MAX/PAGE_SIZE,
+				 &virt_addr, &__pfn_t) * PAGE_SIZE;
+	if (size <= 0) {
+		aeon_err(sb, "direct_access failed\n");
+		return -EINVAL;
+	}
+
+	sbi->virt_addr = virt_addr;
+
+	if (!sbi->virt_addr) {
+		aeon_err(sb, "ioremap of the aeon image failed(1)\n");
+		return -EINVAL;
+	}
+
+	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
+	sbi->initsize = size;
+	aeon_info("head addr 0x%llx\n", (u64)virt_addr);
+	aeon_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
+		__func__, sbi->s_bdev->bd_disk->disk_name,
+		sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
+
+	aeon_dbg("next\n");
+	bdev = blkdev_get_by_path("/dev/pmem1", FMODE_READ | FMODE_EXCL, &aeon_fs_type);
+	if (bdev)
+		aeon_dbg("1");
+	if (bdev->bd_disk)
+		aeon_dbg("2");
+	if (bdev->bd_disk->disk_name)
+		aeon_dbg("3 %s\n", bdev->bd_disk->disk_name);
+
+
+	if (!bdev_dax_supported(bdev, AEON_DEF_BLOCK_SIZE_4K)) {
+		aeon_dbg("device does not support DAX\n");
+		return -EINVAL;
+	}
+	sbi->s_bdev2 = bdev;
+
+	dax_dev = fs_dax_get_by_host(bdev->bd_disk->disk_name);
+	if (!dax_dev) {
+		aeon_err(sb, "Couldn't retrieve DAX device.\n");
+		blkdev_put(bdev, mode);
+		return -EINVAL;
+	}
+	sbi->s_dax_dev2 = dax_dev;
+
+	size = dax_direct_access(sbi->s_dax_dev2, 0, LONG_MAX/PAGE_SIZE,
+				 &virt_addr, &__pfn_t) * PAGE_SIZE;
+	if (size <= 0) {
+		aeon_err(sb, "direct_access failed\n");
+		blkdev_put(bdev, mode);
+		return -EINVAL;
+	}
+
+	sbi->virt_addr2 = virt_addr;
+	if (!sbi->virt_addr2) {
+		aeon_err(sb, "ioremap of the aeon image failed(1)\n");
+		blkdev_put(bdev, mode);
+		return -EINVAL;
+	}
+
+	sbi->phys_addr2 = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
+	sbi->initsize2 = size;
+	aeon_dbg("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
+		__func__, bdev->bd_disk->disk_name,
+		sbi->phys_addr2, (unsigned long)sbi->virt_addr2, sbi->initsize2);
+	return 0;
+}
 static void init_once(void *foo)
 {
 	struct aeon_inode_info *vi = foo;

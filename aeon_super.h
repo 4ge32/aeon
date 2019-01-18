@@ -36,14 +36,18 @@ struct aeon_sb_info {
 	struct super_block	*sb;
 	struct aeon_super_block *aeon_sb;
 	struct block_device	*s_bdev;
+	struct block_device	*s_bdev2;
 	struct dax_device	*s_dax_dev;
+	struct dax_device	*s_dax_dev2;
 
 	/*
 	 * base physical and virtual address of AEON (which is also
 	 * the pointer to the super block)
 	 */
 	phys_addr_t	phys_addr;
+	phys_addr_t	phys_addr2;
 	void		*virt_addr;
+	void		*virt_addr2;
 
 	unsigned long	num_blocks;
 	unsigned long	last_addr;
@@ -51,6 +55,7 @@ struct aeon_sb_info {
 	/* Mount options */
 	unsigned long	blocksize;
 	unsigned long	initsize;
+	unsigned long	initsize2;
 	unsigned long	s_mount_opt;
 	kuid_t		uid;		/* Mount uid for root directory */
 	kgid_t		gid;		/* Mount gid for root directory */

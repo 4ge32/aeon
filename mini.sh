@@ -1,0 +1,16 @@
+touch /mnt/alice
+touch /mnt/bob
+touch /mnt/cat
+touch /mnt/hello
+touch /mnt/world
+touch /mnt/c
+touch /mnt/cpp
+touch /mnt/rust
+touch /mnt/python
+touch /mnt/linux
+touch /mnt/kernel
+touch /mnt/system
+touch /mnt/programming
+touch /mnt/os
+touch /mnt/newblock
+touch /mnt/fromabove

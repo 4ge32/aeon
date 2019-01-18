@@ -137,6 +137,42 @@ static int aeon_insert_blocktree(struct rb_root *tree,
 	return ret;
 }
 
+#ifdef CONFIG_AEON_FS_NUMA
+static void aeon_init_free_list(struct super_block *sb,
+				struct free_list *free_list, int index)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long per_list_blocks;
+
+	if (index >= sbi->num_lists) {
+		index -= (sbi->num_lists/2);
+	}
+
+	per_list_blocks = sbi->num_blocks / sbi->num_lists;
+
+	free_list->block_start = per_list_blocks * index;
+	free_list->block_end = free_list->block_start + per_list_blocks - 1;
+
+	sbi->last_addr = free_list->block_end << AEON_SHIFT;
+}
+static void aeon_init_free_list2(struct super_block *sb,
+				struct free_list *free_list, int index)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	unsigned long per_list_blocks;
+
+	index -= (sbi->num_lists/2);
+	if (index >= sbi->num_lists) {
+		index -= (sbi->num_lists/2);
+	}
+	per_list_blocks = sbi->num_blocks / sbi->num_lists;
+
+	free_list->block_start = per_list_blocks * index;
+	free_list->block_end = free_list->block_start + per_list_blocks - 1;
+
+	sbi->last_addr = free_list->block_end << AEON_SHIFT;
+}
+#else
 static void aeon_init_free_list(struct super_block *sb,
 				struct free_list *free_list, int index)
 {
@@ -150,7 +186,52 @@ static void aeon_init_free_list(struct super_block *sb,
 
 	sbi->last_addr = free_list->block_end << AEON_SHIFT;
 }
+#endif
 
+#ifdef CONFIG_AEON_FS_NUMA
+void aeon_init_blockmap(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct rb_root *tree;
+	struct free_list *free_list;
+	struct aeon_range_node *blknode;
+	int ret;
+	int i;
+
+	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = aeon_get_free_list(sb, i);
+		tree = &(free_list->block_free_tree);
+		if (cpu_to_mem(i) == 0) {
+			aeon_dbg("%d : %d\n", cpu_to_mem(i), i);
+			aeon_init_free_list(sb, free_list, i);
+		} else {
+			aeon_dbg("%d : %d\n", cpu_to_mem(i), i);
+			aeon_init_free_list2(sb, free_list, i);
+		}
+
+		free_list->num_free_blocks = free_list->block_end -
+						free_list->block_start + 1;
+
+		blknode = aeon_alloc_block_node(sb);
+		if (i == 0)
+			blknode->range_low = free_list->block_start + 1;
+		else
+			blknode->range_low = free_list->block_start;
+		blknode->range_high = free_list->block_end;
+		ret = aeon_insert_blocktree(tree, blknode);
+		if (ret) {
+			aeon_err(sb, "%s failed\n", __func__);
+			aeon_free_block_node(blknode);
+			return;
+		}
+		free_list->first_node = blknode;
+		free_list->last_node = blknode;
+		free_list->num_blocknode = 1;
+		aeon_dbg("%lu - %lu\n", free_list->block_start, free_list->block_end);
+	}
+}
+#else
 void aeon_init_blockmap(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -186,6 +267,7 @@ void aeon_init_blockmap(struct super_block *sb)
 		free_list->num_blocknode = 1;
 	}
 }
+#endif
 
 static inline
 int aeon_rbtree_compare_rangenode(struct aeon_range_node *curr,
@@ -356,14 +438,23 @@ int aeon_insert_blocks_into_free_list(struct super_block *sb,
 
 	if (num <= 0) {
 		aeon_err(sb, "less zero blocks can't be freed\n");
+		dump_stack();
+		BUG();
 		return -EINVAL;
 	}
 
+	if (blocknr >= sbi->per_list_blocks * sbi->cpus) {
+	aeon_dbg("blocknr %lu : per %lu\n", blocknr, sbi->per_list_blocks);
+		BUG();
+	}
+
+	AEON_ERR(1);
 	curr_node = aeon_alloc_block_node(sb);
 	if (curr_node == NULL)
 		return -ENOMEM;
 
 	cpu_id = blocknr / sbi->per_list_blocks;
+	aeon_dbg("cpu id %d\n", cpu_id);
 	free_list = aeon_get_free_list(sb, cpu_id);
 	art = aeon_get_rtable(sb, cpu_id);
 	spin_lock(&free_list->s_lock);
@@ -373,6 +464,7 @@ int aeon_insert_blocks_into_free_list(struct super_block *sb,
 	num_blocks = aeon_get_numblocks(btype) * num;
 	block_low = blocknr;
 	block_high = blocknr + num_blocks - 1;
+	AEON_ERR(1);
 
 	if (blocknr < free_list->block_start ||
 	    blocknr + num > free_list->block_end + 1) {
@@ -385,6 +477,7 @@ int aeon_insert_blocks_into_free_list(struct super_block *sb,
 		goto out;
 	}
 
+	AEON_ERR(1);
 	ret = aeon_find_free_slot(tree, block_low, block_high, &prev, &next);
 	if (ret) {
 		aeon_err(sb, "find free slot fail: %d\n", ret);
@@ -685,6 +778,7 @@ alloc:
 
 	*blocknr = new_blocknr;
 
+	memset(((void *)((*blocknr<<AEON_SHIFT) + (u64)sbi->virt_addr)), 0, ret_blocks * 4096);
 	return ret_blocks / aeon_get_numblocks(btype);
 }
 
@@ -834,7 +928,7 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
 		addr = (u64)sbi->virt_addr + (blocknr<<AEON_SHIFT);
-		memset((void *)addr, 0, 256);
+		memset((void *)addr, 0, allocated * 4096);
 		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		art->i_allocated = 1;

@@ -72,6 +72,9 @@ case "$1" in
   set)
     nvdimm_set
     ;;
+  set2)
+    nvdimm_set2
+    ;;
   xfs)
     xfs
     ;;
