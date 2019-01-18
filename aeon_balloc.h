@@ -79,21 +79,21 @@ static inline struct free_list *aeon_get_numa_list(struct super_block *sb)
 }
 
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,
-						   int cpu)
+						   int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
+	int numa_id = cpu_to_mem(cpu_id);
+	int list_id = cpu_id;
 	int i;
-	int j;
 
-	/* TODO */
-	for (i = 0; i < sbi->numa_nodes; i++) {
-		for (j = 0; j < sbi->cpus/sbi->numa_nodes; j++) {
-			if (cpu == sbi->nm[i].free_lists[j].index)
-				return &sbi->nm[i].free_lists[j];
+	for (i = 0; i < sbi->num_lists; i++) {
+		if (cpu_id == sbi->nm[numa_id].free_lists[i].index) {
+			list_id = i;
+			break;
 		}
 	}
 
-	return NULL;
+	return &sbi->nm[numa_id].free_lists[list_id];
 }
 #else
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,

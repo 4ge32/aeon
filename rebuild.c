@@ -656,6 +656,9 @@ int aeon_rebuild_dir_inode_tree(struct super_block *sb, struct aeon_inode *pi,
 	int ca = 0; /* the number of candidate dentries */
 	int p_state = NOT_FOUND;
 
+	if (sih->de_info)
+		return 0;
+
 	de_info = kzalloc(sizeof(struct aeon_dentry_info), GFP_KERNEL);
 	if (!de_info)
 		return -ENOMEM;

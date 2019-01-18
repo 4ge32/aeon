@@ -431,7 +431,7 @@ aeon_free_extents_blocks(struct super_block *sb,
 	int err;
 	int i;
 
-	aeh += (depth-1);
+	aeh += depth;
 	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT; i++) {
 		blocknr = le64_to_cpu(aeh->eh_extent_blocks[i]);
 		err = aeon_insert_blocks_into_free_list(sb, blocknr, 1, 0);
@@ -490,7 +490,7 @@ next:
 	}
 
 	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT-1; i++) {
-		freed_blocknr = aeh->eh_extent_blocks[i];
+		freed_blocknr = le32_to_cpu(aeh->eh_extent_blocks[i]);
 		if (!freed_blocknr)
 			goto end;
 

@@ -58,11 +58,11 @@ int aeon_alloc_block_free_lists(struct super_block *sb)
 			if (cpu_to_mem(cpu_id) != numa_id)
 				continue;
 
-			aeon_dbg("%d,%d,%d numa %d cpuid %d\n",
-				 numa_id, cpu_id,
-				 nm->numa_id,
-				 nm->free_lists[list_id].numa_index,
-				 nm->free_lists[list_id].index);
+			aeon_dbgv("%d,%d,%d numa %d cpuid %d\n",
+				  numa_id, cpu_id,
+				  nm->numa_id,
+				  nm->free_lists[list_id].numa_index,
+				  nm->free_lists[list_id].index);
 			list_id++;
 		}
 	}
@@ -839,7 +839,6 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		art->i_allocated = 1;
 		art->i_head_ino = cpu_to_le32(ino);
-		imem_cache_create(sbi, inode_map, blocknr, ino, 0);
 	} else
 		blocknr = le64_to_cpu(art->i_blocknr);
 
