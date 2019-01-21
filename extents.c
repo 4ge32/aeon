@@ -223,15 +223,11 @@ struct aeon_extent
 	if (!entries)
 		goto out;
 
-#ifndef USE_RB
-	ret = aeon_linear_search_extent(sb, sih, aeh, iblock);
-#else
 	if (entries < PI_MAX_INTERNAL_EXTENT + 1) {
 		ret = aeon_linear_search_extent(sb, sih, aeh, iblock);
 		goto out;
 	}
 	ret = aeon_rb_search_extent(sb, sih, iblock);
-#endif
 out:
 	return ret;
 }
@@ -293,9 +289,6 @@ aeon_insert_extenttree(struct super_block *sb,
 		       struct aeon_inode_info_header *sih,
 		       struct aeon_extent_header *aeh, struct aeon_extent *ae)
 {
-#ifndef USE_RB
-	return 0;
-#else
 	struct aeon_range_node *node = NULL;
 	int entries;
 	int err;
@@ -330,7 +323,6 @@ aeon_insert_extenttree(struct super_block *sb,
 	}
 
 	return 0;
-#endif
 }
 
 int
@@ -404,10 +396,6 @@ aeon_remove_extenttree(struct super_block *sb,
 	struct aeon_range_node *ret_node = NULL;
 	bool found = false;
 
-#ifndef USE_RB
-	return 0;
-
-#else
 	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
 	if (!found) {
 		aeon_err(sb, "%s target not found: %lu\n", __func__, offset);
@@ -419,7 +407,6 @@ aeon_remove_extenttree(struct super_block *sb,
 	aeon_free_extent_node(ret_node);
 
 	return 0;
-#endif
 }
 
 static int
@@ -522,10 +509,7 @@ next:
 
 end:
 	aeh->eh_entries = 0;
-
-#ifdef USE_RB
 	aeon_destroy_range_node_tree(sb, &sih->rb_tree);
-#endif
 
 	return 0;
 }
