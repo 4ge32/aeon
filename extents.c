@@ -38,14 +38,12 @@ u64 aeon_pull_extent_addr(struct super_block *sb,
 		return addr;
 	}
 
-	return (u64)aeon_search_extent(sb, sih, index);
-
 	if (le16_to_cpu(aeh->eh_depth))
 		return (u64)aeon_search_extent(sb, sih, index);
 
 	internal_index = index - PI_MAX_INTERNAL_EXTENT;
 	num_exblock = internal_index / AEON_EXTENT_PER_PAGE;
-	if (num_exblock < 0 || PI_MAX_EXTERNAL_EXTENT-1 <= num_exblock) {
+	if (num_exblock < 0 || PI_MAX_EXTERNAL_EXTENT <= num_exblock) {
 		aeon_err(sb, "out of bounds in extent header\n");
 		return 0;
 	}
@@ -168,11 +166,11 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	return (struct aeon_extent *)addr;
 }
 
-static struct aeon_extent
-*aeon_linear_search_extent(struct super_block *sb,
-			   struct aeon_inode_info_header *sih,
-			   struct aeon_extent_header *aeh,
-			   unsigned long iblock)
+static
+struct aeon_extent *aeon_linear_search_extent(struct super_block *sb,
+					      struct aeon_inode_info_header *sih,
+					      struct aeon_extent_header *aeh,
+					      unsigned long iblock)
 {
 	struct aeon_extent *ae;
 	unsigned int offset;
@@ -436,9 +434,6 @@ aeon_free_extents_blocks(struct super_block *sb,
 	aeh += depth;
 	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT; i++) {
 		blocknr = le64_to_cpu(aeh->eh_extent_blocks[i]);
-		if (!blocknr)
-			return 0;
-
 		err = aeon_insert_blocks_into_free_list(sb, blocknr, 1, 0);
 		if (err) {
 			AEON_ERR(err);
@@ -467,7 +462,6 @@ aeon_delete_extenttree(struct super_block *sb,
 	/* TODO:
 	 * Free allocated extent pages if the inode has
 	 */
-	aeon_dbg("1 - !!!!!!!!!!!\n");
 	entries = le16_to_cpu(aeh->eh_entries);
 	while (entries > 0) {
 		addr = aeon_pull_extent_addr(sb, sih, index);
@@ -484,12 +478,6 @@ aeon_delete_extenttree(struct super_block *sb,
 		ae->ex_offset = 0;
 		if (freed_blocknr == 0)
 			goto next;
-		if (freed_blocknr >= AEON_SB(sb)->cpus * AEON_SB(sb)->per_list_blocks) {
-			aeon_dbg("inde %d\n", index);
-			aeon_dbg("num %d\n", num);
-			aeon_dbg("dep %d\n", aeh->eh_depth);
-		}
-
 		err = aeon_insert_blocks_into_free_list(sb, freed_blocknr, num, 0);
 		if (err) {
 			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
@@ -501,13 +489,8 @@ next:
 		entries--;
 	}
 
-	aeon_dbg("2 - !!!!!!!!!!!\n");
 	for (i = 0; i < PI_MAX_EXTERNAL_EXTENT-1; i++) {
 		freed_blocknr = le32_to_cpu(aeh->eh_extent_blocks[i]);
-		if (freed_blocknr >= AEON_SB(sb)->cpus * AEON_SB(sb)->per_list_blocks) {
-			aeon_dbg("2num %d\n", i);
-			aeon_dbg("2dep %d\n", aeh->eh_depth);
-		}
 		if (!freed_blocknr)
 			goto end;
 
@@ -518,7 +501,6 @@ next:
 		}
 	}
 
-	aeon_dbg("3 - !!!!!!!!!!!\n");
 	if (le16_to_cpu(aeh->eh_depth)) {
 		struct aeon_sb_info *sbi = AEON_SB(sb);
 		u64 next;
@@ -527,9 +509,6 @@ next:
 		int i;
 
 		blocknr = le64_to_cpu(aeh->eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT-1]);
-		if (!blocknr)
-			goto end;
-
 		next = (u64)sbi->virt_addr + (blocknr<<AEON_SHIFT);
 		aehpp = (struct aeon_extent_header *)next;
 		for (i = 0; i < le16_to_cpu(aeh->eh_depth); i++) {
