@@ -147,9 +147,7 @@ static inline struct aeon_inode_info *AEON_I(struct inode *inode)
 static inline
 u64 aeon_get_reserved_inode_addr(struct super_block *sb, u64 inode_number)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return aeon_get_addr_off(sbi) + AEON_SB_SIZE +
+	return AEON_HEAD(sb) + AEON_SB_SIZE +
 		(inode_number % 32 - 1) * AEON_INODE_SIZE;
 }
 

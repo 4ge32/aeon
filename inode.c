@@ -85,7 +85,7 @@ int aeon_get_inode_address(struct super_block *sb,
 		return -ENOENT;
 	}
 
-	*pi_addr = (u64)sbi->virt_addr + addr;
+	*pi_addr = AEON_HEAD(sb) + addr;
 
 	pi = (struct aeon_inode *)(*pi_addr);
 	if (ino != le32_to_cpu(pi->aeon_ino)) {
@@ -140,16 +140,15 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 				       struct inode *inode,
 				       struct aeon_mdata *am)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_inode *pidir = am->pidir;
 	u64 i_addr_offset;
 	u64 d_addr_offset;
 	u64 p_addr_offset;
 
-	i_addr_offset = am->pi_addr - (u64)sbi->virt_addr;
-	d_addr_offset = am->de_addr - (u64)sbi->virt_addr;
-	p_addr_offset = (u64)pidir - (u64)sbi->virt_addr;
+	i_addr_offset = am->pi_addr - AEON_HEAD(sb);
+	d_addr_offset = am->de_addr - AEON_HEAD(sb);
+	p_addr_offset = (u64)pidir  - AEON_HEAD(sb);
 
 	aeon_memunlock_inode(sb, pi);
 
@@ -299,42 +298,35 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid,
 	return 0;
 }
 
-static u64 search_imem_addr(struct aeon_sb_info *sbi,
-			    struct inode_map *inode_map, u32 ino)
+static u64 search_imem_addr(struct super_block *sb, int cpu_id, u32 ino)
 {
-	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct aeon_region_table *art = aeon_get_rtable(sb, cpu_id);
 	unsigned long blocknr;
 	unsigned long internal_ino;
-	int cpu_id;
 	u64 addr;
-
-	cpu_id = ino % sbi->cpus;
-	if (cpu_id >= sbi->cpus)
-		cpu_id -= sbi->cpus;
 
 	internal_ino = (((ino - cpu_id) / sbi->cpus) %
 			AEON_I_NUM_PER_PAGE);
 
 	blocknr = le64_to_cpu(art->i_blocknr);
-	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
-					(internal_ino << AEON_I_SHIFT);
+	addr = AEON_HEAD(sb) + (blocknr << AEON_SHIFT) +
+				(internal_ino << AEON_I_SHIFT);
 
 	aeon_dbgv("%s ino %u addr 0x%llx\n", __func__, ino, addr);
 	return addr;
 }
 
 static int aeon_get_new_inode_address(struct super_block *sb, u32 free_ino,
-				      u64 *pi_addr, int cpuid,
-				      struct inode_map *inode_map)
+				      u64 *pi_addr, int cpuid)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long ret;
 
 	ret = aeon_get_new_inode_block(sb, cpuid, free_ino);
 	if (ret <= 0)
 		goto err;
 
-	*pi_addr = search_imem_addr(sbi, inode_map, free_ino);
+	*pi_addr = search_imem_addr(sb, cpuid, free_ino);
 	if (*pi_addr == 0)
 		goto err;
 
@@ -397,8 +389,7 @@ int aeon_new_aeon_inode(struct super_block *sb, struct aeon_mdata *am)
 		return err;
 	}
 
-	err = aeon_get_new_inode_address(sb, free_ino, &pi_addr,
-					 cpu_id, inode_map);
+	err = aeon_get_new_inode_address(sb, free_ino, &pi_addr, cpu_id);
 	if (err) {
 		aeon_err(sb, "%s: get inode addr failed %d\n", __func__, err);
 		mutex_unlock(&inode_map->inode_table_mutex);

@@ -790,7 +790,7 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	return allocated;
 }
 
-static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,
+static void aeon_register_next_inode_block(struct super_block *sb,
 					   struct inode_map *inode_map,
 					   struct aeon_region_table *art,
 					   unsigned long blocknr)
@@ -798,7 +798,7 @@ static void aeon_register_next_inode_block(struct aeon_sb_info *sbi,
 	struct aeon_inode *pi;
 	unsigned long prev_blocknr = le64_to_cpu(art->i_blocknr);
 
-	pi = (struct aeon_inode *)((u64)sbi->virt_addr +
+	pi = (struct aeon_inode *)(AEON_HEAD(sb) +
 				   (prev_blocknr << AEON_SHIFT) +
 				   (AEON_INODE_SIZE));
 
@@ -821,7 +821,6 @@ static void imem_cache_create(struct aeon_sb_info *sbi,
 
 u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	unsigned long allocated;
@@ -833,9 +832,9 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
-		addr = (u64)sbi->virt_addr + (blocknr<<AEON_SHIFT);
+		addr = AEON_HEAD(sb) + (blocknr<<AEON_SHIFT);
 		memset((void *)addr, 0, 256);
-		aeon_register_next_inode_block(sbi, inode_map, art, blocknr);
+		aeon_register_next_inode_block(sb, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
 		art->i_allocated = 1;
 		art->i_head_ino = cpu_to_le32(ino);
@@ -849,14 +848,15 @@ out:
 	return 0;
 }
 
-static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
+static void do_aeon_init_new_inode_block(struct super_block *sb,
 					 int cpu_id, u32 ino)
 {
-	struct inode_map *inode_map = aeon_get_inode_map(sbi->sb, cpu_id);
-	struct free_list *free_list = aeon_get_free_list(sbi->sb, cpu_id);
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+	struct inode_map *inode_map = aeon_get_inode_map(sb, cpu_id);
+	struct free_list *free_list = aeon_get_free_list(sb, cpu_id);
 	struct rb_root *tree;
 	struct rb_node *temp;
-	u64 addr = (u64)sbi->virt_addr + AEON_SB_SIZE + AEON_INODE_SIZE;
+	u64 addr = AEON_HEAD(sb) + AEON_SB_SIZE + AEON_INODE_SIZE;
 	__le64 *table_blocknr;
 	struct aeon_range_node *node;
 	unsigned long blocknr = 0;
@@ -868,7 +868,7 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 		table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 		blocknr = le64_to_cpu(*table_blocknr);
 		inode_map->i_table_addr = (void *)((blocknr << AEON_SHIFT) +
-						   (u64)sbi->virt_addr);
+						   AEON_HEAD(sb));
 		art = AEON_R_TABLE(inode_map);
 		free_list->num_free_blocks = le64_to_cpu(art->num_free_blocks);
 		return;
@@ -881,7 +881,7 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	node = container_of(temp, struct aeon_range_node, node);
 
 	blocknr = node->range_low;
-	temp_addr = (blocknr << AEON_SHIFT) + (u64)sbi->virt_addr;
+	temp_addr = (blocknr << AEON_SHIFT) + AEON_HEAD(sb);
 	memset((void *)temp_addr, 0, 4096 * AEON_PAGES_FOR_INODE);
 	node->range_low += AEON_PAGES_FOR_INODE;
 
@@ -893,28 +893,26 @@ static void do_aeon_init_new_inode_block(struct aeon_sb_info *sbi,
 	spin_unlock(&free_list->s_lock);
 
 	inode_map->i_table_addr = (void *)((*table_blocknr << AEON_SHIFT) +
-					   (u64)sbi->virt_addr);
+					   AEON_HEAD(sb));
 	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 }
 
 void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	int i;
 
-	for (i = 0; i < sbi->cpus; i++)
-		do_aeon_init_new_inode_block(sbi, i, ino + i);
+	for (i = 0; i < AEON_SB(sb)->cpus; i++)
+		do_aeon_init_new_inode_block(sb, i, ino + i);
 }
 
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = AEON_PAGES_FOR_DENTRY;
 
 	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
-	*de_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
+	*de_addr = AEON_HEAD(sb) + (blocknr << AEON_SHIFT);
 	memset((void *)(*de_addr), 0, allocated * 4096);
 
 	return blocknr;
@@ -922,14 +920,12 @@ unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr)
 
 unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
 
 	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
-
-	*pi_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
+	*pi_addr = AEON_HEAD(sb) + (blocknr << AEON_SHIFT);
 
 	return blocknr;
 }
@@ -973,7 +969,6 @@ u64 aeon_get_new_blk(struct super_block *sb, int cpu_id)
  */
 u64 aeon_get_xattr_blk(struct super_block *sb)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned long allocated;
 	unsigned long blocknr = 0;
 	int num_blocks = 1;
@@ -986,7 +981,7 @@ u64 aeon_get_xattr_blk(struct super_block *sb)
 	}
 
 	addr = blocknr << AEON_SHIFT;
-	memset((void *)((u64)sbi->virt_addr + addr), 0, 1<<AEON_SHIFT);
+	memset((void *)(AEON_HEAD(sb) + addr), 0, 1<<AEON_SHIFT);
 
 	return addr;
 }
@@ -994,7 +989,6 @@ u64 aeon_get_xattr_blk(struct super_block *sb)
 u64 aeon_get_new_extents_header_block(struct super_block *sb,
 				      struct aeon_extent_header *prev)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_extent_header *aeh;
 	unsigned long num_blocks = 2;
 	unsigned long allocated;
@@ -1010,7 +1004,7 @@ u64 aeon_get_new_extents_header_block(struct super_block *sb,
 
 	header_addr = (blocknr<<AEON_SHIFT);
 	extent_addr = (blocknr+1)<<AEON_SHIFT;
-	aeh = (struct aeon_extent_header *)(header_addr + (u64)sbi->virt_addr);
+	aeh = (struct aeon_extent_header *)(header_addr + AEON_HEAD(sb));
 	memset((void *)aeh, 0, 4096);
 	aeh->eh_entries = 0;
 	aeh->eh_depth = 0;

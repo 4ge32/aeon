@@ -78,7 +78,7 @@ static void aeon_put_super(struct super_block *sb)
 		aeon_destroy_range_node_tree(sb, &inode_map->inode_inuse_tree);
 	}
 
-	if (sbi->virt_addr) {
+	if (AEON_HEAD(sb)) {
 		/* Save everything before blocknode mapping! */
 	}
 
@@ -279,7 +279,9 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
-	aeon_info("head addr 0x%llx\n", (u64)virt_addr);
+	aeon_dbgv("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
+		  __func__, sbi->s_bdev->bd_disk->disk_name,
+		  sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
 
 	return 0;
 }
@@ -485,7 +487,7 @@ static void aeon_fill_region_table(struct super_block *sb)
 			art->i_allocated = cpu_to_le32(1);
 			art->i_head_ino = cpu_to_le32(inode_start);
 			blocknr = (((u64)inode_map->i_table_addr -
-				   (u64)sbi->virt_addr) >> AEON_SHIFT);
+				   AEON_HEAD(sb)) >> AEON_SHIFT);
 			art->i_blocknr = cpu_to_le64(blocknr);
 			art->this_block = cpu_to_le64(blocknr);
 

@@ -114,12 +114,11 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 					struct aeon_inode **c_pi,
 					struct aeon_dentry **c_de, int err)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
 	if (fs_persisted)
 		return 0;
 
 	if (err == CHILD_PERSIST) {
+		struct aeon_sb_info *sbi = AEON_SB(sb);
 		struct opaque_list *oq;
 
 		mutex_lock(&sbi->s_lock);
@@ -145,20 +144,20 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 
 		/* recover from inode */
 		addr = le64_to_cpu((*c_pi)->i_pinode_addr);
-		tmp = (void *)((u64)sbi->virt_addr + addr);
+		tmp = (void *)(AEON_HEAD(sb) + addr);
 		if ((struct aeon_inode *)tmp != p_pi)
 			(*c_pi)->i_pinode_addr = p_pi->i_inode_addr;
 
 		addr =  le64_to_cpu((*c_pi)->i_inode_addr);
-		tmp = (void *)((u64)sbi->virt_addr + addr);
+		tmp = (void *)(AEON_HEAD(sb) + addr);
 		if (unlikely((struct aeon_inode *)tmp != (*c_pi))) {
 			addr = (u64)(*c_pi);
-			(*c_pi)->i_inode_addr = addr - (u64)sbi->virt_addr;
+			(*c_pi)->i_inode_addr = addr - AEON_HEAD(sb);
 		}
 
 		if (pi_has_valid_de_addr(sb, *c_pi)) {
 			addr = le64_to_cpu((*c_pi)->i_dentry_addr);
-			tmp = (void *)((u64)sbi->virt_addr + addr);
+			tmp = (void *)(AEON_HEAD(sb) + addr);
 			aeon_rebuild_dentry(tmp, *c_de, *c_pi);
 			*c_de = (struct aeon_dentry *)tmp;
 		} else
@@ -169,7 +168,7 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 		u64 addr;
 
 		addr = le64_to_cpu((*c_pi)->i_dentry_addr);
-		tmp = (struct aeon_dentry *)((u64)sbi->virt_addr + addr);
+		tmp = (struct aeon_dentry *)(AEON_HEAD(sb) + addr);
 
 		ino = le32_to_cpu((*c_pi)->aeon_ino);
 		aeon_info("Recover dentry (ino:%lu)\n", ino);
@@ -182,7 +181,7 @@ static unsigned long aeon_recover_child(struct super_block *sb,
 		u64 addr;
 
 		addr = le64_to_cpu((*c_de)->d_inode_addr);
-		tmp = (struct aeon_inode *)((u64)sbi->virt_addr + addr);
+		tmp = (struct aeon_inode *)(AEON_HEAD(sb) + addr);
 
 		ino = le32_to_cpu((*c_pi)->aeon_ino);
 		aeon_info("Recover dentry (ino:%lu)\n", ino);
@@ -433,9 +432,9 @@ out:
 		return err;
 	}
 
-	d_addr_base = (u64)negative_dentry - (u64)sbi->virt_addr;
-	p_addr_base = (u64)pidir - (u64)sbi->virt_addr;
-	i_addr_base = addr - (u64)sbi->virt_addr;
+	d_addr_base = (u64)negative_dentry - AEON_HEAD(sb);
+	p_addr_base = (u64)pidir - AEON_HEAD(sb);
+	i_addr_base = addr - AEON_HEAD(sb);
 	negative_dentry->d_dentry_addr = d_addr_base;
 	negative_dentry->d_pinode_addr = p_addr_base;
 	negative_dentry->d_inode_addr = i_addr_base;
@@ -460,7 +459,6 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 			int num_candidate_dentries,
 			struct i_valid_list *ivl)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pidir = aeon_get_inode(sb, sih);
 	struct aeon_dentry *d;
 	struct aeon_dentry_info *de_info = sih->de_info;
@@ -477,7 +475,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 	}
 
 	/* Skip dot and dotdot direntry */
-	d = (struct aeon_dentry *)((u64)sbi->virt_addr +
+	d = (struct aeon_dentry *)(AEON_HEAD(sb) +
 				   (i_dentry_tb << AEON_SHIFT));
 	next_block = le64_to_cpu(d->d_next_dentry_block);
 
@@ -491,7 +489,7 @@ do_aeon_rebuild_dirtree(struct super_block *sb,
 			struct aeon_dentry_invalid *adi;
 			int found;
 
-			d = (struct aeon_dentry *)((u64)sbi->virt_addr +
+			d = (struct aeon_dentry *)(AEON_HEAD(sb) +
 						   (i_dentry_tb << AEON_SHIFT) +
 						   (i << AEON_D_SHIFT));
 			if (i == 0)
@@ -581,7 +579,7 @@ aeon_recover_child_again(struct super_block *sb, struct aeon_inode *pi,
 	unsigned long links;
 	unsigned long entries;
 	unsigned int candidate = 0;
-	u64 paddr = (u64)pi - (u64)sbi->virt_addr;
+	u64 paddr = (u64)pi - AEON_HEAD(sb);
 	int err;
 
 	list_for_each_entry(oq, &sbi->oq->opaque_list, opaque_list) {
@@ -740,11 +738,12 @@ out:
 }
 
 static unsigned int
-imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
+imem_cache_rebuild(struct super_block *sb, struct inode_map *inode_map,
 		   unsigned long blocknr, u32 start_ino,
 		   unsigned int allocated,  unsigned long *next_blocknr,
 		   int space, int cpu_id)
 {
+	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi;
 	struct imem_cache *im;
 	struct imem_cache *init;
@@ -753,7 +752,7 @@ imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
 	struct i_valid_child_list *ivcl = NULL;
 	struct i_valid_child_list *ivcl_init;
 	struct aeon_region_table *art;
-	u64 virt_addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT);
+	u64 virt_addr = AEON_HEAD(sb) + (blocknr << AEON_SHIFT);
 	u32 ino = start_ino;
 	u32 ino_off = sbi->cpus;
 	int i;
@@ -796,7 +795,7 @@ imem_cache_rebuild(struct aeon_sb_info *sbi, struct inode_map *inode_map,
 			if (ino != le32_to_cpu(pi->aeon_ino))
 				goto next;
 
-			addr = (u64)sbi->virt_addr + cpu_to_le64(pi->i_inode_addr);
+			addr = AEON_HEAD(sb) + cpu_to_le64(pi->i_inode_addr);
 			if ((u64)pi != addr)
 				goto next;
 
@@ -865,15 +864,14 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 	mutex_lock(&inode_map->inode_table_mutex);
 
 	art = AEON_R_TABLE(inode_map);
-	offset = ((u64)inode_map->i_table_addr -
-			(u64)sbi->virt_addr) >> AEON_SHIFT;
+	offset = ((u64)inode_map->i_table_addr - AEON_HEAD(sb)) >> AEON_SHIFT;
 	allocated = le64_to_cpu(art->allocated);
 
 	/* the first page for inode contains inode_table
 	 * so it leaves space of a inode size between head
 	 * of page and firtst inode (last argument).
 	 */
-	ret = imem_cache_rebuild(sbi, inode_map, offset, ino,
+	ret = imem_cache_rebuild(sb, inode_map, offset, ino,
 				 allocated, &blocknr, 1, cpu_id);
 	allocated -= ret;
 	offset = blocknr;
@@ -881,7 +879,7 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 
 	for (i = 1; i < le32_to_cpu(art->i_num_allocated_pages) /
 					AEON_PAGES_FOR_INODE; i++) {
-		ret = imem_cache_rebuild(sbi, inode_map, offset, ino,
+		ret = imem_cache_rebuild(sb, inode_map, offset, ino,
 					 allocated, &blocknr, 0, cpu_id);
 		allocated -= ret;
 		offset = blocknr;

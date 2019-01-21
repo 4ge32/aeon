@@ -9,10 +9,8 @@
 static inline
 struct aeon_xattr_header *HDR(struct super_block *sb, u64 blocknr)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return (struct aeon_xattr_header *)((u64)sbi->virt_addr +
-					   (blocknr << AEON_SHIFT));
+	return (struct aeon_xattr_header *)(AEON_HEAD(sb) +
+					    (blocknr<<AEON_SHIFT));
 }
 
 static inline
@@ -24,17 +22,14 @@ struct aeon_xattr_header *_HDR(u64 addr)
 static inline
 struct aeon_xattr_entry *ENTRY(struct super_block *sb, u64 blocknr, int offset)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return (struct aeon_xattr_entry *)((u64)sbi->virt_addr +
+	return (struct aeon_xattr_entry *)(AEON_HEAD(sb) +
 					   (blocknr << AEON_SHIFT) + offset);
 }
 
 static inline
-struct aeon_xattr_entry *FIRST_ENTRY(struct super_block *sb, u64 blocknr) {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return (struct aeon_xattr_entry *)((u64)sbi->virt_addr +
+struct aeon_xattr_entry *FIRST_ENTRY(struct super_block *sb, u64 blocknr)
+{
+	return (struct aeon_xattr_entry *)(AEON_HEAD(sb) +
 					   (blocknr << AEON_SHIFT) +
 					   sizeof(struct aeon_xattr_header));
 }
@@ -47,10 +42,9 @@ struct aeon_xattr_entry *_FIRST_ENTRY(u64 addr)
 }
 
 static inline
-struct aeon_xattr_entry *LAST_ENTRY(struct super_block *sb, u64 blocknr) {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return (struct aeon_xattr_entry *)((u64)sbi->virt_addr +
+struct aeon_xattr_entry *LAST_ENTRY(struct super_block *sb, u64 blocknr)
+{
+	return (struct aeon_xattr_entry *)(AEON_HEAD(sb) +
 					   ((blocknr + 1) << AEON_SHIFT));
 }
 
@@ -144,7 +138,7 @@ int aeon_xattr_get(struct inode *inode, int name_index, const char *name,
 	if (!pi->i_xattr)
 		goto cleanup;
 	blocknr = le64_to_cpu(pi->i_xattr) >> AEON_SHIFT;
-	xattr = le64_to_cpu(pi->i_xattr) + (u64)AEON_SB(sb)->virt_addr;
+	xattr = le64_to_cpu(pi->i_xattr) + AEON_HEAD(sb);
 	header = _HDR(xattr);
 	end = (char *)xattr + 4096;
 	//aeon_dbg("xattr 0x%llx\n", xattr);
@@ -241,14 +235,14 @@ int aeon_xattr_set(struct inode *inode, int name_index, const char *name,
 		u64 addr;
 		xattr = aeon_get_xattr_blk(sb);
 		pi->i_xattr = cpu_to_le64(xattr);
-		addr = (u64)AEON_SB(sb)->virt_addr + xattr;
+		addr = AEON_HEAD(sb) + xattr;
 		header = (struct aeon_xattr_header *)addr;
 		header->h_magic = cpu_to_le32(AEON_XATTR_MAGIC);
 		header->h_blocks = cpu_to_le32(1);
 		rwlock_init(&header->x_lock);
 	}
 
-	xattr = (u64)AEON_SB(sb)->virt_addr + xattr;
+	xattr = AEON_HEAD(sb) + xattr;
 	if (xattr) {
 		/* Check whether header is valid or not. */
 		header = _HDR(xattr);
@@ -499,7 +493,7 @@ aeon_xattr_set2(struct inode *inode, u64 old_addr,
 
 	/* Update the inode. */
 	aeon_get_inode(sb, &AEON_I(inode)->header)->i_xattr =
-		new_addr ? (new_addr - (u64)AEON_SB(sb)->virt_addr) : 0;
+		new_addr ? (new_addr - AEON_HEAD(sb)) : 0;
 	inode->i_ctime = current_time(inode);
 	/* Always keep inode clean */
 	err = sync_inode_metadata(inode, 1);

@@ -25,7 +25,6 @@ static
 struct aeon_dentry *aeon_get_internal_dentry(struct super_block *sb,
 					     struct aeon_dentry_map *de_map)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	unsigned int latest_entry;
 	unsigned int internal_entry;
 	unsigned long head_addr;
@@ -36,8 +35,8 @@ struct aeon_dentry *aeon_get_internal_dentry(struct super_block *sb,
 	head_addr = le64_to_cpu(de_map->block_dentry[latest_entry])<<AEON_SHIFT;
 	internal_offset = internal_entry << AEON_D_SHIFT;
 
-	return (struct aeon_dentry *)((u64)sbi->virt_addr +
-				      head_addr + internal_offset);
+	return (struct aeon_dentry *)
+		(AEON_HEAD(sb) + head_addr + internal_offset);
 }
 
 static
@@ -97,7 +96,6 @@ static int aeon_init_dentry_map(struct super_block *sb,
 static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pi,
 			    struct aeon_inode_info_header *sih, u32 ino)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_dentry *direntry;
 	struct aeon_dentry_info *de_info = sih->de_info;
 	struct aeon_dentry_map *de_map = &de_info->de_map;
@@ -110,8 +108,8 @@ static int aeon_init_dentry(struct super_block *sb, struct aeon_inode *pi,
 	if (blocknr == 0)
 		return -ENOSPC;
 
-	pi_addr = (u64)pi - (u64)sbi->virt_addr;
-	de_addr_base = de_addr - (u64)sbi->virt_addr;
+	pi_addr = (u64)pi - AEON_HEAD(sb);
+	de_addr_base = de_addr - AEON_HEAD(sb);
 	direntry = (struct aeon_dentry *)de_addr;
 	strncpy(direntry->name, ".\0", 2);
 	direntry->name_len = 2;
@@ -155,16 +153,15 @@ static void aeon_register_dentry_to_map(struct super_block *sb,
 					struct aeon_dentry_map *de_map,
 					unsigned long blocknr)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_dentry *de;
 	int global = de_map->num_latest_dentry;
 
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				    (de_map->block_dentry[global]<<AEON_SHIFT));
+	de = (struct aeon_dentry *)
+		(AEON_HEAD(sb) + (de_map->block_dentry[global]<<AEON_SHIFT));
 	de->d_next_dentry_block = cpu_to_le64(blocknr);
 
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
-				    (blocknr<<AEON_SHIFT));
+	de = (struct aeon_dentry *)
+		(AEON_HEAD(sb) + (blocknr<<AEON_SHIFT));
 	de->d_prev_dentry_block = de_map->block_dentry[global];
 
 	de_map->num_latest_dentry = ++global;
@@ -208,10 +205,9 @@ static
 void aeon_fill_dentry_data(struct super_block *sb, struct aeon_dentry *de,
 			   struct aeon_mdata *am, const char *name, int namelen)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-	u64 i_addr_offset = am->pi_addr - (u64)sbi->virt_addr;
-	u64 d_addr_offset = (u64)de - (u64)sbi->virt_addr;
-	u64 i_paddr_offset = (u64)am->pidir - (u64)sbi->virt_addr;
+	u64 i_addr_offset = am->pi_addr - AEON_HEAD(sb);
+	u64 d_addr_offset = (u64)de - AEON_HEAD(sb);
+	u64 i_paddr_offset = (u64)am->pidir - AEON_HEAD(sb);
 
 	de->name_len = le32_to_cpu(namelen);
 	de->ino = cpu_to_le32(am->ino);
@@ -441,7 +437,6 @@ struct aeon_dentry *aeon_find_dentry(struct super_block *sb,
 struct aeon_dentry *aeon_dotdot(struct super_block *sb,
 				struct dentry *dentry)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct dentry *parent = dentry->d_parent;
 	struct inode *inode = d_inode(parent);
 	struct aeon_dentry_map *de_map;
@@ -453,7 +448,7 @@ struct aeon_dentry *aeon_dotdot(struct super_block *sb,
 		return NULL;
 
 	dotdot_block = le64_to_cpu(de_map->block_dentry[0]);
-	de = (struct aeon_dentry *)((u64)sbi->virt_addr +
+	de = (struct aeon_dentry *)(AEON_HEAD(sb) +
 				    (dotdot_block << AEON_SHIFT) +
 				    (1 << AEON_D_SHIFT));
 	return de;
@@ -462,7 +457,7 @@ struct aeon_dentry *aeon_dotdot(struct super_block *sb,
 void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 		   struct inode *inode, int update_times)
 {
-	struct aeon_sb_info *sbi = AEON_SB(dir->i_sb);
+	struct super_block *sb = dir->i_sb;
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(dir->i_sb, sih);
 
@@ -471,10 +466,10 @@ void aeon_set_link(struct inode *dir, struct aeon_dentry *de,
 	 */
 	dir->i_ino = le32_to_cpu(pi->aeon_ino);
 	de->ino = pi->aeon_ino;
-	de->d_inode_addr = cpu_to_le64(sih->pi_addr - (u64)sbi->virt_addr);
-	de->d_pinode_addr = (u64)pi - (u64)sbi->virt_addr;
+	de->d_inode_addr = cpu_to_le64(sih->pi_addr - AEON_HEAD(sb));
+	de->d_pinode_addr = (u64)pi - AEON_HEAD(sb);
 	aeon_update_dentry_csum(de);
-	pi->i_dentry_addr = cpu_to_le64((u64)de - (u64)sbi->virt_addr);
+	pi->i_dentry_addr = cpu_to_le64((u64)de - AEON_HEAD(sb));
 	aeon_update_inode_csum(pi);
 
 	aeon_flush_buffer(de, sizeof(*de), 1);
@@ -514,7 +509,6 @@ int aeon_empty_dir(struct inode *inode)
 int aeon_free_cached_dentry_blocks(struct super_block *sb,
 				   struct aeon_inode_info_header *sih)
 {
-	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_dentry_map *de_map;
 	struct aeon_dentry *de;
 	unsigned long blocknr;
@@ -531,9 +525,8 @@ int aeon_free_cached_dentry_blocks(struct super_block *sb,
 	for (global = 1; global <= de_map->num_latest_dentry; global++) {
 		free = true;
 		blocknr = de_map->block_dentry[global];
-		//aeon_dbg("blocknr %lu\n", blocknr);
 		for (internal = 0; internal < AEON_INTERNAL_ENTRY; internal++) {
-			de = (struct aeon_dentry *)(sbi->virt_addr +
+			de = (struct aeon_dentry *)(AEON_HEAD(sb) +
 						    (blocknr << AEON_SHIFT) +
 						    (internal << AEON_D_SHIFT));
 			if (de->valid) {
@@ -594,7 +587,7 @@ int aeon_get_dentry_address(struct super_block *sb,
 		return -ENOENT;
 	}
 
-	*de_addr = (u64)sbi->virt_addr + addr;
+	*de_addr = AEON_HEAD(sb) + addr;
 	de = (struct aeon_dentry *)(*de_addr);
 	if (pi->aeon_ino != de->ino) {
 		u32 pi_ino = le32_to_cpu(pi->aeon_ino);

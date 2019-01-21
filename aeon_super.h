@@ -152,13 +152,14 @@ static inline u64 aeon_get_block_off(struct super_block *sb,
 }
 
 #ifdef CONFIG_AEON_FS_NUMA
-static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi, int numa_id)
+static inline u64 AEON_HEAD(struct super_block *sb, int numa_id)
 {
+	return -1;
 }
 #else
-static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi)
+static inline u64 AEON_HEAD(struct super_block *sb)
 {
-	return (u64)sbi->virt_addr;
+	return (u64)AEON_SB(sb)->virt_addr;
 }
 #endif
 
