@@ -34,6 +34,15 @@ struct i_valid_child_list {
 	struct	list_head i_valid_child_list;
 };
 
+struct inode_map {
+	struct mutex		inode_table_mutex;
+	struct rb_root		inode_inuse_tree;
+	unsigned long		num_range_node_inode;
+	struct aeon_range_node	*first_inode_range;
+	struct imem_cache	*im;
+	void			*i_table_addr;
+};
+
 struct aeon_extent_header {
 	__le16  eh_entries;
 	__le16  eh_depth;
@@ -176,6 +185,53 @@ struct aeon_inode *aeon_get_inode(struct super_block *sb,
 	return (struct aeon_inode *)addr;
 }
 
+static inline
+struct imem_cache *aeon_alloc_icache(struct super_block *sb)
+{
+	return (struct imem_cache *)aeon_alloc_inode_node(sb);
+}
+
+static inline
+void aeon_free_icache(struct imem_cache *im)
+{
+	aeon_free_inode_node((struct aeon_range_node *)im);
+}
+
+static inline struct inode_map *aeon_alloc_inode_maps(struct super_block *sb)
+{
+
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	return alloc_percpu(struct inode_map);
+#else
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return kcalloc(sbi->cpus, sizeof(struct inode_map), GFP_KERNEL);
+#endif
+}
+
+static inline struct inode_map *aeon_get_inode_map(struct super_block *sb,
+						   int cpu_id)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	return per_cpu_ptr(sbi->inode_maps, cpu_id);
+#else
+	return &sbi->inode_maps[cpu_id];
+#endif
+}
+
+static inline void aeon_free_inode_maps(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
+	free_percpu(sbi->inode_maps);
+#else
+	kfree(sbi->inode_maps);
+#endif
+}
+
 /*
  * This function only is called from ioctl.c for the purpose of
  * file system test so far.
@@ -213,7 +269,6 @@ static inline void aeon_update_inode_csum(struct aeon_inode *pi)
 					(unsigned char *)pi,
 					AEON_INODE_CSIZE));
 }
-
 
 int aeon_init_inode_inuse_list(struct super_block *sb);
 int aeon_get_inode_address(struct super_block *sb,

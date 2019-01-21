@@ -1,5 +1,5 @@
 #
-# Makefile for the linux filesystem.
+# Makefile for the linux filesystem, AEON.
 #
 
 CONFIG_AEON_FS_XATTR=y
@@ -12,9 +12,12 @@ CONFIG_AEON_FS_SECURITY=y
 # and CONFIG_AEON_FS_NUMA are enabled,
 # file system uses the code for numa so far.
 #
+# Not working numa correctly in this version.
+# 4ge32/aeon-gevanni repo was used for
+# the experiment with real numa nvdimm architecture machine.
 #CONFIG_AEON_FS_PERCPU_FREELIST=y
-CONFIG_AEON_FS_NUMA=y
-CONFIG_AEON_FS_PERCPU_INODEMAP=y
+#CONFIG_AEON_FS_NUMA=y
+#CONFIG_AEON_FS_PERCPU_INODEMAP=y
 
 ifdef CONFIG_AEON_FS_XATTR
 ccflags-y += -DCONFIG_AEON_FS_XATTR

@@ -210,7 +210,7 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_mode = am->mode;
 	inode->i_ino = am->ino;
 	aeon_init_inode_flags(inode);
-	//aeon_dbg("%s: allocating inode %u @ 0x%llx\n", __func__, ino, pi_addr);
+	aeon_dbgv("%s: allocating inode %u @ 0x%llx\n", __func__, ino, pi_addr);
 
 	switch (type) {
 	case TYPE_CREATE:
@@ -292,13 +292,10 @@ static int aeon_alloc_unused_inode(struct super_block *sb, int cpuid,
 	}
 
 	*ino =  new_ino  * sbi->cpus + cpuid;
-	//aeon_dbg("%s: %u - %d - %d - %u\n", __func__, new_ino, sbi->cpus,
-	//						cpuid, *ino);
 	art->i_range_high = le32_to_cpu(i->range_high);
 	art->allocated++;
 	art->i_allocated++;
 
-	//aeon_dbg("%s: Alloc ino %lu\n", __func__, *ino);
 	return 0;
 }
 
@@ -322,7 +319,7 @@ static u64 search_imem_addr(struct aeon_sb_info *sbi,
 	addr = (u64)sbi->virt_addr + (blocknr << AEON_SHIFT) +
 					(internal_ino << AEON_I_SHIFT);
 
-	//aeon_dbg("%s ino %u addr 0x%llx\n", __func__, ino, addr);
+	aeon_dbgv("%s ino %u addr 0x%llx\n", __func__, ino, addr);
 	return addr;
 }
 
@@ -357,8 +354,7 @@ static u64 aeon_reclaim_inode(struct inode_map *inode_map, u32 *ino)
 	addr = im->addr;
 	*ino = im->ino;
 	list_del(&im->imem_list);
-	//kfree(im);
-	aeon_free_inode_node((struct aeon_range_node *)im);
+	aeon_free_icache(im);
 	im = NULL;
 
 	return addr;
@@ -638,8 +634,7 @@ void aeon_destroy_imem_cache(struct inode_map *inode_map)
 
 	list_for_each_entry_safe(im, dend, &inode_map->im->imem_list, imem_list) {
 		list_del(&im->imem_list);
-		aeon_free_inode_node((struct aeon_range_node *)im);
-		//kfree(im);
+		aeon_free_icache(im);
 		im = NULL;
 	}
 }
@@ -700,22 +695,18 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	u32 ino = le32_to_cpu(pi->aeon_ino);
 	int cpuid = ino % sbi->cpus;
 	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
-	//struct aeon_region_table *art = AEON_R_TABLE(inode_map);
+	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
 	struct imem_cache *im;
 	int err = 0;
 
-	/* TODO:
-	 * improve it
-	 */
 	mutex_lock(&inode_map->inode_table_mutex);
 
-	//art->freed++;
-	//im = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
-	im = (struct imem_cache *)aeon_alloc_inode_node(sb);
+	im = aeon_alloc_icache(sb);
 	im->ino = ino;
 	im->addr = sih->pi_addr;
 	im->independent = 1;
 	im->head = im;
+	art->freed++;
 	list_add(&im->imem_list, &inode_map->im->imem_list);
 
 	mutex_unlock(&inode_map->inode_table_mutex);

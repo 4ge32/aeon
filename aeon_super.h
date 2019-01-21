@@ -89,9 +89,11 @@ struct aeon_sb_info {
 
 	struct mb_cache *s_ea_block_cache;
 
+#ifdef CONFIG_AEON_FS_NUMA
 	struct numa_maps *nm;
 	int numa_nodes;
 	int num_lists;
+#endif
 
 	struct free_list *candidate;
 };
@@ -149,10 +151,16 @@ static inline u64 aeon_get_block_off(struct super_block *sb,
 	return (u64)blocknr << AEON_SHIFT;
 }
 
+#ifdef CONFIG_AEON_FS_NUMA
+static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi, int numa_id)
+{
+}
+#else
 static inline u64 aeon_get_addr_off(struct aeon_sb_info *sbi)
 {
 	return (u64)sbi->virt_addr;
 }
+#endif
 
 static inline int aeon_super_block_persisted(struct aeon_super_block *aeon_sb)
 {

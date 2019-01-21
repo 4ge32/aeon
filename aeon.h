@@ -143,15 +143,6 @@ struct opaque_list {
 	struct list_head opaque_list;
 };
 
-struct inode_map {
-	struct mutex		inode_table_mutex;
-	struct rb_root		inode_inuse_tree;
-	unsigned long		num_range_node_inode;
-	struct aeon_range_node	*first_inode_range;
-	struct imem_cache	*im;
-	void			*i_table_addr;
-};
-
 struct aeon_range_node {
 	struct rb_node node;
 	struct vm_area_struct *vma;
@@ -201,16 +192,6 @@ struct aeon_region_table {
 #include "aeon_inode.h"
 #include "aeon_dir.h"
 
-static inline struct imem_cache *aeon_alloc_icache(struct super_block *sb)
-{
-	return (struct imem_cache *)aeon_alloc_inode_node(sb);
-}
-
-static inline void aeon_free_icache(struct imem_cache *im)
-{
-	aeon_free_inode_node((struct aeon_range_node *)im);
-}
-
 static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 					 unsigned int size)
 {
@@ -219,41 +200,6 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	ret = __copy_from_user_inatomic_nocache(dst, src, size);
 
 	return ret;
-}
-
-static inline struct inode_map *aeon_alloc_inode_maps(struct super_block *sb)
-{
-
-#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
-	return alloc_percpu(struct inode_map);
-#else
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return kcalloc(sbi->cpus, sizeof(struct inode_map), GFP_KERNEL);
-#endif
-}
-
-static inline struct inode_map *aeon_get_inode_map(struct super_block *sb,
-						   int cpu_id)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
-	return per_cpu_ptr(sbi->inode_maps, cpu_id);
-#else
-	return &sbi->inode_maps[cpu_id];
-#endif
-}
-
-static inline void aeon_free_inode_maps(struct super_block *sb)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-#ifdef CONFIG_AEON_FS_PERCPU_INODEMAP
-	free_percpu(sbi->inode_maps);
-#else
-	kfree(sbi->inode_maps);
-#endif
 }
 
 static inline unsigned int

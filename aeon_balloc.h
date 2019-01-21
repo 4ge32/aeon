@@ -42,26 +42,7 @@ static inline struct numa_maps *aeon_alloc_numa_maps(struct super_block *sb)
 
 	return kcalloc(sbi->numa_nodes, sizeof(struct numa_maps), GFP_KERNEL);
 }
-#endif
 
-static inline struct free_list *aeon_alloc_free_lists(struct super_block *sb)
-{
-#ifdef CONFIG_AEON_FS_PERCPU_FREELIST
-	return alloc_percpu(struct free_list);
-#else
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-#ifdef CONFIG_AEON_FS_NUMA
-	return kcalloc(sbi->cpus/sbi->numa_nodes,
-		       sizeof(struct free_list), GFP_KERNEL);
-#else
-	return kcalloc(sbi->cpus, sizeof(struct free_list), GFP_KERNEL);
-#endif
-#endif
-}
-
-
-#ifdef CONFIG_AEON_FS_NUMA
 static inline struct free_list *aeon_get_numa_list(struct super_block *sb)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -95,7 +76,24 @@ static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 
 	return &sbi->nm[numa_id].free_lists[list_id];
 }
+#endif
+
+static inline struct free_list *aeon_alloc_free_lists(struct super_block *sb)
+{
+#ifdef CONFIG_AEON_FS_PERCPU_FREELIST
+	return alloc_percpu(struct free_list);
 #else
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+#ifdef CONFIG_AEON_FS_NUMA
+	return kcalloc(sbi->cpus/sbi->numa_nodes,
+		       sizeof(struct free_list), GFP_KERNEL);
+#else
+	return kcalloc(sbi->cpus, sizeof(struct free_list), GFP_KERNEL);
+#endif
+#endif
+}
+
 static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 						   int cpu)
 {
@@ -107,7 +105,6 @@ static inline struct free_list *aeon_get_free_list(struct super_block *sb,
 	return &sbi->free_lists[cpu];
 #endif
 }
-#endif
 
 static inline void aeon_free_free_lists(struct super_block *sb)
 {
