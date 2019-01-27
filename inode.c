@@ -209,7 +209,8 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	inode->i_mode = am->mode;
 	inode->i_ino = am->ino;
 	aeon_init_inode_flags(inode);
-	aeon_dbgv("%s: allocating inode %u @ 0x%llx\n", __func__, ino, pi_addr);
+	aeon_dbgv("%s: allocating inode %u @ 0x%llx\n",
+		  __func__, am->ino, am->pi_addr);
 
 	switch (type) {
 	case TYPE_CREATE:

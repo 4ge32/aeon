@@ -334,12 +334,13 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 	unsigned long next;
 	int err = -ENOSPC;
 
+	/* TODO: separate this processing */
 	if (le16_to_cpu(aeh->eh_entries)) {
 		ae = aeon_get_prev_extent(aeh);
 		if (!ae)
 			goto new_alloc;
 
-		if (le16_to_cpu(ae->ex_length) < SHRT_MAX)
+		if (le16_to_cpu(ae->ex_length) > SHRT_MAX)
 			goto new_alloc;
 
 		next = le64_to_cpu(ae->ex_block) + le16_to_cpu(ae->ex_length);
