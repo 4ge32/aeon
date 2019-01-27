@@ -111,46 +111,6 @@ static inline int aeon_get_cpuid(struct super_block *sb)
 	return smp_processor_id() % sbi->cpus;
 }
 
-/*
- * Get the persistent memory's address
- */
-static inline struct aeon_super_block *aeon_get_super(struct super_block *sb)
-{
-	struct aeon_sb_info *sbi = AEON_SB(sb);
-
-	return (struct aeon_super_block *)sbi->virt_addr;
-}
-
-/* Translate an offset the beginning of the aeon instance to a PMEM address.
- *
- * If this is part of a read-modify-write of the block,
- * aeon_memunlock_block() before calling!
- */
-static inline void *aeon_get_block(struct super_block *sb, u64 block)
-{
-	struct aeon_super_block *ps = aeon_get_super(sb);
-
-	return block ? ((void *)ps + block) : NULL;
-}
-
-static inline int aeon_get_reference(struct super_block *sb, u64 block,
-				     void *dram, void **nvmm, size_t size)
-{
-	int rc = 0;
-
-	*nvmm = aeon_get_block(sb, block);
-	aeon_dbg("%s: nvmm 0x%lx\n", __func__, (unsigned long)*nvmm);
-	rc = memcpy_mcsafe(dram, *nvmm, size);
-	return rc;
-}
-
-static inline u64 aeon_get_block_off(struct super_block *sb,
-				     unsigned long blocknr,
-				     unsigned short btype)
-{
-	return (u64)blocknr << AEON_SHIFT;
-}
-
 #ifdef CONFIG_AEON_FS_NUMA
 static inline u64 AEON_HEAD(struct super_block *sb, int numa_id)
 {
@@ -162,6 +122,47 @@ static inline u64 AEON_HEAD(struct super_block *sb)
 	return (u64)AEON_SB(sb)->virt_addr;
 }
 #endif
+
+/*
+ * Get the persistent memory's address
+ */
+static inline struct aeon_super_block *aeon_get_super(struct super_block *sb)
+{
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	return (struct aeon_super_block *)sbi->virt_addr;
+}
+
+/**
+ * aeon_get_address() - Translate an offset
+ * the beginning of the aeon instance to a PMEM address.
+ * @sb: super block
+ * @offset: The offset from the head address
+ * @offset2: The offset from the "offset" address
+ */
+static inline
+void *aeon_get_address(struct super_block *sb, u64 offset, u64 offset2)
+{
+	return offset ? (void *)(AEON_HEAD(sb) + offset + offset2) : NULL;
+}
+
+static inline int aeon_get_reference(struct super_block *sb, u64 block,
+				     void *dram, void **nvmm, size_t size)
+{
+	int rc = 0;
+
+	*nvmm = aeon_get_address(sb, block, 0);
+	aeon_dbg("%s: nvmm 0x%lx\n", __func__, (unsigned long)*nvmm);
+	rc = memcpy_mcsafe(dram, *nvmm, size);
+	return rc;
+}
+
+static inline u64 aeon_get_block_off(struct super_block *sb,
+				     unsigned long blocknr,
+				     unsigned short btype)
+{
+	return (u64)blocknr << AEON_SHIFT;
+}
 
 static inline int aeon_super_block_persisted(struct aeon_super_block *aeon_sb)
 {

@@ -34,7 +34,7 @@ int aeon_block_symlink(struct super_block *sb, struct aeon_inode *pi,
 		return -ENOSPC;
 
 	block = aeon_get_block_off(sb, blocknr, AEON_BLOCK_TYPE_4K);
-	blockp = (char *)aeon_get_block(sb, block);
+	blockp = (char *)aeon_get_address(sb, block, 0);
 
 	memcpy_to_pmem_nocache(blockp, symname, len);
 	blockp[len] = '\0';
@@ -60,7 +60,7 @@ static const char *aeon_get_link(struct dentry *dentry, struct inode *inode,
 
 	blocknr = le64_to_cpu(pi->sym_block);
 	block = aeon_get_block_off(sb, blocknr, AEON_BLOCK_TYPE_4K);
-	blockp = (char *)aeon_get_block(sb, block);
+	blockp = (char *)aeon_get_address(sb, block, 0);
 
 	return blockp;
 }
