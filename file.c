@@ -132,7 +132,7 @@ static ssize_t do_dax_mapping_read(struct inode *inode, char __user *buf,
 		aeon_dbgv("extent of %ld\n", ex_offset);
 
 		blocknr = le64_to_cpu(ae->ex_block);
-		pages = le16_to_cpu(ae->ex_length) - (index - ex_offset);
+		pages = le16_to_cpu(ae->ex_length) - (index - ex_offset) + 1;
 		blocknr += (index - ex_offset);
 		nvmm = aeon_get_address(sb, blocknr<<AEON_SHIFT, 0);
 
@@ -161,7 +161,6 @@ copy_more:
 		aeon_dbgv("offset   %ld\n", offset);
 		aeon_dbgv("copying  %ld\n", copying);
 		aeon_dbgv("nr       %ld\n", nr);
-		aeon_dbgv("nr       %ld\n", nr >> PAGE_SHIFT);
 		aeon_dbgv("nvmm     0x%lx\n", (unsigned long)nvmm);
 
 		left = copy_to_user(buf + copied, nvmm + offset, nr);
@@ -272,147 +271,108 @@ out:
 static ssize_t aeon_write(struct file *filp, const char __user *buf,
 			  size_t len, loff_t *ppos)
 {
-	struct address_space *mapping = filp->f_mapping;
-	struct inode *inode = mapping->host;
-	struct aeon_inode_info *si = AEON_I(inode);
-	struct aeon_inode_info_header *sih = &si->header;
-	struct aeon_inode *pi = aeon_get_inode(inode->i_sb, sih);
-	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	struct inode *inode = filp->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
-	unsigned long total_blocks;
-	unsigned long num_blocks;
-	unsigned long new_blocks = 0;
-	unsigned long iblock;
-	unsigned int data_bits;
-	void *kmem;
-	u64 blk_off;
-	u64 file_size;
-	u32 time;
-	loff_t pos;
-	ssize_t ret = -1;
+	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_extent *ae;
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	unsigned long blocknr;
+	unsigned long num_blocks; /* The num of blocks used for the file data */
+	unsigned long iblock;	  /* file offset in block */
+	unsigned long offset;     /* file offset in bytes */
+	unsigned long copied;
+	unsigned long status;
+	ssize_t ret = -EFAULT;
 	ssize_t written = 0;
-	ssize_t offset;
-	size_t count;
-	size_t bytes;
-	size_t copied = 0;
-	long status = 0;
+	ssize_t count;		  /* entire written bytes to the file */
+	ssize_t space;
+	ssize_t bytes;
 	int allocated;
-
-	aeon_dbgv("WRITE-----------------------------\n");
+	loff_t pos;
+	void *nvmm;
+	u64 addr_off;
 
 	if (len == 0)
 		return 0;
 
-	if (!access_ok(VERIFY_READ, buf, len)) {
-		ret = -EFAULT;
-		goto out;
-	}
-
-	pos = *ppos;
-
-	if (filp->f_flags & O_APPEND)
-		pos = i_size_read(inode);
-
-	count = len;
-	iblock  = pos >> AEON_SHIFT;
-	offset = (pos & (sb->s_blocksize - 1)) + (iblock<<AEON_SHIFT);
-	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
-	total_blocks = num_blocks;
-
-	aeon_dbgv("len          %lu\n", len);
-	aeon_dbgv("pos    	%llu\n", pos);
-	aeon_dbgv("offset       %lu\n", offset);
-	aeon_dbgv("num_blocks   %lu\n", num_blocks);
-	aeon_dbgv("total_blocks %lu\n", total_blocks);
+	if (!access_ok(VERIFY_READ, buf, len))
+		return -EFAULT;
 
 	ret = file_remove_privs(filp);
 	if (ret)
 		goto out;
 
+	pos = *ppos;
+	if (filp->f_flags & O_APPEND)
+		pos = i_size_read(inode);
+
 	inode->i_ctime = inode->i_mtime = current_time(inode);
-	time = current_time(inode).tv_sec;
 
-#ifdef CONFIG_AEON_FS_COMPRESSION
-	{
-		void *compressed_data;
-		unsigned long outlen = 0;
+	count = len;
+	iblock = pos >> AEON_SHIFT;
+	offset = pos;
 
-		compressed_data = aeon_compress(buf, len, &outlen);
-		if (IS_ERR(compressed_data)) {
-			aeon_err(sb, "failed to compress data\n");
-			goto out;
-		}
-		num_blocks = ((1<<AEON_SHIFT) + outlen - 1)>>AEON_SHIFT;
-		buf = compressed_data;
-		aeon_dbg("!len %lu %lu %lu\n", len, outlen, num_blocks);
-	}
-#endif
+	aeon_dbgv("---WRITE---\n");
+	aeon_dbgv("len      %lu\n", len);
+	aeon_dbgv("pos      %llu\n", pos);
+	aeon_dbgv("iblock   %lu\n", iblock);
+	aeon_dbgv("offset   %lu\n", offset);
 
 	while (count > 0) {
-		struct aeon_extent *ae;
-		unsigned long blocknr = 0;
+		aeon_dbgv("-START-\n");
 
-		//num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
-		num_blocks = ((count - 1) >> sb->s_blocksize_bits) + 1;
-
-		aeon_dbgv("iblock       %lu\n", iblock);
-		aeon_dbgv("pos          %lld\n", pos);
-		aeon_dbgv("iblock       %lu\n", iblock);
-		aeon_dbgv("count        %lu\n", count);
-		aeon_dbgv("num_blocks   %lu\n", num_blocks);
+		num_blocks = ((count - 1) >> AEON_SHIFT) + 1;
 
 		ae = aeon_search_extent(sb, sih, iblock);
 		if (!ae) {
-			aeon_dbgv("ALLOCATED\n");
+			aeon_dbgv("Allocate new blocks\n");
+
 			allocated = do_dax_get_new_blocks(sb, inode, sih, iblock,
 							  num_blocks, &blocknr);
 			if (allocated <= 0) {
-				AEON_ERR(-ENOSPC);
+				ret = -ENOSPC;
 				goto out;
 			}
+
 			offset = 0;
-#ifdef CONFIG_AEON_FS_COMPRESSION
-			{
-			struct aeon_inode *pi = aeon_get_inode(sb, sih);
-			pi->i_original_size = cpu_to_le64(len);
-			ae = aeon_get_prev_extent(aeon_get_extent_header(pi));
-			ae->ex_original_length = cpu_to_le16(((1<<AEON_SHIFT) +
-						      len - 1) >> AEON_SHIFT);
-			}
-#endif
+			space = sb->s_blocksize * allocated - offset;
 		} else {
-			aeon_dbgv("NOT ALLOCATE\n");
+			aeon_dbgv("Use remaining space\n");
+
 			blocknr = le64_to_cpu(ae->ex_block);
-			allocated = le32_to_cpu(aeh->eh_blocks);
-			count = (sb->s_blocksize) * allocated - pos;
+			allocated = le32_to_cpu(ae->ex_length);
+			aeon_dbgv("eoffset  %lu->\n", offset);
+			offset -= sb->s_blocksize * le32_to_cpu(ae->ex_offset);
+
+			aeon_dbgv("offset   %u\n", le32_to_cpu(ae->ex_offset));
+			space = sb->s_blocksize * allocated - offset;
 		}
 
-		aeon_dbgv("---allocated %d\n", allocated);
-		aeon_dbgv("blocknr      %lu\n", blocknr);
-		aeon_dbgv("pos          %llu\n", pos);
-		aeon_dbgv("offset       %lu\n", offset);
-		aeon_dbgv("count        %lu\n", count);
 
-		bytes = (sb->s_blocksize) * allocated - offset;
+		aeon_dbgv("allocate %d\n", allocated);
+		aeon_dbgv("blocknr  %lu\n", blocknr);
+		aeon_dbgv("pos      %llu\n", pos);
+		aeon_dbgv("count    %lu\n", count);
+		aeon_dbgv("offset   %lu\n", offset);
+		aeon_dbgv("space    %lu\n", space);
+
+		bytes = sb->s_blocksize * allocated - offset;
+		aeon_dbgv("bytes    %lu\n", bytes);
 		if (bytes > count)
 			bytes = count;
+		if (bytes > space)
+			bytes = space;
 
-		blk_off = blocknr<<AEON_SHIFT;
-		kmem = aeon_get_address(sb, blk_off, 0);
+		addr_off = blocknr << AEON_SHIFT;
+		nvmm = aeon_get_address(sb, addr_off, 0);
 
-		aeon_dbgv("---kmem      0x%lx\n", (unsigned long)kmem);
-		aeon_dbgv("offset       %lu\n", offset);
-		aeon_dbgv("bytes        %lu\n", bytes);
-		aeon_dbgv("copied       %lu\n", copied);
-		copied = bytes -
-			memcpy_to_pmem_nocache(kmem + offset, buf, bytes);
-		if (pos + copied > inode->i_size)
-			file_size = cpu_to_le64(pos + copied);
-		else
-			file_size = cpu_to_le64(inode->i_size);
+		aeon_dbgv("nvmm     0x%llx\n", (u64)nvmm);
+		aeon_dbgv("offset   %lu\n", offset);
+		aeon_dbgv("bytes    %lu\n", bytes);
+		aeon_dbgv("COPY\n");
 
-		aeon_dbgv("copied       %lu\n", copied);
-		aeon_dbgv("total        %llu\n", copied + pos);
+		copied = bytes - copy_from_user(nvmm+offset, buf, bytes);
 		if (copied > 0) {
 			status = copied;
 			written += copied;
@@ -422,9 +382,17 @@ static ssize_t aeon_write(struct file *filp, const char __user *buf,
 			iblock = pos >> AEON_SHIFT;
 		}
 
+		aeon_dbgv("copied   %lu\n", copied);
+		aeon_dbgv("offset   %lu\n", offset);
+		aeon_dbgv("bytes    %lu\n", bytes);
+		aeon_dbgv("pos      %llu\n", pos);
+		aeon_dbgv("count    %lu\n", count);
+		aeon_dbgv("region   %lu\n", sb->s_blocksize * aeh->eh_blocks);
+
 		if (unlikely(copied != bytes)) {
 			aeon_err(sb, "%s ERROR!: %p, bytes %lu, copied %lu\n",
-				__func__, kmem, bytes, copied);
+				__func__, nvmm, bytes, copied);
+			BUG();
 			if (status >= 0)
 				status = -EFAULT;
 		}
@@ -433,22 +401,13 @@ static ssize_t aeon_write(struct file *filp, const char __user *buf,
 			break;
 	}
 
-	data_bits = 0x1000;
-	inode->i_blocks += (new_blocks << (data_bits - sb->s_blocksize_bits));
-
+	aeon_dbgv("NOW   %llu/n", pos >> AEON_SHIFT);
+	*ppos = pos;
+	i_size_write(inode, pos);
+	pi->i_size = cpu_to_le64(pos);
 	ret = written;
 
-	*ppos = pos;
-	if (pos > inode->i_size) {
-		i_size_write(inode, pos);
-		pi->i_size = cpu_to_le64(inode->i_size);
-	}
 out:
-	if (ret < 0) {
-		aeon_err(sb, "%s error\n", __func__);
-		return ret;
-	}
-
 	return ret;
 }
 #endif
@@ -582,7 +541,7 @@ static int aeon_open(struct inode *inode, struct file *file)
 const struct file_operations aeon_dax_file_operations = {
 	.llseek		= aeon_llseek,
 #ifdef	CONFIG_AEON_FS_AEON_RW
-	.read		= aeon_read,
+	//.read		= aeon_read,
 	.write          = aeon_write,
 #endif
 	.read_iter	= aeon_file_read_iter,
