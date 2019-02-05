@@ -9,8 +9,13 @@
 /*
  * extent tree's header referred from inode
  */
+#ifdef CONFIG_AEON_FS_COMPRESSION
+#define PI_MAX_INTERNAL_EXTENT 3
+#define PI_MAX_EXTERNAL_EXTENT 4
+#else
 #define PI_MAX_INTERNAL_EXTENT 5
 #define PI_MAX_EXTERNAL_EXTENT 4
+#endif
 
 struct imem_cache {
 	u32	ino;
@@ -49,6 +54,8 @@ struct aeon_extent_header {
 	__le32  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
 	__le32  eh_blocks;
 	__le64  eh_prev_extent;
+#ifdef CONFIG_AEON_FS_COMPRESSION
+#endif
 } __attribute((__packed__));
 
 struct aeon_extent {
@@ -56,6 +63,11 @@ struct aeon_extent {
 	__le64  ex_block;
 	__le16  ex_length;
 	__le32  ex_offset;
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	__le16  ex_compressed_length;
+	__le32  ex_compressed_offset;
+	__le16  pad;
+#endif
 } __attribute((__packed__));
 
 enum aeon_new_inode_type {
@@ -76,6 +88,9 @@ struct aeon_inode {
 	u8	i_new;           /* Is this inode new? */
 	/* 4  */
 	__le32	i_flags;	 /* Inode flags */
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	__le64	i_original_size;
+#endif
 	__le64	i_size;		 /* Size of data in bytes */
 	__le32	i_ctime;	 /* Inode modification time */
 	__le32	i_mtime;	 /* Inode tree Modification time */

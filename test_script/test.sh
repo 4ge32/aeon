@@ -76,7 +76,12 @@ libaeon ()
 
 compression ()
 {
-  _do_test 1 1
+  OPT="CONFIG_AEON_FS_COMPRESSION"
+  cat ../Makefile | grep \#${OPT} >> /dev/null
+  if [ $? -eq 0 ]; then
+    echo "Enable $OPT"
+  fi
+  _do_test 1 2
 }
 
 other ()
@@ -129,6 +134,9 @@ case "$1" in
     ;;
   other)
     other
+    ;;
+  compression)
+    compression
     ;;
   all)
     mmap

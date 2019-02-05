@@ -1202,3 +1202,26 @@ test-other-3 ()
 
   clean
 }
+
+test-compression-1 ()
+{
+  init
+
+  FILE=../aeon_extents.h
+  cat $FILE > /mnt/test
+  diff $FILE /mnt/test
+  res=$?
+
+  clean
+}
+test-compression-2 ()
+{
+  init
+
+  FILE=../aeon_inode.h
+  cat $FILE > /mnt/test
+  diff $FILE /mnt/test
+  res=$?
+
+  clean
+}
