@@ -6,6 +6,90 @@
 #include "aeon_balloc.h"
 
 
+#ifdef CONFIG_AEON_FS_COMPRESSION
+static struct aeon_extent
+*aeon_rb_search_cextent(struct super_block *sb,
+			struct aeon_inode_info_header *sih, unsigned long offset)
+{
+	struct aeon_range_node *ret_node = NULL;
+	struct aeon_extent *ret = NULL;
+	bool found;
+
+	found = aeon_find_range_node(&sih->rb_ctree, offset,
+				     NODE_EXTENT, &ret_node);
+	if (found)
+		ret = ret_node->extent;
+
+	return ret;
+}
+
+static struct aeon_extent
+*aeon_linear_search_cextent(struct super_block *sb,
+			    struct aeon_inode_info_header *sih,
+			    struct aeon_extent_header *aeh,
+			    unsigned long iblock)
+{
+	struct aeon_extent *ae;
+	unsigned int offset;
+	int length;
+	int entries;
+	int index = 0;
+	u64 addr;
+
+	read_lock(&sih->i_meta_lock);
+	entries = le16_to_cpu(aeh->eh_entries);
+	while (entries > 0) {
+		addr = aeon_pull_extent_addr(sb, sih, index);
+		if (!addr) {
+			read_unlock(&sih->i_meta_lock);
+			return NULL;
+		}
+		ae = (struct aeon_extent *)addr;
+
+		length = le16_to_cpu(ae->ex_compressed_length);
+		offset = le16_to_cpu(ae->ex_compressed_offset);
+		if (offset <= iblock && iblock < offset + length) {
+			read_unlock(&sih->i_meta_lock);
+			return (struct aeon_extent *)addr;
+		}
+
+		index++;
+		entries--;
+	}
+	read_unlock(&sih->i_meta_lock);
+
+	return NULL;
+}
+
+struct aeon_extent
+*aeon_search_cextent(struct super_block *sb,
+		     struct aeon_inode_info_header *sih, unsigned long iblock)
+{
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_extent_header *aeh;
+	struct aeon_extent *ret = NULL;
+	int entries;
+
+	if (!pi->i_exblocks)
+		goto out;
+
+	aeh = aeon_get_extent_header(pi);
+
+	entries = le16_to_cpu(aeh->eh_entries);
+	if (!entries)
+		goto out;
+
+	if (entries < PI_MAX_INTERNAL_EXTENT + 1) {
+		ret = aeon_linear_search_cextent(sb, sih, aeh, iblock);
+		goto out;
+	}
+	ret = aeon_rb_search_cextent(sb, sih, iblock);
+out:
+	return ret;
+}
+
+#endif
+
 static struct aeon_extent
 *aeon_rb_search_extent(struct super_block *sb,
 		       struct aeon_inode_info_header *sih, unsigned long offset)
@@ -164,11 +248,11 @@ struct aeon_extent *do_aeon_get_extent_on_pmem(struct super_block *sb,
 	return (struct aeon_extent *)addr;
 }
 
-static
-struct aeon_extent *aeon_linear_search_extent(struct super_block *sb,
-					      struct aeon_inode_info_header *sih,
-					      struct aeon_extent_header *aeh,
-					      unsigned long iblock)
+static struct aeon_extent
+*aeon_linear_search_extent(struct super_block *sb,
+			   struct aeon_inode_info_header *sih,
+			   struct aeon_extent_header *aeh,
+			   unsigned long iblock)
 {
 	struct aeon_extent *ae;
 	unsigned int offset;
@@ -176,7 +260,6 @@ struct aeon_extent *aeon_linear_search_extent(struct super_block *sb,
 	int entries;
 	int index = 0;
 	u64 addr;
-
 
 	read_lock(&sih->i_meta_lock);
 	entries = le16_to_cpu(aeh->eh_entries);
@@ -277,6 +360,22 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 			aeon_free_extent_node(node);
 			return err;
 		}
+
+#ifdef CONFIG_AEON_FS_COMPRESSION
+		node = aeon_alloc_extent_node(sb);
+		if (!node)
+			return -ENOMEM;
+
+		node->offset = le32_to_cpu(pi->ae[i].ex_compressed_offset);
+		node->length = le16_to_cpu(pi->ae[i].ex_compressed_length);
+		node->extent = &pi->ae[i];
+
+		err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
+		if (err) {
+			aeon_free_extent_node(node);
+			return err;
+		}
+#endif
 	}
 
 	return 0;
@@ -319,6 +418,23 @@ aeon_insert_extenttree(struct super_block *sb,
 		aeon_err(sb, "%s: %d\n", __func__, err);
 		return err;
 	}
+
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	node = aeon_alloc_extent_node(sb);
+	if (!node)
+		return -ENOMEM;
+
+	node->offset = le32_to_cpu(ae->ex_compressed_offset);
+	node->length = le16_to_cpu(ae->ex_compressed_length);
+	node->extent = ae;
+
+	err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
+	if (err) {
+		aeon_free_extent_node(node);
+		aeon_err(sb, "%s: %d\n", __func__, err);
+		return err;
+	}
+#endif
 
 	return 0;
 }
@@ -386,6 +502,75 @@ new_alloc:
 
 	return 0;
 }
+
+#ifdef CONFIG_AEON_FS_COMPRESSION
+int
+aeon_update_cextent(struct super_block *sb, struct inode *inode,
+		    unsigned long blocknr, unsigned long offset, int num_blocks,
+		    int compressed_length)
+{
+	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	struct aeon_extent *ae;
+	unsigned long next;
+	int err = -ENOSPC;
+
+	/* TODO: separate this processing */
+//	if (le16_to_cpu(aeh->eh_entries)) {
+//		ae = aeon_get_prev_extent(aeh);
+//		if (!ae)
+//			goto new_alloc;
+//
+//		if (le16_to_cpu(ae->ex_length) > SHRT_MAX)
+//			goto new_alloc;
+//
+//		next = le64_to_cpu(ae->ex_block) + le16_to_cpu(ae->ex_length);
+//		if (next != blocknr)
+//			goto new_alloc;
+//
+//		write_lock(&sih->i_meta_lock);
+//
+//		ae->ex_length += cpu_to_le16(num_blocks);
+//		aeh->eh_blocks += cpu_to_le16(num_blocks);
+//
+//		write_unlock(&sih->i_meta_lock);
+//
+//		return 0;
+//	}
+//
+//new_alloc:
+	ae = aeon_get_new_extent(sb, sih);
+	if (!ae) {
+		aeon_err(sb, "can't expand file more\n");
+		return err;
+	}
+
+	write_lock(&sih->i_meta_lock);
+
+	ae->ex_index = aeh->eh_entries;
+	ae->ex_length = cpu_to_le16(num_blocks);
+	ae->ex_block = cpu_to_le64(blocknr);
+	ae->ex_offset = cpu_to_le32(offset);
+	ae->ex_compressed_offset = cpu_to_le32(offset);
+	ae->ex_compressed_length = cpu_to_le16(compressed_length);
+	aeh->eh_blocks += cpu_to_le16(num_blocks);
+	aeh->eh_prev_extent = cpu_to_le64(ae);
+
+	pi->i_blocks = aeh->eh_blocks * 8;
+	inode->i_blocks = le32_to_cpu(pi->i_blocks);
+
+	err = aeon_insert_extenttree(sb, sih, aeh, ae);
+	if (err) {
+		write_unlock(&sih->i_meta_lock);
+		return err;
+	}
+
+	write_unlock(&sih->i_meta_lock);
+
+	return 0;
+}
+#endif
 
 static int
 aeon_remove_extenttree(struct super_block *sb,
@@ -606,6 +791,25 @@ aeon_rebuild_rb_extenttree(struct super_block *sb,
 			read_unlock(&sih->i_meta_lock);
 			return err;
 		}
+
+#ifdef CONFIG_AEON_FS_COMPRESSION
+		node = aeon_alloc_extent_node(sb);
+		if (!node) {
+			read_unlock(&sih->i_meta_lock);
+			return -ENOMEM;
+		}
+		node->offset = le32_to_cpu(ae->ex_compressed_offset);
+		node->length = le16_to_cpu(ae->ex_compressed_length);
+		node->extent = ae;
+
+		err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
+		if (err) {
+			aeon_err(sb, "%s - insert_extenttree\n", __func__);
+			aeon_free_extent_node(node);
+			read_unlock(&sih->i_meta_lock);
+			return err;
+		}
+#endif
 	}
 	read_unlock(&sih->i_meta_lock);
 

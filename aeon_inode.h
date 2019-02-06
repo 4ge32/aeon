@@ -138,6 +138,9 @@ struct aeon_inode_info_header {
 	/* Map from file offsets to write log entries. */
 	struct     aeon_dentry_info *de_info;
 	struct     rb_root rb_tree;		/* RB tree for directory or extent*/
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	struct     rb_root rb_ctree;
+#endif
 	struct     rw_semaphore dax_sem;
 	struct     rw_semaphore xattr_sem;
 	struct     mutex truncate_mutex;

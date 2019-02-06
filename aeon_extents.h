@@ -52,4 +52,12 @@ int aeon_update_extent(struct super_block *sb, struct inode *inode,
 		       int num_blocks);
 int aeon_rebuild_rb_extenttree(struct super_block *sb,
 			       struct inode *inode, int entries);
+#ifdef CONFIG_AEON_FS_COMPRESSION
+struct aeon_extent *aeon_search_cextent(struct super_block *sb,
+					struct aeon_inode_info_header *sih,
+					unsigned long iblock);
+int aeon_update_cextent(struct super_block *sb, struct inode *inode,
+			unsigned long blocknr, unsigned long offset,
+			int num_blocks, int compressed_length);
+#endif
 #endif

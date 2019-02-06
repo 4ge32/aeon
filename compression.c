@@ -323,9 +323,6 @@ zstd_decompress(struct list_head *ws, const void *data_in,
 		/* this is the point which can be changed
 		 * when using pmem.
 		 * */
-		//memcpy(tmp, workspace->out_buf.dst, total_out);
-		//aeon_dbg("%s\n", (char *)tmp);
-		//aeon_dbg("%lu %lu", pg_offset, destlen);
 		memcpy(tmp + pg_offset,
 		       workspace->out_buf.dst + buf_offset, bytes);
 
@@ -375,7 +372,7 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
 
 	workspace->in_buf.src = src;
 	workspace->in_buf.pos = 0;
-	workspace->in_buf.size = min_t(size_t, len, PAGE_SIZE);
+	workspace->in_buf.size = max_t(size_t, len, PAGE_SIZE);
 
 	out_page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
 	if (out_page == NULL) {
@@ -386,7 +383,7 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
 	nr_pages++;
 	workspace->out_buf.dst = kmap(out_page);
 	workspace->out_buf.pos = 0;
-	workspace->out_buf.size = min_t(size_t, max_out, PAGE_SIZE);
+	workspace->out_buf.size = max_t(size_t, max_out, PAGE_SIZE);
 
 	while (1) {
 		size_t ret;
@@ -822,8 +819,6 @@ void *aeon_compress(const char __user *data, size_t len, size_t *outlen)
 		goto out1;
 	}
 
-	aeon_dbg("%s: %lu\n", __func__, len);
-
 	workspace = find_workspace(COMPRESSION_TYPE);
 	err = zstd_do_compress_pages(workspace, buf, len,
 				     &out_pages, &total_in, &total_out, ret);
@@ -835,6 +830,8 @@ void *aeon_compress(const char __user *data, size_t len, size_t *outlen)
 
 	*outlen = total_out;
 	kfree(buf);
+
+	aeon_dbgv("%s: len %lu : outlen %lu\n", __func__, len, *outlen);
 
 	return ret;
 
@@ -897,12 +894,14 @@ void *aeon_decompress(const void *data, struct aeon_extent *ae,
 {
 	struct list_head *workspace;
 	void *ret;
-	int original_length = le64_to_cpu(pi->i_original_size);
-	int compressed_length = le16_to_cpu(ae->ex_length);
-	size_t o_len = original_length;
+	int compressed_length = le16_to_cpu(ae->ex_compressed_length);
+	size_t o_len = (le16_to_cpu(ae->ex_length))<<PAGE_SHIFT;
+	//size_t o_len = le64_to_cpu(pi->i_original_size);
 	size_t c_len = compressed_length<<AEON_SHIFT;
 	size_t outlen = 0;
 	int err = -ENOMEM;
+
+	aeon_dbgv("%lu :%d\n", o_len, le16_to_cpu(ae->ex_length));
 
 	ret = kzalloc(sizeof(char) * (o_len+1), GFP_KERNEL);
 	if (!ret)
@@ -917,12 +916,12 @@ void *aeon_decompress(const void *data, struct aeon_extent *ae,
 		goto out;
 	}
 
-	if (outlen != le64_to_cpu(pi->i_original_size)) {
-		aeon_dbg("%lu != %lu\n", outlen, c_len);
-		aeon_dbg("%lu\n", o_len);
-		err = -1;
-		goto out;
-	}
+	//if (outlen != o_len) {
+	//	aeon_dbg("%lu != %lu\n", outlen, o_len);
+	//	aeon_dbg("%lu\n", o_len);
+	//	err = -1;
+	//	goto out;
+	//}
 
 	return ret;
 out:

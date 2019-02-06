@@ -126,6 +126,9 @@ void aeon_init_header(struct super_block *sb,
 #ifdef CONFIG_AEON_FS_XATTR
 	init_rwsem(&sih->xattr_sem);
 #endif
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	sih->rb_ctree = RB_ROOT;
+#endif
 }
 
 void aeon_set_file_ops(struct inode *inode)
@@ -171,6 +174,9 @@ static inline void fill_new_aeon_inode(struct super_block *sb,
 	pi->i_mode = cpu_to_le16(inode->i_mode);
 	pi->dev.rdev =  cpu_to_le32(am->rdev);
 	pi->i_exblocks = 0;
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	pi->i_original_size = 0;
+#endif
 
 	aeon_init_extent_header(&pi->aeh);
 

@@ -67,14 +67,14 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 	if (isize == 0)
 		goto out;
 
-	aeon_dbgv("len     %lu \n", len);
-	aeon_dbgv("isize   %lld \n", isize);
-	aeon_dbgv("pos     %lld \n", pos);
-
 	if (len > isize - pos)
 		len = isize - pos;
 	if (len <= 0)
 		goto out;
+
+	aeon_dbgv("len     %lu \n", len);
+	aeon_dbgv("isize   %lld \n", isize);
+	aeon_dbgv("pos     %lld \n", pos);
 
 	end_index = (isize - 1) >> PAGE_SHIFT;
 
@@ -102,7 +102,7 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 		}
 
 		aeon_dbgv("---PREPARE  \n");
-		aeon_dbgv("isize   %lu \n", index);
+		aeon_dbgv("start   %lu \n", index);
 		aeon_dbgv("end     %lu \n", end_index);
 
 		ae = aeon_search_extent(sb, sih, index);
@@ -112,20 +112,21 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 		}
 		ex_offset = le32_to_cpu(ae->ex_compressed_offset);
 		offset += index << AEON_SHIFT;
-		blocknr = le64_to_cpu(ae->ex_block) + ex_offset;
+		blocknr = le64_to_cpu(ae->ex_block);
 		pages = le16_to_cpu(ae->ex_length) - (index-ex_offset);
 		nvmm = aeon_get_address(sb, blocknr<<AEON_SHIFT, 0);
-		dram = aeon_decompress(nvmm, ae, pi);
-		if (IS_ERR(nvmm)) {
-			aeon_err(sb, "can't decompress data\n");
-			goto out;
-		}
 
+		aeon_dbgv("exindex %d\n", le16_to_cpu(ae->ex_index));
 		aeon_dbgv("block   %lu\n", blocknr);
 		aeon_dbgv("exoff   %lu\n", ex_offset);
 		aeon_dbgv("lengt   %d\n", le16_to_cpu(ae->ex_compressed_length));
 
-copy_more:
+		dram = aeon_decompress(nvmm, ae, pi);
+		if (IS_ERR(dram)) {
+			aeon_err(sb, "can't decompress data\n");
+			goto out;
+		}
+
 		copying = pages << PAGE_SHIFT;
 		if (len < copying + copied)
 			nr = len - copied;
@@ -137,6 +138,7 @@ copy_more:
 		aeon_dbgv("copying %lu\n", copying);
 		aeon_dbgv("offset  %lu\n", offset);
 		aeon_dbgv("nr      %lu\n", nr);
+		aeon_dbgv("addr  0x%llx\n", (u64)dram+offset);
 
 		left = copy_to_user(buf+copied, dram+offset, nr);
 
@@ -145,7 +147,7 @@ copy_more:
 		index += (offset >> AEON_SHIFT);
 		offset &= ~PAGE_MASK;
 
-		aeon_dbgv("---READ    \n");
+		aeon_dbgv("---DONE    \n");
 		aeon_dbgv("le      %lu\n", len);
 		aeon_dbgv("left    %lu\n", left);
 		aeon_dbgv("copied  %lu\n", copied);
@@ -154,7 +156,6 @@ copy_more:
 		if (copied < len) {
 			offset += copied;
 			aeon_dbgv("COPY MORE\n");
-			//goto copy_more;
 		}
 
 		kfree(dram);
@@ -355,7 +356,6 @@ static int do_get_new_blocks_vc(struct super_block *sb,
 {
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh;
-	struct aeon_extent *ae;
 	unsigned long blocknr = 0;
 	int o_len = (original_len + (1<<PAGE_SHIFT) - 1) >> PAGE_SHIFT;
 	int allocated;
@@ -373,14 +373,12 @@ static int do_get_new_blocks_vc(struct super_block *sb,
 
 	*ret_blocknr = blocknr;
 
-	err = aeon_update_extent(sb, inode, blocknr, iblock, o_len);
+	err = aeon_update_cextent(sb, inode, blocknr, iblock, o_len,
+				  num_blocks);
 	if (err) {
 		aeon_err(sb, "failed to update extent\n");
 		goto out;
 	}
-	ae = aeon_get_prev_extent(aeh);
-	ae->ex_compressed_offset = cpu_to_le32(iblock);
-	ae->ex_compressed_length = cpu_to_le16(num_blocks);
 
 	clean_bdev_aliases(sb->s_bdev, blocknr, allocated);
 	err = sb_issue_zeroout(sb, blocknr, allocated, GFP_NOFS);
@@ -418,7 +416,8 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 	int allocated;
 	loff_t pos;
 	void *nvmm;
-	void *compressed_data;
+	void *compressed_data = NULL;
+	void *head = NULL;
 	u64 addr_off;
 
 	if (len == 0)
@@ -442,9 +441,9 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 		aeon_err(sb, "failed to compress data\n");
 		goto out;
 	}
-	buf = compressed_data;
 	aeon_dbgv("COMPRESS\n");
 	aeon_dbgv("outlen   %lu\n", outlen);
+	head = compressed_data;
 	original_len = len;
 	len = outlen;
 
@@ -463,7 +462,7 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 
 		num_blocks = ((count - 1) >> AEON_SHIFT) + 1;
 
-		ae = aeon_search_extent(sb, sih, iblock);
+		ae = aeon_search_cextent(sb, sih, iblock);
 		if (!ae) {
 			aeon_dbgv("Allocate new blocks\n");
 
@@ -481,11 +480,11 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 			aeon_dbgv("Use remaining space\n");
 
 			blocknr = le64_to_cpu(ae->ex_block);
-			allocated = le32_to_cpu(ae->ex_length);
+			allocated = le32_to_cpu(ae->ex_compressed_length);
 			aeon_dbgv("eoffset  %lu->\n", offset);
-			offset -= sb->s_blocksize * le32_to_cpu(ae->ex_offset);
+			offset -= sb->s_blocksize * le32_to_cpu(ae->ex_compressed_offset);
 
-			aeon_dbgv("offset   %u\n", le32_to_cpu(ae->ex_offset));
+			aeon_dbgv("offset   %u\n", le32_to_cpu(ae->ex_compressed_offset));
 			space = sb->s_blocksize * allocated - offset;
 		}
 
@@ -512,12 +511,13 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 		aeon_dbgv("bytes    %lu\n", bytes);
 		aeon_dbgv("COPY\n");
 
-		copied = bytes - memcpy_to_pmem_nocache(nvmm+offset, buf, bytes);
+		copied = bytes - memcpy_to_pmem_nocache(nvmm+offset,
+							compressed_data, bytes);
 		if (copied > 0) {
 			status = copied;
 			written += copied;
 			pos += copied;
-			buf += copied;
+			compressed_data += copied;
 			count -= copied;
 			iblock = pos >> AEON_SHIFT;
 		}
@@ -544,10 +544,12 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 	*ppos = pos;
 	i_size_write(inode, pos);
 	pi->i_size = cpu_to_le64(pos);
-	pi->i_original_size = cpu_to_le64(original_len);
+	pi->i_original_size += cpu_to_le64(original_len);
 
 	ret = original_len;
 out:
+	if (head)
+		kfree(head);
 	return ret;
 }
 #else
