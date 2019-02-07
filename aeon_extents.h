@@ -5,12 +5,13 @@
 
 #ifdef CONFIG_AEON_FS_COMPRESSION
 #define AEON_E_SHIFT		5
+#define AEON_EXTENT_HEADER_SIZE 64
 #else
 #define AEON_E_SHIFT		4
+#define AEON_EXTENT_HEADER_SIZE 32
 #endif
 
-#define AEON_EXTENT_HEADER_SIZE 32
-#define AEON_EXTENT_SIZE	((1 << AEON_E_SHIFT))
+#define AEON_EXTENT_SIZE	(1 << AEON_E_SHIFT)
 #define AEON_EXTENT_PER_PAGE	(AEON_DEF_BLOCK_SIZE_4K / AEON_EXTENT_SIZE)
 #define AEON_EXTENT_MAX_DEPTH	(AEON_DEF_BLOCK_SIZE_4K / \
 				 AEON_EXTENT_HEADER_SIZE)
@@ -58,6 +59,7 @@ struct aeon_extent *aeon_search_cextent(struct super_block *sb,
 					unsigned long iblock);
 int aeon_update_cextent(struct super_block *sb, struct inode *inode,
 			unsigned long blocknr, unsigned long offset,
-			int num_blocks, int compressed_length);
+			int num_blocks, int compressed_length,
+			unsigned long original_len);
 #endif
 #endif

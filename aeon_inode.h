@@ -10,8 +10,8 @@
  * extent tree's header referred from inode
  */
 #ifdef CONFIG_AEON_FS_COMPRESSION
-#define PI_MAX_INTERNAL_EXTENT 3
-#define PI_MAX_EXTERNAL_EXTENT 4
+#define PI_MAX_INTERNAL_EXTENT 2
+#define PI_MAX_EXTERNAL_EXTENT 9
 #else
 #define PI_MAX_INTERNAL_EXTENT 5
 #define PI_MAX_EXTERNAL_EXTENT 4
@@ -66,7 +66,7 @@ struct aeon_extent {
 #ifdef CONFIG_AEON_FS_COMPRESSION
 	__le16  ex_compressed_length;
 	__le32  ex_compressed_offset;
-	__le16  pad;
+	__le32  ex_original_length;
 #endif
 } __attribute((__packed__));
 

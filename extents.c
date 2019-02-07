@@ -507,12 +507,13 @@ new_alloc:
 int
 aeon_update_cextent(struct super_block *sb, struct inode *inode,
 		    unsigned long blocknr, unsigned long offset, int num_blocks,
-		    int compressed_length)
+		    int compressed_length, unsigned long original_len)
 {
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	struct aeon_extent *ae;
+	struct aeon_extent *prev;
 	unsigned long next;
 	int err = -ENOSPC;
 
@@ -546,16 +547,32 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 		return err;
 	}
 
+	if (le16_to_cpu(aeh->eh_entries)) {
+		prev = aeon_get_prev_extent(aeh);
+		if (prev)
+			ae->ex_compressed_offset =
+			prev->ex_compressed_offset + prev->ex_compressed_length;
+		else
+			ae->ex_compressed_offset = 0;
+	}
+
 	write_lock(&sih->i_meta_lock);
 
 	ae->ex_index = aeh->eh_entries;
 	ae->ex_length = cpu_to_le16(num_blocks);
 	ae->ex_block = cpu_to_le64(blocknr);
-	ae->ex_offset = cpu_to_le32(offset);
-	ae->ex_compressed_offset = cpu_to_le32(offset);
-	ae->ex_compressed_length = cpu_to_le16(compressed_length);
+	ae->ex_offset = aeh->eh_blocks;
+	//ae->ex_compressed_offset = cpu_to_le32(offset);
+	ae->ex_compressed_length = cpu_to_le16(original_len);
+	ae->ex_original_length = cpu_to_le32(original_len);
 	aeh->eh_blocks += cpu_to_le16(num_blocks);
 	aeh->eh_prev_extent = cpu_to_le64(ae);
+
+	aeon_dbgv("%s-O: offset %u length %d\n",
+		  __func__, le32_to_cpu(ae->ex_offset), num_blocks);
+	aeon_dbgv("%s-C: offset %u length %d\n",
+		  __func__, le32_to_cpu(ae->ex_compressed_offset),
+		  le16_to_cpu(ae->ex_compressed_length));
 
 	pi->i_blocks = aeh->eh_blocks * 8;
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);

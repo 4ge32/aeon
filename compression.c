@@ -284,6 +284,8 @@ zstd_decompress(struct list_head *ws, const void *data_in,
 	workspace->out_buf.pos = 0;
 	workspace->out_buf.size = PAGE_SIZE;
 
+	aeon_dbgv("%s: 0x%llx : %lu\n", __func__, (u64)data_in, srclen);
+
 	ret = 1;
 	while (pg_offset < destlen &&
 	       workspace->in_buf.pos < workspace->in_buf.size) {
@@ -895,8 +897,7 @@ void *aeon_decompress(const void *data, struct aeon_extent *ae,
 	struct list_head *workspace;
 	void *ret;
 	int compressed_length = le16_to_cpu(ae->ex_compressed_length);
-	size_t o_len = (le16_to_cpu(ae->ex_length))<<PAGE_SHIFT;
-	//size_t o_len = le64_to_cpu(pi->i_original_size);
+	size_t o_len = le32_to_cpu(ae->ex_original_length);
 	size_t c_len = compressed_length<<AEON_SHIFT;
 	size_t outlen = 0;
 	int err = -ENOMEM;
@@ -915,13 +916,6 @@ void *aeon_decompress(const void *data, struct aeon_extent *ae,
 		AEON_ERR(err);
 		goto out;
 	}
-
-	//if (outlen != o_len) {
-	//	aeon_dbg("%lu != %lu\n", outlen, o_len);
-	//	aeon_dbg("%lu\n", o_len);
-	//	err = -1;
-	//	goto out;
-	//}
 
 	return ret;
 out:
