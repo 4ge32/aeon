@@ -5,11 +5,17 @@ DEV=/dev/pmem0
 DEV2=/dev/pmem1
 MOUNT_POINT=/mnt
 OPT=init,dax,wprotect,user_xattr
+OPT_C=init,dax,wprotect,data=compressed
 R_OPT=dax,wprotect,user_xattr
 
 run () {
   sudo insmod $FS.ko
   sudo mount -t $FS -o $OPT $DEV $MOUNT_POINT
+}
+
+run_compression () {
+  sudo insmod $FS.ko
+  sudo mount -t $FS -o $OPT_C $DEV $MOUNT_POINT
 }
 
 remount_run() {
@@ -92,6 +98,9 @@ case "$1" in
     ;;
   dentry)
     show_dentries_info
+    ;;
+  compression)
+    run_compression
     ;;
   *)
     run

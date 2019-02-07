@@ -515,7 +515,6 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	struct aeon_extent *ae;
 	struct aeon_extent *prev;
-	unsigned long next;
 	int err = -ENOSPC;
 
 	/* TODO: separate this processing */

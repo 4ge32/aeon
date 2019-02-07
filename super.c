@@ -19,8 +19,8 @@
 
 static struct kmem_cache *aeon_inode_cachep;
 static struct kmem_cache *aeon_range_node_cachep;
-int wprotect = 0;
-int support_clwb = 0;
+int wprotect;
+int support_clwb;
 unsigned int aeon_dbgmask;
 
 module_param(wprotect, int, 0444);
@@ -197,11 +197,7 @@ void aeon_free_dir_node(struct aeon_range_node *node)
 
 void aeon_free_block_node(struct aeon_range_node *node)
 {
-#ifdef USE_LIBAEON
-	pmem_free(node);
-#else
 	aeon_free_range_node(node);
-#endif
 }
 
 void aeon_free_extent_node(struct aeon_range_node *node)
@@ -231,11 +227,7 @@ struct aeon_range_node *aeon_alloc_dir_node(struct super_block *sb)
 
 struct aeon_range_node *aeon_alloc_block_node(struct super_block *sb)
 {
-#ifdef USE_LIBAEON
-	return aeon_pmem_alloc_range_node(sb, ANY_CPU);
-#else
 	return aeon_alloc_range_node(sb);
-#endif
 }
 
 struct aeon_range_node *aeon_alloc_extent_node(struct super_block *sb)
@@ -329,13 +321,14 @@ err:
 
 enum {
 	Opt_init, Opt_dax, Opt_dbgmask, Opt_user_xattr, Opt_nouser_xattr,
-	Opt_wprotect, Opt_err,
+	Opt_wprotect, Opt_compression, Opt_err,
 };
 
 static const match_table_t tokens = {
 	{ Opt_init,		"init"	     },
 	{ Opt_dax,		"dax"	     },
 	{ Opt_wprotect,		"wprotect"   },
+	{ Opt_compression,	"data=compressed" },
 	{ Opt_dbgmask,		"dbgmask=%u" },
 	{ Opt_user_xattr,	"user_xattr"},
 	{ Opt_nouser_xattr,	"nouser_xattr"},
@@ -370,6 +363,16 @@ static int aeon_parse_options(char *options, struct aeon_sb_info *sbi,
 		case Opt_wprotect:
 			set_opt(sbi->s_mount_opt, PROTECT);
 			aeon_info("AEON: Enabling write protection (CR0.WP)\n");
+			break;
+		case Opt_compression:
+#ifdef CONFIG_AEON_FS_COMPRESSION
+			set_opt(sbi->s_mount_opt, COMPRESSION);
+			compression = 1;
+			aeon_info("AEON: Compression Mode\n");
+#else
+			aeon_info("compressiom mode is not supported, "
+				  "AEON disable the option\n");
+#endif
 			break;
 		case Opt_dbgmask:
 			if (match_int(&args[0], &option))

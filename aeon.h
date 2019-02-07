@@ -81,6 +81,7 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
  */
 #define AEON_MOUNT_PROTECT      0x000001    /* wprotect CR0.WP */
 #define AEON_MOUNT_DAX          0x000008    /* Direct Access */
+#define AEON_MOUNT_COMPRESSION  0x000010    /* Compression mode */
 #define AEON_MOUNT_FORMAT       0x000200    /* was FS formatted on mount? */
 #define AEON_MOUNT_XATTR_USER	0x004000    /* Extended user attributes */
 
@@ -126,6 +127,7 @@ extern void aeon_err_msg(struct super_block *sb, const char *fmt, ...);
 #define AEON_OTHER_FLMASK (AEON_NODUMP_FL | AEON_NOATIME_FL)
 
 extern int wprotect;
+extern int compression;
 
 struct aeon_mdata {
 	u64 pi_addr;
@@ -305,6 +307,14 @@ long aeon_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 #ifdef CONFIG_COMPAT
 long aeon_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 #endif
+
+/* compression file.c */
+ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
+			       size_t len, loff_t *ppos);
+ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
+			    size_t len, loff_t *ppos);
+void aeon_init_file(struct aeon_inode *pi,
+		    struct aeon_extent_header *aeh);
 
 /* debug.c */
 int aeon_build_stats(struct aeon_sb_info *sbi);
