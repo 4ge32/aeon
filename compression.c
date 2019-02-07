@@ -454,6 +454,8 @@ zstd_do_compress_pages(struct list_head *ws, const void *src, size_t len,
 
 		ret = ZSTD_endStream(stream, &workspace->out_buf);
 		if (ZSTD_isError(ret)) {
+			if (ZSTD_getErrorCode(ret) == ZSTD_error_srcSize_wrong)
+				return len;
 			aeon_warn("ZSTD_endstream returned %d\n",
 				  ZSTD_getErrorCode(ret));
 			err = -EIO;
@@ -797,7 +799,8 @@ aeon_decompress_pmem(void *src, size_t len, struct iov_iter *i, size_t *outlen)
 	return err;
 }
 
-void *aeon_compress(const char __user *data, size_t len, size_t *outlen)
+void *aeon_compress(const char __user *data, size_t len,
+		    size_t *outlen, int *compressed)
 {
 	void *ret;
 	void *buf;
@@ -806,6 +809,8 @@ void *aeon_compress(const char __user *data, size_t len, size_t *outlen)
 	size_t total_out = 0;
 	unsigned long out_pages = (len >> PAGE_SHIFT) + 1;
 	int err = -ENOMEM;
+
+	aeon_dbgv("size %lu\n", len);
 
 	ret = kzalloc(sizeof(char) * len, GFP_KERNEL);
 	if (!ret)
@@ -825,11 +830,17 @@ void *aeon_compress(const char __user *data, size_t len, size_t *outlen)
 	err = zstd_do_compress_pages(workspace, buf, len,
 				     &out_pages, &total_in, &total_out, ret);
 	free_workspace(COMPRESSION_TYPE, workspace);
-	if (err) {
+	if (err == len) {
+		*compressed = 0;
+		*outlen = len;
+		kfree(ret);
+		return buf;
+	} else if (err) {
 		AEON_ERR(err);
 		goto out1;
 	}
 
+	*compressed = 1;
 	*outlen = total_out;
 	kfree(buf);
 
@@ -897,7 +908,7 @@ void *aeon_decompress(const void *data, struct aeon_extent *ae,
 	struct list_head *workspace;
 	void *ret;
 	int compressed_length = le16_to_cpu(ae->ex_compressed_length);
-	size_t o_len = le32_to_cpu(ae->ex_original_length);
+	size_t o_len = le32_to_cpu(ae->ex_compressed_length);
 	size_t c_len = compressed_length<<AEON_SHIFT;
 	size_t outlen = 0;
 	int err = -ENOMEM;

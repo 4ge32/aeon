@@ -1203,24 +1203,88 @@ test-other-3 ()
   clean
 }
 
+# basic 1: a file size is below 4k
 test-compression-1 ()
 {
   init
 
   FILE=../aeon_extents.h
-  cat $FILE > /mnt/test
-  diff $FILE /mnt/test
+  cat $FILE > $DIR/test
+  diff $FILE $DIR/test
   res=$?
 
   clean
 }
+
+# basic 2: a file size over 4k
 test-compression-2 ()
 {
   init
 
   FILE=../aeon_inode.h
-  cat $FILE > /mnt/test
-  diff $FILE /mnt/test
+  cat $FILE > $DIR/test
+  diff $FILE $DIR/test
+  res=$?
+
+  clean
+}
+
+# basic 3: a file size over 4k
+# even after compression
+test-compression-3 ()
+{
+  init
+
+  FILE=dmesg.log
+  cat $FILE > $DIR/test
+  diff $FILE $DIR/test
+  res=$?
+
+  clean
+}
+
+# the pattern that doesn't success compression
+test-compression-4 ()
+{
+  init
+
+  FILE=hello.c
+  cat $FILE > $DIR/test
+  diff $FILE $DIR/test
+  res=$?
+
+  clean
+}
+
+# append test
+test-compression-5 ()
+{
+  init
+
+  FILE=../aeon_inode.h
+  for i in `seq 1 5`
+  do
+  	cat $FILE >> $TMP/test
+  	cat $FILE >> $DIR/test
+  done
+  diff $TMP/test $DIR/test
+  res=$?
+
+  clean
+}
+
+# cutoff test
+test-compression-6 ()
+{
+  init
+
+  FILE=../aeon_inode.h
+  for i in `seq 1 5`
+  do
+  	cat $FILE > $TMP/test
+  	cat $FILE > $DIR/test
+  done
+  diff $TMP/test $DIR/test
   res=$?
 
   clean

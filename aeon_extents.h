@@ -60,6 +60,6 @@ struct aeon_extent *aeon_search_cextent(struct super_block *sb,
 int aeon_update_cextent(struct super_block *sb, struct inode *inode,
 			unsigned long blocknr, unsigned long offset,
 			int num_blocks, int compressed_length,
-			unsigned long original_len);
+			unsigned long original_len, int compressed);
 #endif
 #endif

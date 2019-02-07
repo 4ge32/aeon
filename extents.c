@@ -367,7 +367,7 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 			return -ENOMEM;
 
 		node->offset = le32_to_cpu(pi->ae[i].ex_compressed_offset);
-		node->length = le16_to_cpu(pi->ae[i].ex_compressed_length);
+		node->length = le32_to_cpu(pi->ae[i].ex_compressed_length);
 		node->extent = &pi->ae[i];
 
 		err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
@@ -425,7 +425,7 @@ aeon_insert_extenttree(struct super_block *sb,
 		return -ENOMEM;
 
 	node->offset = le32_to_cpu(ae->ex_compressed_offset);
-	node->length = le16_to_cpu(ae->ex_compressed_length);
+	node->length = le32_to_cpu(ae->ex_compressed_length);
 	node->extent = ae;
 
 	err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
@@ -507,7 +507,8 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 int
 aeon_update_cextent(struct super_block *sb, struct inode *inode,
 		    unsigned long blocknr, unsigned long offset, int num_blocks,
-		    int compressed_length, unsigned long original_len)
+		    int compressed_length, unsigned long original_len,
+		    int compressed)
 {
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
@@ -563,8 +564,8 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	ae->ex_block = cpu_to_le64(blocknr);
 	ae->ex_offset = aeh->eh_blocks;
 	//ae->ex_compressed_offset = cpu_to_le32(offset);
-	ae->ex_compressed_length = cpu_to_le16(original_len);
-	ae->ex_original_length = cpu_to_le32(original_len);
+	ae->ex_compressed_length = cpu_to_le32(original_len);
+	ae->ex_compressed = cpu_to_le32(compressed);
 	aeh->eh_blocks += cpu_to_le16(num_blocks);
 	aeh->eh_prev_extent = cpu_to_le64(ae);
 
@@ -597,7 +598,13 @@ aeon_remove_extenttree(struct super_block *sb,
 	struct aeon_range_node *ret_node = NULL;
 	bool found = false;
 
-	found = aeon_find_range_node(&sih->rb_tree, offset, NODE_EXTENT, &ret_node);
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	found = aeon_find_range_node(&sih->rb_ctree, offset,
+				     NODE_EXTENT, &ret_node);
+#else
+	found = aeon_find_range_node(&sih->rb_tree, offset,
+				     NODE_EXTENT, &ret_node);
+#endif
 	if (!found) {
 		aeon_err(sb, "%s target not found: %lu\n", __func__, offset);
 		return -EINVAL;
@@ -746,6 +753,10 @@ aeon_cutoff_extenttree(struct super_block *sb,
 			aeon_err(sb, "%s: insert blocks into free list\n", __func__);
 			return -EINVAL;
 		}
+#ifdef CONFIG_AEON_FS_COMPRESSION
+		err = aeon_remove_extenttree(sb, sih,
+					     le32_to_cpu(ae->ex_compressed_offset));
+#endif
 		err = aeon_remove_extenttree(sb, sih, offset);
 		if (err) {
 			aeon_err(sb, "%s: remove blocks from a tree\n", __func__);
@@ -753,6 +764,7 @@ aeon_cutoff_extenttree(struct super_block *sb,
 		}
 
 		aeh->eh_entries--;
+		aeh->eh_blocks -= cpu_to_le32(length);
 		ae->ex_block = 0;
 		ae->ex_length = 0;
 		ae->ex_offset = 0;
@@ -816,7 +828,7 @@ aeon_rebuild_rb_extenttree(struct super_block *sb,
 			return -ENOMEM;
 		}
 		node->offset = le32_to_cpu(ae->ex_compressed_offset);
-		node->length = le16_to_cpu(ae->ex_compressed_length);
+		node->length = le32_to_cpu(ae->ex_compressed_length);
 		node->extent = ae;
 
 		err = do_aeon_insert_extenttree(&sih->rb_ctree, node);

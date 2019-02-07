@@ -819,7 +819,7 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	if (old_size < offset)
 		ae->ex_length = cpu_to_le16(off + length - iblock);
 
-	aeh->eh_entries = cpu_to_le16(++index);
+	//aeh->eh_entries = cpu_to_le16(++index);
 	entries = entries - index - 1;
 	err = aeon_cutoff_extenttree(sb, sih, pi, entries, index);
 	if (err)

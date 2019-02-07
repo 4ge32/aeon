@@ -81,7 +81,7 @@ compression ()
   if [ $? -eq 0 ]; then
     echo "Enable $OPT"
   fi
-  _do_test 1 2
+  _do_test 1 5
 }
 
 other ()

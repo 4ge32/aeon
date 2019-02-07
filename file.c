@@ -58,6 +58,7 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 	ssize_t err = 0;
 
 	aeon_dbgv("-----READ-----\n");
+	aeon_dbgv("INO: %lu\n", inode->i_ino);
 
 	pos = *ppos;
 	index = pos >> PAGE_SHIFT;
@@ -127,7 +128,10 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 		aeon_dbgv("lengt   %d\n", le16_to_cpu(ae->ex_compressed_length));
 		aeon_dbgv("nvmm  0x%llx\n", (u64)nvmm);
 
-		dram = aeon_decompress(nvmm, ae, pi);
+		if (le32_to_cpu(ae->ex_compressed))
+			dram = aeon_decompress(nvmm, ae, pi);
+		else
+			dram = nvmm;
 		if (IS_ERR(dram)) {
 			aeon_err(sb, "can't decompress data\n");
 			goto out;
@@ -141,7 +145,7 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 			nr = copying;
 
 		aeon_dbgv("---COPYING");
-		aeon_dbgv("o_len   %u\n", le32_to_cpu(ae->ex_original_length));
+		aeon_dbgv("o_len   %u\n", le32_to_cpu(ae->ex_compressed_length));
 		aeon_dbgv("copied  %lu\n", copied);
 		aeon_dbgv("copying %lu\n", copying);
 		aeon_dbgv("offset  %lu\n", offset);
@@ -167,7 +171,8 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 			goto out;
 		}
 
-		kfree(dram);
+		if (le32_to_cpu(ae->ex_compressed))
+			kfree(dram);
 	} while (copied < len);
 
 out:
@@ -362,7 +367,7 @@ static int do_get_new_blocks_vc(struct super_block *sb,
 				unsigned long iblock,
 				unsigned long num_blocks,
 				unsigned long *ret_blocknr,
-				unsigned long original_len)
+				unsigned long original_len, int compressed)
 {
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh;
@@ -384,7 +389,7 @@ static int do_get_new_blocks_vc(struct super_block *sb,
 	*ret_blocknr = blocknr;
 
 	err = aeon_update_cextent(sb, inode, blocknr, iblock, o_len,
-				  num_blocks, original_len);
+				  num_blocks, original_len, compressed);
 	if (err) {
 		aeon_err(sb, "failed to update extent\n");
 		goto out;
@@ -423,6 +428,7 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 	ssize_t bytes;
 	size_t original_len;
 	int allocated;
+	int compressed = 0;
 	loff_t pos;
 	void *nvmm;
 	void *compressed_data = NULL;
@@ -445,13 +451,11 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 
 	inode->i_ctime = inode->i_mtime = current_time(inode);
 
-	compressed_data = aeon_compress(buf, len, &outlen);
+	compressed_data = aeon_compress(buf, len, &outlen, &compressed);
 	if (IS_ERR(compressed_data)) {
 		aeon_err(sb, "failed to compress data\n");
 		goto out;
 	}
-	aeon_dbgv("COMPRESS\n");
-	aeon_dbgv("outlen   %lu\n", outlen);
 	head = compressed_data;
 	original_len = len;
 	len = outlen;
@@ -461,6 +465,8 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 	offset = pos;
 
 	aeon_dbgv("---WRITE---\n");
+	aeon_dbgv("INO: %lu\n", inode->i_ino);
+	aeon_dbgv("outlen   %lu\n", outlen);
 	aeon_dbgv("len      %lu\n", len);
 	aeon_dbgv("pos      %llu\n", pos);
 	aeon_dbgv("iblock   %lu\n", iblock);
@@ -499,7 +505,7 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 		aeon_dbgv("Allocate new blocks");
 		allocated = do_get_new_blocks_vc(sb, inode, sih, iblock,
 						 num_blocks, &blocknr,
-						 original_len);
+						 original_len, compressed);
 		if (allocated <= 0) {
 			ret = -ENOSPC;
 			goto out;
