@@ -110,11 +110,11 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 			aeon_err(sb, "can't find an extent: %u\n", index);
 			goto out;
 		}
-		ex_offset = le32_to_cpu(ae->ex_compressed_offset);
+		ex_offset = le32_to_cpu(ae->ex_original_offset);
 		if (offset < le32_to_cpu(ae->ex_offset)<<PAGE_SHIFT)
 			offset = 0;
 		else
-			offset -= le32_to_cpu(ae->ex_compressed_offset);
+			offset -= le32_to_cpu(ae->ex_original_offset);
 		blocknr = le64_to_cpu(ae->ex_block);
 		index_extent = le16_to_cpu(ae->ex_index);
 		pages = le16_to_cpu(ae->ex_length) - (index-ex_offset);
@@ -125,7 +125,7 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 		aeon_dbgv("exoffc  %lu\n", ex_offset);
 		aeon_dbgv("exoffo  %u\n", le32_to_cpu(ae->ex_offset));
 		aeon_dbgv("exind   %d\n", index_extent);
-		aeon_dbgv("lengt   %d\n", le16_to_cpu(ae->ex_compressed_length));
+		aeon_dbgv("lengt   %d\n", le16_to_cpu(ae->ex_original_length));
 		aeon_dbgv("nvmm  0x%llx\n", (u64)nvmm);
 
 		if (le32_to_cpu(ae->ex_compressed))
@@ -137,15 +137,15 @@ static ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 			goto out;
 		}
 
-		copying = le32_to_cpu(ae->ex_compressed_offset) +
-			le32_to_cpu(ae->ex_compressed_length) - pos;
+		copying = le32_to_cpu(ae->ex_original_offset) +
+			le32_to_cpu(ae->ex_original_length) - pos;
 		if (len < copying + copied)
 			nr = len - copied;
 		else
 			nr = copying;
 
 		aeon_dbgv("---COPYING");
-		aeon_dbgv("o_len   %u\n", le32_to_cpu(ae->ex_compressed_length));
+		aeon_dbgv("o_len   %u\n", le32_to_cpu(ae->ex_original_length));
 		aeon_dbgv("copied  %lu\n", copied);
 		aeon_dbgv("copying %lu\n", copying);
 		aeon_dbgv("offset  %lu\n", offset);
@@ -495,11 +495,11 @@ static ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 		//	aeon_dbgv("Use remaining space\n");
 
 		//	blocknr = le64_to_cpu(ae->ex_block);
-		//	allocated = le32_to_cpu(ae->ex_compressed_length);
+		//	allocated = le32_to_cpu(ae->ex_original_length);
 		//	aeon_dbgv("eoffset  %lu->\n", offset);
-		//	offset -= sb->s_blocksize * le32_to_cpu(ae->ex_compressed_offset);
+		//	offset -= sb->s_blocksize * le32_to_cpu(ae->ex_original_offset);
 
-		//	aeon_dbgv("offset   %u\n", le32_to_cpu(ae->ex_compressed_offset));
+		//	aeon_dbgv("offset   %u\n", le32_to_cpu(ae->ex_original_offset));
 		//	space = sb->s_blocksize * allocated - offset;
 		//}
 		aeon_dbgv("Allocate new blocks");

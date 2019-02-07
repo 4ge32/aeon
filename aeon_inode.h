@@ -64,8 +64,8 @@ struct aeon_extent {
 	__le16  ex_length;
 	__le32  ex_offset;
 #ifdef CONFIG_AEON_FS_COMPRESSION
-	__le32  ex_compressed_length;
-	__le32  ex_compressed_offset;
+	__le32  ex_original_length;
+	__le32  ex_original_offset;
 	__le16  ex_compressed;
 #endif
 } __attribute((__packed__));

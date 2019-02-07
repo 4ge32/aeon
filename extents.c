@@ -46,8 +46,8 @@ static struct aeon_extent
 		}
 		ae = (struct aeon_extent *)addr;
 
-		length = le16_to_cpu(ae->ex_compressed_length);
-		offset = le16_to_cpu(ae->ex_compressed_offset);
+		length = le16_to_cpu(ae->ex_original_length);
+		offset = le16_to_cpu(ae->ex_original_offset);
 		if (offset <= iblock && iblock < offset + length) {
 			read_unlock(&sih->i_meta_lock);
 			return (struct aeon_extent *)addr;
@@ -366,8 +366,8 @@ aeon_build_new_rb_extent_tree(struct super_block *sb,
 		if (!node)
 			return -ENOMEM;
 
-		node->offset = le32_to_cpu(pi->ae[i].ex_compressed_offset);
-		node->length = le32_to_cpu(pi->ae[i].ex_compressed_length);
+		node->offset = le32_to_cpu(pi->ae[i].ex_original_offset);
+		node->length = le32_to_cpu(pi->ae[i].ex_original_length);
 		node->extent = &pi->ae[i];
 
 		err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
@@ -424,8 +424,8 @@ aeon_insert_extenttree(struct super_block *sb,
 	if (!node)
 		return -ENOMEM;
 
-	node->offset = le32_to_cpu(ae->ex_compressed_offset);
-	node->length = le32_to_cpu(ae->ex_compressed_length);
+	node->offset = le32_to_cpu(ae->ex_original_offset);
+	node->length = le32_to_cpu(ae->ex_original_length);
 	node->extent = ae;
 
 	err = do_aeon_insert_extenttree(&sih->rb_ctree, node);
@@ -551,10 +551,10 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	if (le16_to_cpu(aeh->eh_entries)) {
 		prev = aeon_get_prev_extent(aeh);
 		if (prev)
-			ae->ex_compressed_offset =
-			prev->ex_compressed_offset + prev->ex_compressed_length;
+			ae->ex_original_offset =
+			prev->ex_original_offset + prev->ex_original_length;
 		else
-			ae->ex_compressed_offset = 0;
+			ae->ex_original_offset = 0;
 	}
 
 	write_lock(&sih->i_meta_lock);
@@ -563,8 +563,8 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	ae->ex_length = cpu_to_le16(num_blocks);
 	ae->ex_block = cpu_to_le64(blocknr);
 	ae->ex_offset = aeh->eh_blocks;
-	//ae->ex_compressed_offset = cpu_to_le32(offset);
-	ae->ex_compressed_length = cpu_to_le32(original_len);
+	//ae->ex_original_offset = cpu_to_le32(offset);
+	ae->ex_original_length = cpu_to_le32(original_len);
 	ae->ex_compressed = cpu_to_le32(compressed);
 	aeh->eh_blocks += cpu_to_le16(num_blocks);
 	aeh->eh_prev_extent = cpu_to_le64(ae);
@@ -572,8 +572,8 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	aeon_dbgv("%s-O: offset %u length %d\n",
 		  __func__, le32_to_cpu(ae->ex_offset), num_blocks);
 	aeon_dbgv("%s-C: offset %u length %d\n",
-		  __func__, le32_to_cpu(ae->ex_compressed_offset),
-		  le16_to_cpu(ae->ex_compressed_length));
+		  __func__, le32_to_cpu(ae->ex_original_offset),
+		  le16_to_cpu(ae->ex_original_length));
 
 	pi->i_blocks = aeh->eh_blocks * 8;
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
@@ -755,7 +755,7 @@ aeon_cutoff_extenttree(struct super_block *sb,
 		}
 #ifdef CONFIG_AEON_FS_COMPRESSION
 		err = aeon_remove_extenttree(sb, sih,
-					     le32_to_cpu(ae->ex_compressed_offset));
+					     le32_to_cpu(ae->ex_original_offset));
 #endif
 		err = aeon_remove_extenttree(sb, sih, offset);
 		if (err) {
@@ -827,8 +827,8 @@ aeon_rebuild_rb_extenttree(struct super_block *sb,
 			read_unlock(&sih->i_meta_lock);
 			return -ENOMEM;
 		}
-		node->offset = le32_to_cpu(ae->ex_compressed_offset);
-		node->length = le32_to_cpu(ae->ex_compressed_length);
+		node->offset = le32_to_cpu(ae->ex_original_offset);
+		node->length = le32_to_cpu(ae->ex_original_length);
 		node->extent = ae;
 
 		err = do_aeon_insert_extenttree(&sih->rb_ctree, node);

@@ -907,8 +907,8 @@ void *aeon_decompress(const void *data, struct aeon_extent *ae,
 {
 	struct list_head *workspace;
 	void *ret;
-	int compressed_length = le16_to_cpu(ae->ex_compressed_length);
-	size_t o_len = le32_to_cpu(ae->ex_compressed_length);
+	int compressed_length = le16_to_cpu(ae->ex_original_length);
+	size_t o_len = le32_to_cpu(ae->ex_original_length);
 	size_t c_len = compressed_length<<AEON_SHIFT;
 	size_t outlen = 0;
 	int err = -ENOMEM;
