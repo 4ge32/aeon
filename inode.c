@@ -111,6 +111,16 @@ u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry)
 	return direntry->ino;
 }
 
+void aeon_init_file(struct aeon_inode *pi,
+		    struct aeon_extent_header *aeh)
+{
+	if (!le16_to_cpu(pi->i_exblocks)) {
+		pi->i_new = 0;
+		pi->i_exblocks++;
+		aeon_init_extent_header(aeh);
+	}
+}
+
 static inline
 void aeon_init_header(struct super_block *sb,
 		      struct aeon_inode_info_header *sih,
@@ -811,6 +821,10 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	ae = aeon_search_extent(sb, sih, iblock);
 	if (!ae)
 		goto expand;
+
+	aeon_dbgv("CUT OFF DATA\n");
+	aeon_dbgv("offset %lu\n", iblock);
+
 	entries = le16_to_cpu(aeh->eh_entries);
 
 	index = le16_to_cpu(ae->ex_index);

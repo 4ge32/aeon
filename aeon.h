@@ -313,8 +313,6 @@ ssize_t do_dax_decompress_read(struct inode *inode, char __user *buf,
 			       size_t len, loff_t *ppos);
 ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 			    size_t len, loff_t *ppos);
-void aeon_init_file(struct aeon_inode *pi,
-		    struct aeon_extent_header *aeh);
 
 /* debug.c */
 int aeon_build_stats(struct aeon_sb_info *sbi);

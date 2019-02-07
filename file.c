@@ -144,7 +144,6 @@ out:
 	aeon_dbgv("copied return     %lu\n", copied);
 	return copied ? copied : err;
 }
-#endif
 
 static ssize_t aeon_read(struct file *filp, char __user *buf,
 			 size_t len, loff_t *ppos)
@@ -169,16 +168,6 @@ static ssize_t aeon_read(struct file *filp, char __user *buf,
 	inode_unlock_shared(inode);
 
 	return ret;
-}
-
-void aeon_init_file(struct aeon_inode *pi,
-		    struct aeon_extent_header *aeh)
-{
-	if (!le16_to_cpu(pi->i_exblocks)) {
-		pi->i_new = 0;
-		pi->i_exblocks++;
-		aeon_init_extent_header(aeh);
-	}
 }
 
 static int do_dax_get_new_blocks(struct super_block *sb,
@@ -376,6 +365,7 @@ static ssize_t aeon_write(struct file *filp, const char __user *buf,
 
 	return aeon_dax_write(filp, buf, len, ppos);
 }
+#endif
 
 static inline void wrap_file_accessed(struct file *fp)
 {

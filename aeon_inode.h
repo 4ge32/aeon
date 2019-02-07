@@ -290,6 +290,8 @@ int aeon_init_inode_inuse_list(struct super_block *sb);
 int aeon_get_inode_address(struct super_block *sb,
 			   u32 ino, u64 *pi_addr, struct aeon_dentry *de);
 u32 aeon_inode_by_name(struct inode *dir, struct qstr *entry);
+void aeon_init_file(struct aeon_inode *pi,
+		    struct aeon_extent_header *aeh);
 void aeon_set_file_ops(struct inode *inode);
 struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 				 struct inode *dir, struct aeon_mdata *am);
