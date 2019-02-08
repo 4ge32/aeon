@@ -5,7 +5,7 @@
 #CONFIG_AEON_FS_XATTR=y
 #CONFIG_AEON_FS_SECURITY=y
 CONFIG_AEON_FS_COMPRESSION=y
-CONFIG_AEON_FS_DEBUG_MODE=y
+#CONFIG_AEON_FS_DEBUG_MODE=y
 CONFIG_AEON_FS_AEON_RW=y
 
 
@@ -59,7 +59,7 @@ aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \
 
 aeon-$(CONFIG_AEON_FS_XATTR) += xattr.o xattr_user.o xattr_trusted.o
 aeon-$(CONFIG_AEON_FS_SECURITY) += xattr_security.o
-aeon-$(CONFIG_AEON_FS_COMPRESSION) += compression.o
+aeon-$(CONFIG_AEON_FS_COMPRESSION) += compression.o cfile.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd`
