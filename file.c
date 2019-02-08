@@ -239,9 +239,6 @@ static ssize_t aeon_dax_write(struct file *filp, const char __user *buf,
 	void *nvmm;
 	u64 addr_off;
 
-	if (len == 0)
-		return 0;
-
 	if (!access_ok(VERIFY_READ, buf, len))
 		return -EFAULT;
 
@@ -359,8 +356,8 @@ out:
 	return ret;
 }
 
-static ssize_t aeon_write(struct file *filp, const char __user *buf,
-			  size_t len, loff_t *ppos)
+static ssize_t do_aeon_write(struct file *filp, const char __user *buf,
+			     size_t len, loff_t *ppos)
 {
 #ifdef CONFIG_AEON_FS_COMPRESSION
 	if (compression)
@@ -368,6 +365,26 @@ static ssize_t aeon_write(struct file *filp, const char __user *buf,
 #endif
 
 	return aeon_dax_write(filp, buf, len, ppos);
+}
+
+static ssize_t aeon_write(struct file *filp, const char __user *buf,
+			  size_t len, loff_t *ppos)
+{
+	struct inode *inode = filp->f_mapping->host;
+	ssize_t ret;
+
+	if (len == 0)
+		return 0;
+
+	sb_start_write(inode->i_sb);
+	inode_lock(inode);
+
+	ret = do_aeon_write(filp, buf, len, ppos);
+
+	inode_unlock(inode);
+	sb_end_write(inode->i_sb);
+
+	return ret;
 }
 #endif
 

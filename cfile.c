@@ -221,9 +221,6 @@ ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 	void *head = NULL;
 	u64 addr_off;
 
-	if (len == 0)
-		return 0;
-
 	if (!access_ok(VERIFY_READ, buf, len))
 		return -EFAULT;
 
