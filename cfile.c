@@ -297,7 +297,7 @@ ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 			goto out;
 		}
 
-		offset = 0;
+		offset = pos & ~PAGE_MASK;
 		space = sb->s_blocksize * allocated - offset;
 
 		aeon_dbgv("allocate %d\n", allocated);
@@ -353,9 +353,11 @@ ssize_t aeon_compress_write(struct file *filp, const char __user *buf,
 
 	aeon_dbgv("NOW   %llu/n", pos >> AEON_SHIFT);
 	*ppos = pos;
-	i_size_write(inode, pos);
-	pi->i_size = cpu_to_le64(pos);
-	pi->i_original_size += cpu_to_le64(original_len);
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		pi->i_size = cpu_to_le64(pos);
+		pi->i_original_size += cpu_to_le64(original_len);
+	}
 
 	ret = original_len;
 out:
