@@ -58,6 +58,7 @@ static ssize_t do_dax_mapping_read(struct inode *inode, char __user *buf,
 	ssize_t err = 0;
 
 	aeon_dbgv("---READ---\n");
+	aeon_dbgv("INO: %lu\n", inode->i_ino);
 
 	pos = *ppos;
 	index = pos >> PAGE_SHIFT;
@@ -259,6 +260,7 @@ static ssize_t aeon_dax_write(struct file *filp, const char __user *buf,
 	offset = pos;
 
 	aeon_dbgv("---WRITE---\n");
+	aeon_dbgv("INO: %lu\n", inode->i_ino);
 	aeon_dbgv("len      %lu\n", len);
 	aeon_dbgv("pos      %llu\n", pos);
 	aeon_dbgv("iblock   %lu\n", iblock);
@@ -280,7 +282,7 @@ static ssize_t aeon_dax_write(struct file *filp, const char __user *buf,
 				goto out;
 			}
 
-			offset = 0;
+			offset = pos & ~PAGE_MASK;
 			space = sb->s_blocksize * allocated - offset;
 		} else {
 			aeon_dbgv("Use remaining space\n");
@@ -336,7 +338,6 @@ static ssize_t aeon_dax_write(struct file *filp, const char __user *buf,
 		if (unlikely(copied != bytes)) {
 			aeon_err(sb, "%s ERROR!: %p, bytes %lu, copied %lu\n",
 				__func__, nvmm, bytes, copied);
-			BUG();
 			if (status >= 0)
 				status = -EFAULT;
 		}
@@ -345,10 +346,13 @@ static ssize_t aeon_dax_write(struct file *filp, const char __user *buf,
 			break;
 	}
 
-	aeon_dbgv("NOW   %llu/n", pos >> AEON_SHIFT);
+	aeon_dbgv("NOW   %llu\n", pos >> AEON_SHIFT);
+
 	*ppos = pos;
-	i_size_write(inode, pos);
-	pi->i_size = cpu_to_le64(pos);
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		pi->i_size = cpu_to_le64(pos);
+	}
 	ret = written;
 
 out:
