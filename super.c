@@ -9,6 +9,7 @@
 #include <linux/parser.h>
 #include <linux/cred.h>
 #include <linux/statfs.h>
+#include <linux/seq_file.h>
 
 #include "aeon.h"
 #include "aeon_super.h"
@@ -161,6 +162,32 @@ static int aeon_statfs(struct dentry *d, struct kstatfs *buf)
 	return 0;
 }
 
+static int aeon_show_options(struct seq_file *seq, struct dentry *root)
+{
+	struct super_block *sb = root->d_sb;
+	struct aeon_sb_info *sbi = AEON_SB(sb);
+
+	mutex_lock(&sbi->s_lock);
+
+	if (test_opt(sb, DAX))
+		seq_puts(seq, ",dax");
+	if(test_opt(sb, PROTECT))
+		seq_puts(seq, ",wprotect");
+#ifdef CONFIG_AEON_FS_COMPRESSION
+	if (test_opt(sb, COMPRESSION))
+		seq_puts(seq, ",data=compressed");
+#endif
+#ifdef CONFIG_AEON_FS_XATTR
+	if (test_opt(sb, XATTR_USER))
+		seq_puts(seq, ",user_xattr");
+	if (!test_opt(sb, XATTR_USER))
+		seq_puts(seq, ",nouser_xattr");
+#endif
+
+	mutex_unlock(&sbi->s_lock);
+	return 0;
+}
+
 static struct super_operations aeon_sops = {
 	.alloc_inode   = aeon_alloc_inode,
 	.destroy_inode = aeon_destroy_inode,
@@ -168,6 +195,7 @@ static struct super_operations aeon_sops = {
 	.write_inode   = aeon_write_inode,
 	.evict_inode   = aeon_evict_inode,
 	.statfs        = aeon_statfs,
+	.show_options  = aeon_show_options,
 };
 
 void aeon_err_msg(struct super_block *sb, const char *fmt, ...)
@@ -271,7 +299,7 @@ static int aeon_get_nvmm_info(struct super_block *sb, struct aeon_sb_info *sbi)
 
 	sbi->phys_addr = pfn_t_to_pfn(__pfn_t) << PAGE_SHIFT;
 	sbi->initsize = size;
-	aeon_dbgv("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
+	aeon_info("%s: dev %s, phys_addr 0x%llx, virt_addr 0x%lx, size %ld\n",
 		  __func__, sbi->s_bdev->bd_disk->disk_name,
 		  sbi->phys_addr, (unsigned long)sbi->virt_addr, sbi->initsize);
 
