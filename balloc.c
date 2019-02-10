@@ -859,9 +859,7 @@ static void aeon_register_next_inode_block(struct super_block *sb,
 	struct aeon_inode *pi;
 	unsigned long prev_blocknr = le64_to_cpu(art->i_blocknr);
 
-	pi = (struct aeon_inode *)(AEON_HEAD(sb) +
-				   (prev_blocknr << AEON_SHIFT) +
-				   (AEON_INODE_SIZE));
+	pi = (struct aeon_inode *)(AEON_HEAD(sb) + (prev_blocknr<<AEON_SHIFT));
 
 	pi->i_next_inode_block = cpu_to_le64(blocknr);
 	art->i_blocknr = cpu_to_le64(blocknr);

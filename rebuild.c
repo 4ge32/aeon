@@ -786,7 +786,7 @@ icache_rebuild(struct super_block *sb, struct inode_map *inode_map,
 		addr = virt_addr + (i << AEON_I_SHIFT);
 		pi = (struct aeon_inode *)addr;
 
-		if (i == 1)
+		if (i == 0)
 			*next_blocknr = le64_to_cpu(pi->i_next_inode_block);
 
 		if (pi->valid && !pi->deleted && (count < allocated)) {
