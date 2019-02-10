@@ -790,62 +790,15 @@ int aeon_dax_get_blocks(struct inode *inode, unsigned long iblock,
 	return allocated;
 }
 
-static void aeon_register_next_inode_block(struct super_block *sb,
-					   struct inode_map *inode_map,
-					   struct aeon_region_table *art,
-					   unsigned long blocknr)
+static void icache_create(struct aeon_sb_info *sbi,
+			      struct inode_map *inode_map)
 {
-	struct aeon_inode *pi;
-	unsigned long prev_blocknr = le64_to_cpu(art->i_blocknr);
+	struct icache *init;
 
-	pi = (struct aeon_inode *)(AEON_HEAD(sb) +
-				   (prev_blocknr << AEON_SHIFT) +
-				   (AEON_INODE_SIZE));
-
-	pi->i_next_inode_block = cpu_to_le64(blocknr);
-	art->i_blocknr = cpu_to_le64(blocknr);
-}
-
-static void imem_cache_create(struct aeon_sb_info *sbi,
-			      struct inode_map *inode_map,
-			      unsigned long blocknr,
-			      u64 start_ino, int space)
-{
-	struct imem_cache *init;
-
-	init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+	init = kmalloc(sizeof(struct icache), GFP_KERNEL);
 	inode_map->im = init;
 
 	INIT_LIST_HEAD(&inode_map->im->imem_list);
-}
-
-u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
-{
-	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
-	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
-	unsigned long allocated;
-	unsigned long blocknr = 0;
-	int num_blocks = AEON_PAGES_FOR_INODE;
-	u64 addr;
-
-	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE+1) {
-		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
-		if (allocated != AEON_PAGES_FOR_INODE)
-			goto out;
-		addr = AEON_HEAD(sb) + (blocknr<<AEON_SHIFT);
-		memset((void *)addr, 0, 4096 * allocated);
-		aeon_register_next_inode_block(sb, inode_map, art, blocknr);
-		art->i_num_allocated_pages += cpu_to_le32(allocated);
-		art->i_allocated = cpu_to_le16(1);
-		art->i_head_ino = cpu_to_le32(ino);
-	} else
-		blocknr = le64_to_cpu(art->i_blocknr);
-
-	return blocknr;
-
-out:
-	aeon_err(sb, "can't alloc region for inode\n");
-	return 0;
 }
 
 static void do_aeon_init_new_inode_block(struct super_block *sb,
@@ -895,8 +848,23 @@ static void do_aeon_init_new_inode_block(struct super_block *sb,
 
 	inode_map->i_table_addr = (void *)((*table_blocknr << AEON_SHIFT) +
 					   AEON_HEAD(sb));
-	/*TODO: Remove it? */
-	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
+	icache_create(sbi, inode_map);
+}
+
+static void aeon_register_next_inode_block(struct super_block *sb,
+					   struct inode_map *inode_map,
+					   struct aeon_region_table *art,
+					   unsigned long blocknr)
+{
+	struct aeon_inode *pi;
+	unsigned long prev_blocknr = le64_to_cpu(art->i_blocknr);
+
+	pi = (struct aeon_inode *)(AEON_HEAD(sb) +
+				   (prev_blocknr << AEON_SHIFT) +
+				   (AEON_INODE_SIZE));
+
+	pi->i_next_inode_block = cpu_to_le64(blocknr);
+	art->i_blocknr = cpu_to_le64(blocknr);
 }
 
 void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
@@ -905,6 +873,35 @@ void aeon_init_new_inode_block(struct super_block *sb, u32 ino)
 
 	for (i = 0; i < AEON_SB(sb)->cpus; i++)
 		do_aeon_init_new_inode_block(sb, i, ino + i);
+}
+
+u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
+{
+	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
+	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	int num_blocks = AEON_PAGES_FOR_INODE;
+	u64 addr;
+
+	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE+1) {
+		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
+		if (allocated != AEON_PAGES_FOR_INODE)
+			goto out;
+		addr = AEON_HEAD(sb) + (blocknr<<AEON_SHIFT);
+		memset((void *)addr, 0, 4096 * allocated);
+		aeon_register_next_inode_block(sb, inode_map, art, blocknr);
+		art->i_num_allocated_pages += cpu_to_le32(allocated);
+		art->i_allocated = cpu_to_le16(1);
+		art->i_head_ino = cpu_to_le32(ino);
+	} else
+		blocknr = le64_to_cpu(art->i_blocknr);
+
+	return blocknr;
+
+out:
+	aeon_err(sb, "can't alloc region for inode\n");
+	return 0;
 }
 
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr)

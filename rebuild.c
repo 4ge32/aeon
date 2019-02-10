@@ -387,7 +387,7 @@ insert_inode_to_validlist(struct super_block *sb, struct aeon_inode *pidir,
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi;
 	struct inode_map *inode_map;
-	struct imem_cache *im;
+	struct icache *im;
 	int ino = le32_to_cpu(negative_dentry->ino);
 	int cpu_id;
 	int err;
@@ -738,15 +738,15 @@ out:
 }
 
 static unsigned int
-imem_cache_rebuild(struct super_block *sb, struct inode_map *inode_map,
+icache_rebuild(struct super_block *sb, struct inode_map *inode_map,
 		   unsigned long blocknr, u32 start_ino,
 		   unsigned int allocated,  unsigned long *next_blocknr,
-		   int space, int cpu_id)
+		   int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct aeon_inode *pi;
-	struct imem_cache *im;
-	struct imem_cache *init;
+	struct icache *im;
+	struct icache *init;
 	struct i_valid_list *ivl;
 	struct i_valid_list *ivl_init;
 	struct i_valid_child_list *ivcl = NULL;
@@ -759,7 +759,7 @@ imem_cache_rebuild(struct super_block *sb, struct inode_map *inode_map,
 	unsigned int count = 0;
 
 	if (!inode_map->im) {
-		init = kmalloc(sizeof(struct imem_cache), GFP_KERNEL);
+		init = kmalloc(sizeof(struct icache), GFP_KERNEL);
 		inode_map->im = init;
 		INIT_LIST_HEAD(&inode_map->im->imem_list);
 	}
@@ -780,7 +780,7 @@ imem_cache_rebuild(struct super_block *sb, struct inode_map *inode_map,
 
 	art = AEON_R_TABLE(inode_map);
 
-	for (i = space; i < AEON_I_NUM_PER_PAGE; i++) {
+	for (i = 0; i < AEON_I_NUM_PER_PAGE; i++) {
 		u64 addr;
 
 		addr = virt_addr + (i << AEON_I_SHIFT);
@@ -851,12 +851,13 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
 	struct inode_map *inode_map = aeon_get_inode_map(sb, cpu_id);
-	struct aeon_region_table *art;
+	struct aeon_region_table *art = aeon_get_rtable(sb, cpu_id);
 	unsigned long offset;
 	unsigned long blocknr = 0;
 	int ino = sbi->cpus + cpu_id;
 	unsigned int allocated;
 	unsigned int ret;
+	unsigned int iblocks;
 	int i;
 
 	if (sbi->s_mount_opt & AEON_MOUNT_FORMAT)
@@ -864,24 +865,13 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 
 	mutex_lock(&inode_map->inode_table_mutex);
 
-	art = AEON_R_TABLE(inode_map);
 	offset = (((u64)inode_map->i_table_addr-AEON_HEAD(sb))>>AEON_SHIFT)+1;
 	allocated = le64_to_cpu(art->allocated);
+	iblocks = le32_to_cpu(art->i_num_allocated_pages)/AEON_PAGES_FOR_INODE;
 
-	/* the first page for inode contains inode_table
-	 * so it leaves space of a inode size between head
-	 * of page and firtst inode (last argument).
-	 */
-	ret = imem_cache_rebuild(sb, inode_map, offset, ino,
-				 allocated, &blocknr, 0, cpu_id);
-	allocated -= ret;
-	offset = blocknr;
-	ino = ino + AEON_I_NUM_PER_PAGE * sbi->cpus;
-
-	for (i = 1; i < le32_to_cpu(art->i_num_allocated_pages) /
-					AEON_PAGES_FOR_INODE; i++) {
-		ret = imem_cache_rebuild(sb, inode_map, offset, ino,
-					 allocated, &blocknr, 0, cpu_id);
+	for (i = 0; i < iblocks; i++) {
+		ret = icache_rebuild(sb, inode_map, offset, ino,
+					 allocated, &blocknr, cpu_id);
 		allocated -= ret;
 		offset = blocknr;
 		ino = ino + AEON_I_NUM_PER_PAGE * sbi->cpus;

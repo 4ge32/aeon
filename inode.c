@@ -325,10 +325,11 @@ static u64 search_imem_addr(struct super_block *sb, int cpu_id, u32 ino)
 
 	internal_ino = (((ino - cpu_id - 1) / sbi->cpus) %
 			AEON_I_NUM_PER_PAGE);
-
 	blocknr = le64_to_cpu(art->i_blocknr);
-	addr = AEON_HEAD(sb) + (blocknr << AEON_SHIFT) +
-				(internal_ino << AEON_I_SHIFT);
+
+	blocknr <<= AEON_SHIFT;
+	internal_ino <<= AEON_I_SHIFT;
+	addr = aeon_get_address_u64(sb, blocknr, internal_ino);
 
 	aeon_dbgv("%s ino %u addr 0x%llx\n", __func__, ino, addr);
 	return addr;
@@ -356,10 +357,10 @@ err:
 
 static u64 aeon_reclaim_inode(struct inode_map *inode_map, u32 *ino)
 {
-	struct imem_cache *im;
+	struct icache *im;
 	u64 addr;
 
-	im = list_first_entry(&inode_map->im->imem_list, struct imem_cache, imem_list);
+	im = list_first_entry(&inode_map->im->imem_list, struct icache, imem_list);
 	addr = im->addr;
 	*ino = im->ino;
 	list_del(&im->imem_list);
@@ -635,10 +636,10 @@ fail:
 	return ERR_PTR(err);
 }
 
-void aeon_destroy_imem_cache(struct inode_map *inode_map)
+void aeon_destroy_icache(struct inode_map *inode_map)
 {
-	struct imem_cache *im;
-	struct imem_cache *dend = NULL;
+	struct icache *im;
+	struct icache *dend = NULL;
 
 	list_for_each_entry_safe(im, dend, &inode_map->im->imem_list, imem_list) {
 		list_del(&im->imem_list);
@@ -704,7 +705,7 @@ static int aeon_free_inode(struct super_block *sb, struct aeon_inode *pi,
 	int cpuid = ino % sbi->cpus;
 	struct inode_map *inode_map = aeon_get_inode_map(sb, cpuid);
 	struct aeon_region_table *art = AEON_R_TABLE(inode_map);
-	struct imem_cache *im;
+	struct icache *im;
 	int err = 0;
 
 	mutex_lock(&inode_map->inode_table_mutex);

@@ -72,7 +72,7 @@ static void aeon_put_super(struct super_block *sb)
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = aeon_get_inode_map(sb, i);
-		aeon_destroy_imem_cache(inode_map);
+		aeon_destroy_icache(inode_map);
 		art = AEON_R_TABLE(inode_map);
 		aeon_dbg("CPU %d: inode allocated %llu, freed %llu\n",
 			 i, le64_to_cpu(art->allocated), le64_to_cpu(art->freed));

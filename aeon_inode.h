@@ -17,11 +17,11 @@
 #define PI_MAX_EXTERNAL_EXTENT 4
 #endif
 
-struct imem_cache {
+struct icache {
 	u32	ino;
 	u64	addr;
 	int	independent;
-	struct	imem_cache *head;
+	struct	icache *head;
 	struct	list_head imem_list;
 };
 
@@ -44,7 +44,7 @@ struct inode_map {
 	struct rb_root		inode_inuse_tree;
 	unsigned long		num_range_node_inode;
 	struct aeon_range_node	*first_inode_range;
-	struct imem_cache	*im;
+	struct icache		*im;
 	void			*i_table_addr;
 };
 
@@ -202,13 +202,13 @@ struct aeon_inode *aeon_get_inode(struct super_block *sb,
 }
 
 static inline
-struct imem_cache *aeon_alloc_icache(struct super_block *sb)
+struct icache *aeon_alloc_icache(struct super_block *sb)
 {
-	return (struct imem_cache *)aeon_alloc_inode_node(sb);
+	return (struct icache *)aeon_alloc_inode_node(sb);
 }
 
 static inline
-void aeon_free_icache(struct imem_cache *im)
+void aeon_free_icache(struct icache *im)
 {
 	aeon_free_inode_node((struct aeon_range_node *)im);
 }
@@ -303,7 +303,7 @@ int aeon_free_inode_resource(struct super_block *sb, struct aeon_inode *pi,
 			     struct aeon_inode_info_header *sih);
 int aeon_free_dram_resource(struct super_block *sb,
 			    struct aeon_inode_info_header *sih);
-void aeon_destroy_imem_cache(struct inode_map *inode_map);
+void aeon_destroy_icache(struct inode_map *inode_map);
 int aeon_update_time(struct inode *inode, struct timespec64 *time, int flags);
 void aeon_truncate_blocks(struct inode *inode, loff_t offset);
 int aeon_setattr(struct dentry *dentry, struct iattr *iattr);

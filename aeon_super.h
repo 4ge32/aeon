@@ -146,6 +146,12 @@ void *aeon_get_address(struct super_block *sb, u64 offset, u64 offset2)
 	return offset ? (void *)(AEON_HEAD(sb) + offset + offset2) : NULL;
 }
 
+static inline
+u64 aeon_get_address_u64(struct super_block *sb, u64 offset, u64 offset2)
+{
+	return offset ? (AEON_HEAD(sb) + offset + offset2) : 0;
+}
+
 static inline int aeon_get_reference(struct super_block *sb, u64 block,
 				     void *dram, void **nvmm, size_t size)
 {

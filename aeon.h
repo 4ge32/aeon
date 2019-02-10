@@ -210,6 +210,7 @@ aeon_get_numblocks(unsigned short btype)
 	return 1;
 }
 
+/*TODO: not use it and remove it */
 static inline struct aeon_region_table *AEON_R_TABLE(struct inode_map *inode_map)
 {
 	return (struct aeon_region_table *)(inode_map->i_table_addr);

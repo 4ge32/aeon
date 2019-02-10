@@ -221,7 +221,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 			space = 1;
 		ino = head_ino;
 		if (inode_map->im) {
-			struct imem_cache *im;
+			struct icache *im;
 			int count = 0;
 			list_for_each_entry(im, &inode_map->im->imem_list,
 					    imem_list) {
@@ -441,7 +441,7 @@ void aeon_destroy_stats(struct aeon_sb_info *sbi)
 int __init aeon_create_root_stats(void)
 {
 	struct dentry *free_list_file;
-	struct dentry *imem_cache_file;
+	struct dentry *icache_file;
 	struct dentry *d_allocated;
 
 	aeon_debugfs_root = debugfs_create_dir("aeon", NULL);
@@ -458,11 +458,11 @@ int __init aeon_create_root_stats(void)
 		return -ENOMEM;
 	}
 
-	imem_cache_file = debugfs_create_file("imem_cache", S_IRUGO,
+	icache_file = debugfs_create_file("icache", S_IRUGO,
 					      aeon_debugfs_root,
 					      NULL, &stat_imem_fops);
 
-	if (!imem_cache_file) {
+	if (!icache_file) {
 		debugfs_remove_recursive(aeon_debugfs_root);
 		aeon_debugfs_root = NULL;
 		return -ENOMEM;
