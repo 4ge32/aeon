@@ -3,8 +3,8 @@
 
 #include "aeon.h"
 
-#define AEON_SB_SIZE            512
-#define AEON_SB_CSIZE           (512 - CHECKSUM_SIZE)
+#define AEON_SB_SIZE            64
+#define AEON_SB_CSIZE           (AEON_SB_SIZE - CHECKSUM_SIZE)
 
 extern int fs_persisted;
 
@@ -25,7 +25,7 @@ struct aeon_super_block {
 	__le64 s_num_inodes;
 	__le64 s_num_free_blocks;
 
-	char   pad[444];
+	char   pad[3];
 	__le32 s_csum;              /* checksum of this sb */
 } __attribute((__packed__));
 
