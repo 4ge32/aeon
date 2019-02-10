@@ -86,7 +86,7 @@ compression ()
 
 other ()
 {
-  _do_test 1 3
+  _do_test 1 4
 }
 
 source ./list_test.sh

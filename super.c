@@ -531,7 +531,7 @@ static void aeon_fill_region_table(struct super_block *sb)
 			art->i_top_ino = cpu_to_le32(inode_start);
 		} else {
 			//aeon_dbgv("%s: %u\n", __func__, le32_to_cpu(art->b_range_low));
-			free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
+			//free_list->first_node->range_low = le32_to_cpu(art->b_range_low);
 			free_list->num_free_blocks = le64_to_cpu(art->num_free_blocks);
 		}
 	}

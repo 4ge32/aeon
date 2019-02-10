@@ -187,6 +187,9 @@ struct aeon_region_table {
 	__le64 alloc_data_pages;
 	__le64 freed_data_count;
 	__le64 freed_data_pages;
+
+	/* The num of block range nodes when last saved */
+	__le16 range_nodes;
 } __attribute((__packed__));
 
 

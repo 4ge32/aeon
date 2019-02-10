@@ -1186,6 +1186,7 @@ test-other-3 ()
 {
   init
 
+  HERE=`pwd`
   touch /mnt/abc
   touch /mnt/bcd
   ./run.sh rm
@@ -1199,6 +1200,35 @@ test-other-3 ()
   if [[ $ret == *"?"* ]]; then
     res=1
   fi
+
+  cd $HERE
+  clean
+}
+
+# Check the info after remount
+test-other-4 ()
+{
+  init
+
+  HERE=`pwd`
+  #echo $HERE
+  cd $DIR
+  #pwd
+  git clone https://github.com/4ge32/aeon.git > /dev/null 2>&1
+  cd aeon
+  #pwd
+  make -j > /dev/null
+  make clean > /dev/null
+  make -j > /dev/null
+  make clean > /dev/null
+  make -j > /dev/null
+  cd $HERE/..
+  #pwd
+  ./run.sh info > $TMP/info1
+  ./run.sh rm
+  ./run.sh info > $TMP/info2
+  diff $TMP/info1 $TMP/info2
+  res=$?
 
   clean
 }
