@@ -846,6 +846,7 @@ next:
 	return count;
 }
 
+/*TODO: Refine code */
 static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 {
 	struct aeon_sb_info *sbi = AEON_SB(sb);
@@ -864,7 +865,7 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 	mutex_lock(&inode_map->inode_table_mutex);
 
 	art = AEON_R_TABLE(inode_map);
-	offset = ((u64)inode_map->i_table_addr - AEON_HEAD(sb)) >> AEON_SHIFT;
+	offset = (((u64)inode_map->i_table_addr-AEON_HEAD(sb))>>AEON_SHIFT)+1;
 	allocated = le64_to_cpu(art->allocated);
 
 	/* the first page for inode contains inode_table
@@ -872,10 +873,10 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 	 * of page and firtst inode (last argument).
 	 */
 	ret = imem_cache_rebuild(sb, inode_map, offset, ino,
-				 allocated, &blocknr, 1, cpu_id);
+				 allocated, &blocknr, 0, cpu_id);
 	allocated -= ret;
 	offset = blocknr;
-	ino = ino + (AEON_I_NUM_PER_PAGE - 1) * sbi->cpus;
+	ino = ino + AEON_I_NUM_PER_PAGE * sbi->cpus;
 
 	for (i = 1; i < le32_to_cpu(art->i_num_allocated_pages) /
 					AEON_PAGES_FOR_INODE; i++) {
@@ -883,7 +884,7 @@ static void do_aeon_rebuild_inode_cache(struct super_block *sb, int cpu_id)
 					 allocated, &blocknr, 0, cpu_id);
 		allocated -= ret;
 		offset = blocknr;
-		ino = ino + (AEON_I_NUM_PER_PAGE) * sbi->cpus;
+		ino = ino + AEON_I_NUM_PER_PAGE * sbi->cpus;
 	}
 
 	mutex_unlock(&inode_map->inode_table_mutex);

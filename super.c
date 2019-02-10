@@ -515,10 +515,10 @@ static void aeon_fill_region_table(struct super_block *sb)
 			art->i_range_high = cpu_to_le32(range_high);
 			art->b_range_low =
 				cpu_to_le32(free_list->first_node->range_low);
-			art->i_allocated = cpu_to_le32(1);
+			art->i_allocated = 0;
 			art->i_head_ino = cpu_to_le32(inode_start);
 			blocknr = (((u64)inode_map->i_table_addr -
-				   AEON_HEAD(sb)) >> AEON_SHIFT);
+				   AEON_HEAD(sb)) >> AEON_SHIFT) + 1;
 			art->i_blocknr = cpu_to_le64(blocknr);
 			art->this_block = cpu_to_le64(blocknr);
 

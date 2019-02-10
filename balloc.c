@@ -828,15 +828,15 @@ u64 aeon_get_new_inode_block(struct super_block *sb, int cpuid, u32 ino)
 	int num_blocks = AEON_PAGES_FOR_INODE;
 	u64 addr;
 
-	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE + 1) {
+	if (le16_to_cpu(art->i_allocated) == AEON_I_NUM_PER_PAGE+1) {
 		allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, cpuid);
 		if (allocated != AEON_PAGES_FOR_INODE)
 			goto out;
 		addr = AEON_HEAD(sb) + (blocknr<<AEON_SHIFT);
-		memset((void *)addr, 0, 256);
+		memset((void *)addr, 0, 4096 * allocated);
 		aeon_register_next_inode_block(sb, inode_map, art, blocknr);
 		art->i_num_allocated_pages += cpu_to_le32(allocated);
-		art->i_allocated = 1;
+		art->i_allocated = cpu_to_le16(1);
 		art->i_head_ino = cpu_to_le32(ino);
 	} else
 		blocknr = le64_to_cpu(art->i_blocknr);
@@ -861,6 +861,7 @@ static void do_aeon_init_new_inode_block(struct super_block *sb,
 	struct aeon_range_node *node;
 	unsigned long blocknr = 0;
 	u64 temp_addr;
+	int prealloc_blocks = AEON_PAGES_FOR_INODE+1;
 
 	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
 		struct aeon_region_table *art;
@@ -882,10 +883,10 @@ static void do_aeon_init_new_inode_block(struct super_block *sb,
 
 	blocknr = node->range_low;
 	temp_addr = (blocknr << AEON_SHIFT) + AEON_HEAD(sb);
-	memset((void *)temp_addr, 0, 4096 * AEON_PAGES_FOR_INODE);
-	node->range_low += AEON_PAGES_FOR_INODE;
+	memset((void *)temp_addr, 0, 4096 * prealloc_blocks);
+	node->range_low += prealloc_blocks;
 
-	free_list->num_free_blocks -= AEON_PAGES_FOR_INODE;
+	free_list->num_free_blocks -= prealloc_blocks;
 
 	table_blocknr = (__le64 *)(cpu_id * 64 + addr);
 	*table_blocknr = cpu_to_le64(blocknr);
@@ -894,6 +895,7 @@ static void do_aeon_init_new_inode_block(struct super_block *sb,
 
 	inode_map->i_table_addr = (void *)((*table_blocknr << AEON_SHIFT) +
 					   AEON_HEAD(sb));
+	/*TODO: Remove it? */
 	imem_cache_create(sbi, inode_map, blocknr, ino, 1);
 }
 

@@ -239,7 +239,7 @@ static int stat_imem_show(struct seq_file *s, void *v)
 		for (i = 0;
 		     i < AEON_I_NUM_PER_PAGE; i++) {
 			blocknr = le64_to_cpu(art->i_blocknr);
-			internal_ino = ((ino - cpu_id) / si->sbi->cpus) %
+			internal_ino = ((ino - cpu_id - 1) / si->sbi->cpus) %
 						AEON_I_NUM_PER_PAGE;
 			addr = (u64)si->sbi->virt_addr + (blocknr << AEON_SHIFT)
 				+ (internal_ino << AEON_I_SHIFT);

@@ -323,7 +323,7 @@ static u64 search_imem_addr(struct super_block *sb, int cpu_id, u32 ino)
 	unsigned long internal_ino;
 	u64 addr;
 
-	internal_ino = (((ino - cpu_id) / sbi->cpus) %
+	internal_ino = (((ino - cpu_id - 1) / sbi->cpus) %
 			AEON_I_NUM_PER_PAGE);
 
 	blocknr = le64_to_cpu(art->i_blocknr);
