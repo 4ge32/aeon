@@ -230,7 +230,7 @@ static int aeon_symlink(struct inode *dir,
 	if (l > sb->s_blocksize)
 		goto out;
 
-	err = aeon_init_mdata(sb, dir, &am, S_IFLNK|0777, 0, 0);
+	err = aeon_init_mdata(sb, dir, &am, S_IFLNK|0777, l, 0);
 	if (err)
 		goto out;
 
