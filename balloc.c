@@ -290,12 +290,13 @@ void aeon_init_blockmap(struct super_block *sb)
 	int ret;
 	int i;
 
+	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
+
 	if (!(sbi->s_mount_opt & AEON_MOUNT_FORMAT)) {
 		aeon_rebuild_blockmap(sb);
 		return;
 	}
 
-	sbi->per_list_blocks = sbi->num_blocks / sbi->cpus;
 	for (i = 0; i < sbi->cpus; i++) {
 		free_list = aeon_get_free_list(sb, i);
 		tree = &(free_list->block_free_tree);
