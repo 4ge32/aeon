@@ -298,7 +298,8 @@ static int aeon_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	d_instantiate(dentry, inode);
 
-	am.pidir->i_links_count = cpu_to_le64(inode->i_nlink);
+	am.pidir->i_links_count = cpu_to_le64(dir->i_nlink);
+	aeon_update_inode_csum(am.pidir);
 
 	aeon_sb->s_num_inodes++;
 	aeon_update_super_block_csum(aeon_sb);
