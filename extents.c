@@ -512,7 +512,7 @@ int
 aeon_update_cextent(struct super_block *sb, struct inode *inode,
 		    unsigned long blocknr, unsigned long offset, int num_blocks,
 		    int compressed_length, unsigned long original_len,
-		    int compressed)
+		    int compressed, int allocated)
 {
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
@@ -569,7 +569,7 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	//ae->ex_original_offset = cpu_to_le32(offset);
 	ae->ex_original_length = cpu_to_le32(original_len);
 	ae->ex_compressed = cpu_to_le32(compressed);
-	aeh->eh_blocks += cpu_to_le16(num_blocks);
+	aeh->eh_blocks += cpu_to_le16(allocated);
 	aeh->eh_prev_extent = cpu_to_le64(ae);
 
 	aeon_dbgv("%s-O: offset %u length %d\n",
@@ -581,12 +581,12 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 	pi->i_blocks = aeh->eh_blocks * 8;
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
 
-	err = aeon_insert_extenttree(sb, sih, aeh, ae);
-	if (err) {
-		write_unlock(&sih->i_meta_lock);
-		return err;
-	}
-
+//	err = aeon_insert_extenttree(sb, sih, aeh, ae);
+//	if (err) {
+//		write_unlock(&sih->i_meta_lock);
+//		return err;
+//	}
+//
 	write_unlock(&sih->i_meta_lock);
 
 	return 0;

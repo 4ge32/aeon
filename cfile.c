@@ -175,7 +175,8 @@ static int do_get_new_blocks_vc(struct super_block *sb,
 	*ret_blocknr = blocknr;
 
 	err = aeon_update_cextent(sb, inode, blocknr, iblock, o_len,
-				  num_blocks, original_len, compressed);
+				  num_blocks, original_len,
+				  compressed, allocated);
 	if (err) {
 		aeon_err(sb, "failed to update extent\n");
 		goto out;

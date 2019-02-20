@@ -231,7 +231,10 @@ struct inode *aeon_new_vfs_inode(enum aeon_new_inode_type type,
 	switch (type) {
 	case TYPE_CREATE:
 		inode->i_op = &aeon_file_inode_operations;
-		inode->i_fop = &aeon_dax_file_operations;
+		if (compression)
+			inode->i_fop = &aeon_compress_file_operations;
+		else
+			inode->i_fop = &aeon_dax_file_operations;
 		inode->i_mapping->a_ops = &aeon_dax_aops;
 		break;
 	case TYPE_MKDIR:

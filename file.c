@@ -516,6 +516,19 @@ static int aeon_open(struct inode *inode, struct file *file)
 
 const struct file_operations aeon_dax_file_operations = {
 	.llseek		= aeon_llseek,
+	.read_iter	= aeon_file_read_iter,
+	.write_iter	= aeon_file_write_iter,
+	.mmap           = aeon_mmap,
+	.fsync		= aeon_fsync,
+	.open		= aeon_open,
+	.unlocked_ioctl = aeon_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= aeon_compat_ioctl,
+#endif
+};
+
+const struct file_operations aeon_compress_file_operations = {
+	.llseek		= aeon_llseek,
 #ifdef	CONFIG_AEON_FS_AEON_RW
 	.read		= aeon_read,
 	.write          = aeon_write,
