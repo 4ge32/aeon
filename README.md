@@ -42,3 +42,6 @@ When first mounting, the `init` option is needed for initialization. AEON doesn'
 If you find bugs, please [report them](httpfs://github.com/4ge32/aeon/issues).
 
 If you have other questions or suggestions, you contact me at [shfy1014[at]google.com](mailto:shfy1014[at]google.com).
+
+## Further details
+See [this document](https://gist.github.com/4ge32/41229cae3f63bbd1e3f2d6350ae98ec6). (Japanese)
