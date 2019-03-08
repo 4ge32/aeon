@@ -1081,6 +1081,21 @@ unsigned long aeon_get_new_extents_block(struct super_block *sb)
 	return blocknr;
 }
 
+unsigned long aeon_get_new_extents_block_addr(struct super_block *sb, u64 *addr)
+{
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	int num_blocks = 1;
+
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
+	if (allocated <= 0) {
+		aeon_err(sb, "failed to get new exttens block\n");
+		return -ENOSPC;
+	}
+
+	return 0;
+}
+
 u64 aeon_get_new_blk(struct super_block *sb, int cpu_id)
 {
 	struct free_list *free_list;

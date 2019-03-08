@@ -479,6 +479,12 @@ test-write-2 ()
   clean
 }
 
+# Big test for new_extent
+# height 0
+test_write-3 ()
+{
+}
+
 helper_recover_test ()
 {
   if [ ! -e $TEST_AEON ]; then

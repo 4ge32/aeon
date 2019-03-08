@@ -141,6 +141,7 @@ void aeon_init_new_inode_block(struct super_block *sb, u32 ino);
 unsigned long aeon_get_new_dentry_block(struct super_block *sb, u64 *de_addr);
 unsigned long aeon_get_new_symlink_block(struct super_block *sb, u64 *pi_addr);
 unsigned long aeon_get_new_extents_block(struct super_block *sb);
+unsigned long aeon_get_new_extents_block_addr(struct super_block *sb, u64 *addr);
 u64 aeon_get_new_blk(struct super_block *sb, int cpu_id);
 u64 aeon_get_xattr_blk(struct super_block *sb);
 u64 aeon_get_new_extents_header_block(struct super_block *sb,

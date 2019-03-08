@@ -7,7 +7,7 @@
 #CONFIG_AEON_FS_COMPRESSION=y
 #CONFIG_AEON_FS_DEBUG_MODE=y
 #CONFIG_AEON_FS_AEON_RW=y
-
+#CONFIG_AEON_FS_BIG_CHANGE=y
 
 # If both CONFIG_AEON_FS_PERCPU_FREELIST
 # and CONFIG_AEON_FS_NUMA are enabled,
@@ -52,6 +52,10 @@ ifdef CONFIG_AEON_FS_AEON_RW
 ccflags-y += -DCONFIG_AEON_FS_AEON_RW
 endif
 
+ifdef CONFIG_AEON_FS_BIG_CHANGE
+ccflags-y += -DCONFIG_AEON_FS_BIG_CHANGE
+endif
+
 obj-m += aeon.o
 
 aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \
@@ -60,6 +64,8 @@ aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \
 aeon-$(CONFIG_AEON_FS_XATTR) += xattr.o xattr_user.o xattr_trusted.o
 aeon-$(CONFIG_AEON_FS_SECURITY) += xattr_security.o
 aeon-$(CONFIG_AEON_FS_COMPRESSION) += compression.o cfile.o
+
+aeon-$(CONFIG_AEON_FS_BIG_CHANGE) += new_extents.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=`pwd`

@@ -32,6 +32,15 @@ void aeon_init_extent_header(struct aeon_extent_header *aeh)
 	memset(aeh->eh_extent_blocks, 0, sizeof(aeh->eh_extent_blocks));
 }
 
+#ifdef CONFIG_AEON_FS_BIG_CHANGE
+static inline
+void aeon_init_extent_middle_header(struct aeon_extent_middle_header *aemh)
+{
+	aemh->eh_entries = 0;
+	aemh->eh_up = 0;
+}
+#endif
+
 static inline
 struct aeon_extent *aeon_get_prev_extent(struct aeon_extent_header *aeh)
 {
