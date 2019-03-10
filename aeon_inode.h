@@ -15,7 +15,7 @@
 #else
 #ifdef CONFIG_AEON_FS_BIG_CHANGE
 #define PI_MAX_INTERNAL_EXTENT 4
-#define PI_MAX_EXTERNAL_EXTENT 2
+#define PI_MAX_EXTERNAL_EXTENT 1
 #else
 #define PI_MAX_INTERNAL_EXTENT 5
 #define PI_MAX_EXTERNAL_EXTENT 4
@@ -81,14 +81,12 @@ struct aeon_extent_middle_header {
 };
 
 struct aeon_extent_header {
-	__le16  eh_entries;
-	__le16  eh_depth;
+	u8	eh_depth;
+	__le32  eh_entries;
 	__le32  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
 	__le64  eh_up;
 	__le32  eh_blocks;
 	__le64  eh_prev_extent;
-#ifdef CONFIG_AEON_FS_COMPRESSION
-#endif
 } __attribute((__packed__));
 
 /*
