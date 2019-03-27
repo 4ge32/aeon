@@ -479,10 +479,27 @@ test-write-2 ()
   clean
 }
 
-# Big test for new_extent
-# height 0
-test_write-3 ()
+test-write-3 ()
 {
+  init
+
+  FILE=4k_file.txt
+  TARGET=target
+  cp $FILE $DIR/
+  cp $FILE $TMP/
+  touch $DIR/$TARGET
+  touch $TMP/$TARGET
+  # 386 is ok but 387 will be failed
+  for i in `seq 1 387`
+  do
+    cat $DIR/$FILE $DIR/$FILE >> $DIR/$TARGET
+    cat $TMP/$FILE $TMP/$FILE >> $TMP/$TARGET
+  done
+  ./run.sh rm
+  diff $DIR/$TARGET $TMP/$TARGET
+  res=$?
+
+  clean
 }
 
 helper_recover_test ()
