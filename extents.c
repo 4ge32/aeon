@@ -443,7 +443,6 @@ aeon_insert_extenttree(struct super_block *sb,
 	return 0;
 }
 
-#ifndef CONFIG_AEON_FS_BIG_CHANGE
 int
 aeon_update_extent(struct super_block *sb, struct inode *inode,
 		   unsigned long blocknr, unsigned long offset, int num_blocks)
@@ -592,7 +591,6 @@ aeon_update_cextent(struct super_block *sb, struct inode *inode,
 
 	return 0;
 }
-#endif
 #endif
 
 static int

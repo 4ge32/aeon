@@ -58,10 +58,6 @@ endif
 
 obj-m += aeon.o
 
-aeon-y += $(addprefix libaeon/, \
-	tree.o \
-	)
-
 aeon-y += super.o balloc.o inode.o mprotect.o namei.o dir.o  \
 	file.o extents.o rebuild.o symlink.o debug.o ioctl.o \
 

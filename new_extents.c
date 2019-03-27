@@ -4,11 +4,6 @@
  *
  * Design Overview
  *
- * |--inode--|
- * | header  | to manage all extents
- * | extents | first few extents embedded in the inode
- * |---------|
- *
  * Address           Address           Address           Address
  * #1                #100              #500              #800
  *
@@ -62,6 +57,18 @@ _aeon_pull_extent_addr(struct super_block *sb,
 	return 0;
 }
 
+static int
+do_aeon_insert_extenttree(struct rb_root *tree, struct aeon_range_node *new_node)
+{
+	int ret;
+
+	ret = aeon_insert_range_node(tree, new_node, NODE_EXTENT);
+	if (ret)
+		aeon_dbg("ERROR: %s failed %d\n", __func__, ret);
+
+	return ret;
+}
+
 /*
  * Maybe new design is realized by this point?
  * (not considering error case, though)
@@ -82,7 +89,7 @@ static struct aeon_extent
 			return ERR_PTR(err);
 		}
 
-		in_ino->eh_depth++;
+		le16_add_cpu(&in_ino->eh_depth, 1);
 		in_ino->eh_up = le64_to_cpu(addr);
 
 		aemh = (struct aeon_extent_middle_header *)addr;
@@ -133,21 +140,6 @@ static struct aeon_extent
 	return ret;
 }
 
-struct aeon_extent
-*__aeon_search_extent(struct super_block *sb,
-		    struct aeon_inode_info_header *sih, unsigned long offset)
-{
-	struct aeon_inode *pi = aeon_get_inode(sb, sih);
-	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
-	struct aeon_extent *ret;
-	int entries = le32_to_cpu(aeh->eh_entries);
-
-	if (!entries)
-		return NULL;
-
-	return NULL;
-}
-
 int
 aeon_update_extent(struct super_block *sb, struct inode *inode,
 		   unsigned long blocknr, unsigned long offset, int num_blocks)
@@ -156,6 +148,7 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 	struct aeon_inode *pi = aeon_get_inode(sb, sih);
 	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	struct aeon_extent *ae;
+	int err = -ENOSPC;
 
 	ae = aeon_get_new_extent(sb, sih);
 	if (IS_ERR(ae)) {
@@ -174,7 +167,11 @@ aeon_update_extent(struct super_block *sb, struct inode *inode,
 	pi->i_blocks = aeh->eh_blocks * 8;
 	inode->i_blocks = le32_to_cpu(pi->i_blocks);
 
-	// TODO insert extenttree on pmem
+	err = aeon_insert_extenttree(sb, sih, aeh, ae);
+	if (err) {
+		write_unlock(&sih->i_meta_lock);
+		return err;
+	}
 
 	write_unlock(&sih->i_meta_lock);
 
