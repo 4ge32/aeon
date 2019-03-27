@@ -13,13 +13,8 @@
 #define PI_MAX_INTERNAL_EXTENT 2
 #define PI_MAX_EXTERNAL_EXTENT 9
 #else
-#ifdef CONFIG_AEON_FS_BIG_CHANGE
-#define PI_MAX_INTERNAL_EXTENT 4
-#define PI_MAX_EXTERNAL_EXTENT 2
-#else
 #define PI_MAX_INTERNAL_EXTENT 5
 #define PI_MAX_EXTERNAL_EXTENT 4
-#endif
 #endif
 
 struct icache {
@@ -53,6 +48,12 @@ struct inode_map {
 	void			*i_table_addr;
 };
 
+struct aeon_extent_idx {
+	__le64  ei_leaf;
+	__le32  ei_offset;
+	__le32  pad;
+};
+
 struct aeon_extent {
 	__le16	ex_index;
 	__le64  ex_block;
@@ -65,87 +66,6 @@ struct aeon_extent {
 #endif
 } __attribute((__packed__));
 
-struct aeon_extent_idx {
-	__le64  ei_leaf;
-	__le32  ei_offset;
-	__le32  pad;
-};
-
-/* BIG CHANGE of STRUCTURES START */
-#ifdef CONFIG_AEON_FS_BIG_CHANGE
-struct aeon_extent_middle_header {
-	__le16  eh_entries;
-	__le64  eh_up;
-	__le16  pad0;
-	__le32  pad1;
-};
-
-struct aeon_extent_header {
-	__le16  eh_entries;
-	__le16  eh_depth;
-	__le32  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
-	__le64  eh_up;
-	__le32  eh_blocks;
-	__le64  eh_prev_extent;
-#ifdef CONFIG_AEON_FS_COMPRESSION
-#endif
-} __attribute((__packed__));
-
-/*
- * Structure of an inode in AEON on pmem.
- */
-struct aeon_inode {
-	/* first 46 bytes */
-	u8	valid;		 /* Is this inode valid? */
-	u8	compressed;	 /* Is this file compressed? */
-	u8	deleted;	 /* Is this inode deleted? */
-	u8	i_new;           /* Is this inode new? */
-
-	__le32	i_flags;	 /* Inode flags */
-	__le64	i_size;		 /* Size of data in bytes */
-	__le32	i_ctime;	 /* Inode modification time */
-	__le32	i_mtime;	 /* Inode tree Modification time */
-	__le32	i_atime;	 /* Access time */
-	__le16	i_mode;		 /* File mode */
-	__le64	i_links_count;	 /* Links count */
-
-	__le64	i_xattr;	 /* Extended attribute block */
-
-	/* second 24 bytes */
-	__le32	i_uid;		 /* Owner Uid */
-	__le32	i_gid;		 /* Group Id */
-	__le32	i_generation;	 /* File version (for NFS) */
-	__le32	i_create_time;	 /* Create time */
-	__le32	aeon_ino;	 /* aeon inode number */
-	__le32	parent_ino;	 /* parent inode number */
-
-	/* third 64 bytes */
-	__le64	i_pinode_addr;	 /* parent inode address offset */
-	__le64	i_dentry_addr;	 /* A related dentry address offset */
-	__le64	i_inode_addr;	 /* inode itself address offset */
-
-	__le64	i_next_inode_block;
-	__le64	i_dentry_table_block;
-
-	__le64  i_block;         /* exist extent or point extent block */ /*TODO: use it ? */
-	__le64	i_blocks;        /* block counts */ /*TODO combine it with val inside aeh? */
-	__le64	sym_block;	 /* for symbolic link */ /*TODO: change it to sym_addr*/
-
-	/* fourth 4 bytes */
-	struct {
-		__le32 rdev;	 /* major/minor # */
-	} dev;			 /* device inode */
-
-	/* */
-	struct aeon_extent_header aeh;
-	struct aeon_extent ae[PI_MAX_INTERNAL_EXTENT];
-	__le16 i_exblocks;
-
-	__le32	csum;            /* CRC32 checksum */
-} __attribute((__packed__));
-
-#else
-
 struct aeon_extent_header {
 	__le16  eh_entries;
 	__le16  eh_depth;
@@ -155,6 +75,14 @@ struct aeon_extent_header {
 #ifdef CONFIG_AEON_FS_COMPRESSION
 #endif
 } __attribute((__packed__));
+
+
+enum aeon_new_inode_type {
+	TYPE_CREATE = 0,
+	TYPE_MKNOD,
+	TYPE_SYMLINK,
+	TYPE_MKDIR
+};
 
 /*
  * Structure of an inode in AEON on pmem.
@@ -208,15 +136,6 @@ struct aeon_inode {
 
 	__le32	csum;            /* CRC32 checksum */
 } __attribute((__packed__));
-#endif
-/* END */
-
-enum aeon_new_inode_type {
-	TYPE_CREATE = 0,
-	TYPE_MKNOD,
-	TYPE_SYMLINK,
-	TYPE_MKDIR
-};
 
 
 /*
