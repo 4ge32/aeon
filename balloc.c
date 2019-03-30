@@ -1081,6 +1081,21 @@ unsigned long aeon_get_new_extents_block(struct super_block *sb)
 	return blocknr;
 }
 
+u64 aeon_get_new_extents_block_addr(struct super_block *sb)
+{
+	unsigned long allocated;
+	unsigned long blocknr = 0;
+	int num_blocks = 1;
+
+	allocated = aeon_new_blocks(sb, &blocknr, num_blocks, 0, ANY_CPU);
+	if (allocated <= 0) {
+		aeon_err(sb, "failed to get new exttens block\n");
+		return 0;
+	}
+
+	return (blocknr << AEON_SHIFT);
+}
+
 u64 aeon_get_new_blk(struct super_block *sb, int cpu_id)
 {
 	struct free_list *free_list;
@@ -1143,11 +1158,11 @@ u64 aeon_get_new_extents_header_block(struct super_block *sb,
 	aeh = (struct aeon_extent_header *)(header_addr + AEON_HEAD(sb));
 	memset((void *)aeh, 0, 4096);
 	aeh->eh_entries = 0;
-	aeh->eh_depth = 0;
+	//aeh->eh_depth = 0;
 	aeh->eh_blocks = 0;
-	aeh->eh_extent_blocks[0] = extent_addr>>AEON_SHIFT;
+	//aeh->eh_extent_blocks[0] = extent_addr>>AEON_SHIFT;
 
-	prev->eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT-1] = header_addr>>AEON_SHIFT;
+	//prev->eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT-1] = header_addr>>AEON_SHIFT;
 
 	return header_addr;
 }

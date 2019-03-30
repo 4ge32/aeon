@@ -483,14 +483,13 @@ test-write-3 ()
 {
   init
 
-  FILE=4k_file.txt
+  FILE=list_test.sh
   TARGET=target
   cp $FILE $DIR/
   cp $FILE $TMP/
   touch $DIR/$TARGET
   touch $TMP/$TARGET
-  # 386 is ok but 387 will be failed
-  for i in `seq 1 387`
+  for i in `seq 1 2000`
   do
     cat $DIR/$FILE $DIR/$FILE >> $DIR/$TARGET
     cat $TMP/$FILE $TMP/$FILE >> $TMP/$TARGET

@@ -16,7 +16,6 @@
 #define AEON_EXTENT_MAX_DEPTH	(AEON_DEF_BLOCK_SIZE_4K / \
 				 AEON_EXTENT_HEADER_SIZE)
 
-
 static inline
 struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
 {
@@ -24,12 +23,43 @@ struct aeon_extent_header *aeon_get_extent_header(struct aeon_inode *pi)
 }
 
 static inline
+struct aeon_extent_middle_header *aeon_get_extent_mheader(struct super_block *sb,
+							  struct aeon_inode *pi)
+{
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	//aeon_dbg("%s: 0x%llx\n", __func__, le64_to_cpu(aeh->eh_cur_block_addr));
+	if (!le64_to_cpu(aeh->eh_cur_block_addr))
+		return NULL;
+	return (struct aeon_extent_middle_header *)
+		(AEON_HEAD(sb) + le64_to_cpu(aeh->eh_cur_block_addr));
+}
+
+static inline struct aeon_extent_middle_header
+*aeon_get_extent_first_mheader(struct super_block *sb, struct aeon_inode *pi)
+{
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
+	//aeon_dbg("%s: 0x%llx\n", __func__, le64_to_cpu(aeh->eh_first_block_addr));
+	if (!le64_to_cpu(aeh->eh_first_block_addr))
+		return NULL;
+	return (struct aeon_extent_middle_header *)
+		(AEON_HEAD(sb) + le64_to_cpu(aeh->eh_first_block_addr));
+}
+
+static inline
+void aeon_init_extent_middle_header(struct aeon_extent_middle_header *aemh)
+{
+	aemh->em_entries = 1; /* header is included */
+	aemh->em_next_addr = 0;
+}
+
+static inline
 void aeon_init_extent_header(struct aeon_extent_header *aeh)
 {
-	aeh->eh_entries = 0;
-	aeh->eh_depth = 0;
-	aeh->eh_blocks = 0;
-	memset(aeh->eh_extent_blocks, 0, sizeof(aeh->eh_extent_blocks));
+	//aeh->eh_entries = 0;
+	//aeh->eh_depth = 0;
+	//aeh->eh_blocks = 0;
+	//memset(aeh->eh_extent_blocks, 0, sizeof(aeh->eh_extent_blocks));
+	memset(aeh, 0, sizeof(struct aeon_extent_header));
 }
 
 static inline
@@ -38,8 +68,6 @@ struct aeon_extent *aeon_get_prev_extent(struct aeon_extent_header *aeh)
 	return (struct aeon_extent *)le64_to_cpu(aeh->eh_prev_extent);
 }
 
-u64 aeon_pull_extent_addr(struct super_block *sb,
-			  struct aeon_inode_info_header *sih, int index);
 int aeon_delete_extenttree(struct super_block *sb,
 			   struct aeon_inode_info_header *sih);
 int aeon_cutoff_extenttree(struct super_block *sb,

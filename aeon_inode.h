@@ -48,11 +48,18 @@ struct inode_map {
 	void			*i_table_addr;
 };
 
+struct aeon_extent_middle_header {
+	__le16  em_entries;
+	__le16  pad0;
+	__le32  pad1;
+	__le64  em_next_addr;
+} __attribute((__packed__));
+
 struct aeon_extent_header {
-	__le16  eh_entries;
-	__le16  eh_depth;
-	__le32  eh_extent_blocks[PI_MAX_EXTERNAL_EXTENT];
+	__le32  eh_entries; /* 2^32 extents */
 	__le32  eh_blocks;
+	__le64  eh_cur_block_addr;
+	__le64  eh_first_block_addr;
 	__le64  eh_prev_extent;
 #ifdef CONFIG_AEON_FS_COMPRESSION
 #endif
@@ -60,7 +67,7 @@ struct aeon_extent_header {
 
 struct aeon_extent {
 	__le16	ex_index;
-	__le64  ex_block;
+	__le64  ex_block; /*TODO: store an address */
 	__le16  ex_length;
 	__le32  ex_offset;
 #ifdef CONFIG_AEON_FS_COMPRESSION

@@ -846,7 +846,6 @@ void aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	return;
 
 expand:
-
 	old_num_blocks = old_size >> blkbits;
 	new_num_blocks = iblock - old_num_blocks;
 	if (!new_num_blocks)
