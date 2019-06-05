@@ -242,8 +242,8 @@ int aeon_add_dentry(struct dentry *dentry, struct aeon_mdata *am)
 	int namelen = dentry->d_name.len;
 	int err;
 
-	if (namelen == 0 || namelen >= AEON_NAME_LEN)
-		return -EINVAL;
+	if (namelen == 0 || namelen > AEON_NAME_LEN)
+		return -ENAMETOOLONG;
 
 	if (pidir->i_new) {
 		err = aeon_init_dentry_map(sb, pidir, sih);
