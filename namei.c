@@ -87,6 +87,9 @@ static struct dentry *aeon_lookup(struct inode *dir,
 	struct inode *inode = NULL;
 	u32 ino = 0;
 
+	if (dentry->d_name.len > AEON_NAME_LEN)
+		return ERR_PTR(-ENAMETOOLONG);
+
 	ino = aeon_inode_by_name(dir, &dentry->d_name);
 	if (ino) {
 		aeon_dbgv("%s: %u %s 0x%llx\n",
