@@ -456,7 +456,7 @@ out_unlock:
 	return ret;
 }
 
-static int aeon_dax_huge_fault(struct vm_fault *vmf,
+static vm_fault_t aeon_dax_huge_fault(struct vm_fault *vmf,
 			       enum page_entry_size pe_size)
 {
 	struct inode *inode = file_inode(vmf->vma->vm_file);
@@ -464,27 +464,26 @@ static int aeon_dax_huge_fault(struct vm_fault *vmf,
 	struct aeon_inode_info *si = AEON_I(inode);
 	struct aeon_inode_info_header *sih = &si->header;
 	bool write;
-	int res = 0;
+	vm_fault_t ret;
 
 	write = (vmf->flags & FAULT_FLAG_WRITE);
-
 	if (write) {
 		sb_start_pagefault(sb);
 		file_update_time(vmf->vma->vm_file);
 	}
 	down_read(&sih->dax_sem);
 
-	res = dax_iomap_fault(vmf, pe_size, NULL, NULL, &aeon_iomap_ops);
+	ret = dax_iomap_fault(vmf, pe_size, NULL, NULL, &aeon_iomap_ops);
 
 	up_read(&sih->dax_sem);
 
 	if (write)
 		sb_end_pagefault(sb);
 
-	return res;
+	return ret;
 }
 
-static int aeon_dax_fault(struct vm_fault *vmf)
+static vm_fault_t aeon_dax_fault(struct vm_fault *vmf)
 {
 	return aeon_dax_huge_fault(vmf, PE_SIZE_PTE);
 }
