@@ -129,7 +129,7 @@ bool aeon_find_range_node(struct rb_root *tree, unsigned long key,
 void aeon_destroy_range_node_tree(struct super_block *sb, struct rb_root *tree);
 int aeon_new_data_blocks(struct super_block *sb,
 	struct aeon_inode_info_header *sih, unsigned long *blocknr,
-	unsigned long start_blk, unsigned int num, int cpu);
+	unsigned long start_blk, unsigned long num, int cpu);
 int aeon_insert_blocks_into_free_list(struct super_block *sb,
 				      unsigned long blocknr,
 				      int num, unsigned short btype);

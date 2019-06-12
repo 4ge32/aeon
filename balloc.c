@@ -828,7 +828,7 @@ alloc:
 // blocknr.  Return the number of blocks allocated.
 int aeon_new_data_blocks(struct super_block *sb,
 	struct aeon_inode_info_header *sih, unsigned long *blocknr,
-	unsigned long start_blk, unsigned int num, int cpu)
+	unsigned long start_blk, unsigned long num, int cpu)
 {
 	int allocated;
 
