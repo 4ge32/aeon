@@ -468,14 +468,14 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 					  old_name->name, old_name->len);
 	if (old_de == NULL) {
 		err = -ENOENT;
-		goto out_dir;
+		goto out_dir_err;
 	}
 
 	if (S_ISDIR(old_inode->i_mode)) {
 		err = -EIO;
 		dir_de = aeon_dotdot(sb, old_dentry);
 		if (!dir_de)
-			goto out_dir;
+			goto out_dir_err;
 	}
 
 	if (new_inode) {
@@ -487,7 +487,7 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 		new_de = aeon_find_dentry(sb, NULL, new_dir,
 					  new_name->name, new_name->len);
 		if (!new_de)
-			goto out_dir;
+			goto out_dir_err;
 
 		aeon_set_link(new_dir, new_de, old_inode, 1);
 		new_inode->i_ctime = current_time(new_inode);
@@ -502,11 +502,11 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 		err = aeon_fill_mdata(sb, new_dir, &am, pi);
 		if (err)
-			goto out_dir;
+			goto out_dir_err;
 
 		err = aeon_add_dentry(new_dentry, &am);
 		if (err)
-			goto out_dir;
+			goto out_dir_err;
 
 		pi->i_dentry_addr = cpu_to_le64(am.de_addr-AEON_HEAD(sb));
 		aeon_update_inode_csum(pi);
@@ -536,8 +536,9 @@ static int aeon_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	return 0;
 
-out_dir:
+out_dir_err:
 	aeon_err(sb, "%s return %d\n", __func__, err);
+out_dir:
 	return err;
 }
 
