@@ -798,67 +798,74 @@ int aeon_update_time(struct inode *inode,
 	return 0;
 }
 
-void aeon_truncate_blocks(struct inode *inode, loff_t offset)
+static void aeon_shrink_file(struct super_block *sb,
+			     struct inode *inode,
+			     struct aeon_extent *ae,
+			     loff_t offset, unsigned long iblock)
 {
-	struct super_block *sb = inode->i_sb;
 	struct aeon_inode *pi;
-	struct aeon_extent *ae;
 	struct aeon_extent_header *aeh;
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
-	unsigned int blkbits = inode->i_blkbits;
-	unsigned long iblock = offset >> blkbits;
-	unsigned long new_num_blocks ;
-	unsigned long new_blocknr = 0;
 	unsigned long off;
-	unsigned long old_num_blocks;
 	loff_t old_size = inode->i_size;
-	int allocated;
 	int entries;
-	int index = 0;
-	int err;
+	int index;
 	int length;
 
 	pi = aeon_get_inode(sb, sih);
 	aeh = aeon_get_extent_header(pi);
-	mutex_lock(&sih->truncate_mutex);
 
-	ae = aeon_search_extent(sb, sih, iblock);
-	if (!ae)
-		goto expand;
+	aeon_dbg("SHRINK\n");
+	aeon_dbg("%llu -> %llu\n", old_size, offset);
 
-	aeon_dbgv("CUT OFF DATA\n");
-	aeon_dbgv("offset %lu\n", iblock);
+	WARN_ON(old_size < offset);
+
+	if (offset > old_size)
+		dump_stack();
 
 	entries = le16_to_cpu(aeh->eh_entries);
-
 	index = le16_to_cpu(ae->ex_index);
 	off = le32_to_cpu(ae->ex_offset);
 	length = le32_to_cpu(ae->ex_length);
+
 	if (old_size < offset)
 		ae->ex_length = cpu_to_le16(off + length - iblock);
 
 	//aeh->eh_entries = cpu_to_le16(++index);
 	entries = entries - index - 1;
-	err = aeon_cutoff_extenttree(sb, sih, pi, entries, index);
-	if (err)
-		aeon_err(sb, "%s\n", __func__);
-	mutex_unlock(&sih->truncate_mutex);
-	return;
+	aeon_cutoff_extenttree(sb, sih, pi, entries, index);
+}
 
-expand:
-	old_num_blocks = old_size >> blkbits;
-	new_num_blocks = iblock - old_num_blocks;
-	if (!new_num_blocks)
-		new_num_blocks = 1;
+static void aeon_expand_blocks(struct super_block *sb, struct inode *inode,
+			       loff_t offset, unsigned long iblock)
+{
+	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	unsigned long new_blocknr = 0;
+	unsigned long old_nblocks;
+	unsigned long new_nblocks;
+	unsigned long blkbits = inode->i_blkbits;
+	loff_t old_size = inode->i_size;
+	int allocated;
+	int err;
+
+	aeon_dbg("EXPAND\n");
+	aeon_dbg("%llu -> %llu\n", old_size, offset);
+
+	WARN_ON(old_size < offset);
+
+	old_nblocks = old_size >> blkbits;
+	new_nblocks = iblock - old_nblocks;
+	if (!new_nblocks)
+		new_nblocks = 1;
 
 	allocated = aeon_new_data_blocks(sb, sih, &new_blocknr,
-					 iblock, new_num_blocks, ANY_CPU);
+					 old_nblocks, new_nblocks, ANY_CPU);
 	if (allocated <= 0) {
 		mutex_unlock(&sih->truncate_mutex);
 		return;
 	}
 
-	err = aeon_update_extent(sb, inode, new_blocknr, iblock, allocated);
+	err = aeon_update_extent(sb, inode, new_blocknr, old_nblocks, allocated);
 	if (err) {
 		aeon_err(sb, "failed to update extent\n");
 		mutex_unlock(&sih->truncate_mutex);
@@ -869,7 +876,27 @@ expand:
 	err = sb_issue_zeroout(sb, new_blocknr, allocated, GFP_NOFS);
 	if (err)
 		aeon_err(sb, "%s: ERROR\n", __func__);
+
+}
+
+void aeon_truncate_blocks(struct inode *inode, loff_t offset)
+{
+	struct super_block *sb = inode->i_sb;
+	struct aeon_extent *ae;
+	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	unsigned long iblock = offset >> inode->i_blkbits;
+
+	mutex_lock(&sih->truncate_mutex);
+
+	ae = aeon_search_extent(sb, sih, iblock);
+	if (ae)
+		aeon_shrink_file(sb, inode, ae, offset, iblock);
+	else
+		aeon_expand_blocks(sb, inode, offset, iblock);
+
 	mutex_unlock(&sih->truncate_mutex);
+
+	return err;
 }
 
 static void aeon_setattr_to_pmem(const struct inode *inode,
