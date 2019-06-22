@@ -798,10 +798,10 @@ int aeon_update_time(struct inode *inode,
 	return 0;
 }
 
-static void aeon_shrink_file(struct super_block *sb,
-			     struct inode *inode,
-			     struct aeon_extent *ae,
-			     loff_t offset, unsigned long iblock)
+static int aeon_shrink_file(struct super_block *sb,
+			    struct inode *inode,
+			    struct aeon_extent *ae,
+			    loff_t offset, unsigned long iblock)
 {
 	struct aeon_inode *pi;
 	struct aeon_extent_header *aeh;
@@ -811,6 +811,7 @@ static void aeon_shrink_file(struct super_block *sb,
 	int entries;
 	int index;
 	int length;
+	int err;
 
 	pi = aeon_get_inode(sb, sih);
 	aeh = aeon_get_extent_header(pi);
@@ -833,11 +834,17 @@ static void aeon_shrink_file(struct super_block *sb,
 
 	//aeh->eh_entries = cpu_to_le16(++index);
 	entries = entries - index - 1;
-	aeon_cutoff_extenttree(sb, sih, pi, entries, index);
+	err = aeon_cutoff_extenttree(sb, sih, pi, entries, index);
+	if (err) {
+		AEON_ERR(err);
+		return err;
+	}
+
+	return 0;
 }
 
-static void aeon_expand_blocks(struct super_block *sb, struct inode *inode,
-			       loff_t offset, unsigned long iblock)
+static int aeon_expand_blocks(struct super_block *sb, struct inode *inode,
+			      loff_t offset, unsigned long iblock)
 {
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	unsigned long new_blocknr = 0;
@@ -861,38 +868,41 @@ static void aeon_expand_blocks(struct super_block *sb, struct inode *inode,
 	allocated = aeon_new_data_blocks(sb, sih, &new_blocknr,
 					 old_nblocks, new_nblocks, ANY_CPU);
 	if (allocated <= 0) {
-		mutex_unlock(&sih->truncate_mutex);
-		return;
+		aeon_err(sb, "failed to allocate new blocks\n");
+		return -ENOSPC;
 	}
 
 	err = aeon_update_extent(sb, inode, new_blocknr, old_nblocks, allocated);
 	if (err) {
 		aeon_err(sb, "failed to update extent\n");
-		mutex_unlock(&sih->truncate_mutex);
-		return;
+		return err;
 	}
 
 	clean_bdev_aliases(sb->s_bdev, new_blocknr, allocated);
 	err = sb_issue_zeroout(sb, new_blocknr, allocated, GFP_NOFS);
-	if (err)
-		aeon_err(sb, "%s: ERROR\n", __func__);
+	if (err) {
+		aeon_err(sb, "%s: sb_issue_zeroout\n", __func__);
+		return err;
+	}
 
+	return 0;
 }
 
-void aeon_truncate_blocks(struct inode *inode, loff_t offset)
+int aeon_truncate_blocks(struct inode *inode, loff_t offset)
 {
 	struct super_block *sb = inode->i_sb;
 	struct aeon_extent *ae;
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
 	unsigned long iblock = offset >> inode->i_blkbits;
+	int err;
 
 	mutex_lock(&sih->truncate_mutex);
 
 	ae = aeon_search_extent(sb, sih, iblock);
 	if (ae)
-		aeon_shrink_file(sb, inode, ae, offset, iblock);
+		err = aeon_shrink_file(sb, inode, ae, offset, iblock);
 	else
-		aeon_expand_blocks(sb, inode, offset, iblock);
+		err = aeon_expand_blocks(sb, inode, offset, iblock);
 
 	mutex_unlock(&sih->truncate_mutex);
 
@@ -940,7 +950,11 @@ static int aeon_setsize(struct inode *inode, loff_t newsize)
 	if (err)
 		return err;
 	dax_sem_down_write(&AEON_I(inode)->header);
-	aeon_truncate_blocks(inode, newsize);
+	err = aeon_truncate_blocks(inode, newsize);
+	if (err) {
+		dax_sem_up_write(&AEON_I(inode)->header);
+		return err;
+	}
 	truncate_setsize(inode, newsize);
 	pi->i_size = cpu_to_le64(newsize);
 	dax_sem_up_write(&AEON_I(inode)->header);
