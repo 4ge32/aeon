@@ -813,16 +813,10 @@ static int aeon_shrink_file(struct super_block *sb,
 	int length;
 	int err;
 
-	pi = aeon_get_inode(sb, sih);
-	aeh = aeon_get_extent_header(pi);
-
-	aeon_dbg("SHRINK\n");
-	aeon_dbg("%llu -> %llu\n", old_size, offset);
-
 	WARN_ON(old_size < offset);
 
-	if (offset > old_size)
-		dump_stack();
+	pi = aeon_get_inode(sb, sih);
+	aeh = aeon_get_extent_header(pi);
 
 	entries = le16_to_cpu(aeh->eh_entries);
 	index = le16_to_cpu(ae->ex_index);
@@ -832,7 +826,6 @@ static int aeon_shrink_file(struct super_block *sb,
 	if (old_size < offset)
 		ae->ex_length = cpu_to_le16(off + length - iblock);
 
-	//aeh->eh_entries = cpu_to_le16(++index);
 	entries = entries - index - 1;
 	err = aeon_cutoff_extenttree(sb, sih, pi, entries, index);
 	if (err) {
@@ -847,6 +840,8 @@ static int aeon_expand_blocks(struct super_block *sb, struct inode *inode,
 			      loff_t offset, unsigned long iblock)
 {
 	struct aeon_inode_info_header *sih = &AEON_I(inode)->header;
+	struct aeon_inode *pi = aeon_get_inode(sb, sih);
+	struct aeon_extent_header *aeh = aeon_get_extent_header(pi);
 	unsigned long new_blocknr = 0;
 	unsigned long old_nblocks;
 	unsigned long new_nblocks;
@@ -855,18 +850,19 @@ static int aeon_expand_blocks(struct super_block *sb, struct inode *inode,
 	int allocated;
 	int err;
 
-	aeon_dbg("EXPAND\n");
-	aeon_dbg("%llu -> %llu\n", old_size, offset);
-
-	WARN_ON(old_size < offset);
+	WARN_ON(old_size > offset);
 
 	old_nblocks = old_size >> blkbits;
-	new_nblocks = iblock - old_nblocks;
-	if (!new_nblocks)
-		new_nblocks = 1;
+	new_nblocks = iblock - old_nblocks + 1;
+
+	if (!pi->i_exblocks) {
+		pi->i_new = 0;
+		pi->i_exblocks++;
+		aeon_init_extent_header(aeh);
+	}
 
 	allocated = aeon_new_data_blocks(sb, sih, &new_blocknr,
-					 old_nblocks, new_nblocks, ANY_CPU);
+					 iblock, new_nblocks, ANY_CPU);
 	if (allocated <= 0) {
 		aeon_err(sb, "failed to allocate new blocks\n");
 		return -ENOSPC;
@@ -899,7 +895,7 @@ int aeon_truncate_blocks(struct inode *inode, loff_t offset)
 	mutex_lock(&sih->truncate_mutex);
 
 	ae = aeon_search_extent(sb, sih, iblock);
-	if (ae)
+	if (ae && (offset < inode->i_size))
 		err = aeon_shrink_file(sb, inode, ae, offset, iblock);
 	else
 		err = aeon_expand_blocks(sb, inode, offset, iblock);
